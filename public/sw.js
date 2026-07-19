@@ -1,4 +1,4 @@
-// ShiftForge service worker.
+// SheetBuilder service worker.
 //
 // Strategy (production only — dev is hard-bailed below):
 //   • App navigations (HTML)      → network-first, fall back to cached shell, then an
@@ -16,10 +16,10 @@
 const CACHE_VERSION = "v5-ipad-20260716";
 const SHELL_CACHE = `shiftforge-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `shiftforge-static-${CACHE_VERSION}`;
-const OFFLINE_URL = "/shiftbuilder";
+const OFFLINE_URL = "/sheetbuilder";
 
 const PRECACHE = [
-  "/shiftbuilder",
+  "/sheetbuilder",
   "/icons/shiftforge-icon.svg",
   "/icons/shiftforge-maskable.svg",
   "/icons/icon-192.png",
@@ -32,7 +32,7 @@ self.addEventListener("install", (event) => {
     caches.open(SHELL_CACHE).then((cache) => cache.addAll(PRECACHE).catch(() => undefined)),
   );
   // Do not skip waiting here. The page promotes this worker only when no
-  // uncommitted ShiftBuilder draft is open.
+  // uncommitted SheetBuilder draft is open.
 });
 
 self.addEventListener("activate", (event) => {
@@ -159,11 +159,11 @@ async function networkFirstNavigation(request) {
     if (cached) return cached;
     return new Response(
       "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>" +
-        "<title>Offline — ShiftForge</title>" +
+        "<title>Offline — SheetBuilder</title>" +
         "<body style='font-family:system-ui;background:#111113;color:#f2f2f4;display:grid;place-items:center;height:100vh;margin:0'>" +
         "<div style='text-align:center;max-width:24rem;padding:0 1.5rem'>" +
         "<h1 style='font-weight:600;margin:0 0 .5rem'>Offline</h1>" +
-        "<p style='opacity:.7;margin:0'>ShiftForge needs a connection to load. It will recover automatically when you're back online.</p>" +
+        "<p style='opacity:.7;margin:0'>SheetBuilder needs a connection to load. It will recover automatically when you're back online.</p>" +
         "</div>",
       { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
     );

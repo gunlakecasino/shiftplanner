@@ -349,7 +349,7 @@ export function SettingsShell() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => router.push("/shiftbuilder/team")}
+              onClick={() => router.push("/sheetbuilder/team")}
               className="sb-settings-back-btn sb-interactive"
             >
               <Users size={15} strokeWidth={2.25} />
@@ -357,11 +357,11 @@ export function SettingsShell() {
             </button>
             <button
               type="button"
-              onClick={() => router.push("/shiftbuilder")}
+              onClick={() => router.push("/sheetbuilder")}
               className="sb-settings-back-btn sb-interactive"
             >
               <ArrowLeft size={15} strokeWidth={2.25} />
-              Shift Builder
+              SheetBuilder
             </button>
           </div>
         </div>
@@ -408,7 +408,7 @@ export function SettingsShell() {
                 onClick={async () => {
                   if (await confirmDialog(`Sign out ${currentOperator.full_name}?`, { confirmLabel: "Sign out" })) {
                     logoutOperator();
-                    router.push("/shiftbuilder");
+                    router.push("/sheetbuilder");
                   }
                 }}
                 className="sb-settings-user-btn sb-interactive"

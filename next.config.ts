@@ -23,16 +23,18 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
-      { source: "/today", destination: "/shiftbuilder", permanent: false },
-      { source: "/today/:path*", destination: "/shiftbuilder", permanent: false },
-      { source: "/nightwatch", destination: "/shiftbuilder", permanent: false },
-      { source: "/nightwatch/:path*", destination: "/shiftbuilder", permanent: false },
-      { source: "/people", destination: "/shiftbuilder", permanent: false },
-      { source: "/people/:path*", destination: "/shiftbuilder", permanent: false },
-      { source: "/mail", destination: "/shiftbuilder", permanent: false },
-      { source: "/mail/:path*", destination: "/shiftbuilder", permanent: false },
-      { source: "/logs", destination: "/shiftbuilder", permanent: false },
-      { source: "/logs/:path*", destination: "/shiftbuilder", permanent: false },
+      { source: "/shiftbuilder", destination: "/sheetbuilder", permanent: false },
+      { source: "/shiftbuilder/:path*", destination: "/sheetbuilder/:path*", permanent: false },
+      { source: "/today", destination: "/sheetbuilder", permanent: false },
+      { source: "/today/:path*", destination: "/sheetbuilder", permanent: false },
+      { source: "/nightwatch", destination: "/sheetbuilder", permanent: false },
+      { source: "/nightwatch/:path*", destination: "/sheetbuilder", permanent: false },
+      { source: "/people", destination: "/sheetbuilder", permanent: false },
+      { source: "/people/:path*", destination: "/sheetbuilder", permanent: false },
+      { source: "/mail", destination: "/sheetbuilder", permanent: false },
+      { source: "/mail/:path*", destination: "/sheetbuilder", permanent: false },
+      { source: "/logs", destination: "/sheetbuilder", permanent: false },
+      { source: "/logs/:path*", destination: "/sheetbuilder", permanent: false },
     ];
   },
 

@@ -10,22 +10,16 @@ import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
  * so RosterRail can subscribe narrowly without prop drilling.
  */
 export function useRosterPanels() {
-  // Floating roster panel open/close; persisted across refreshes.
-  // iPad: default collapsed so the artboard gets full width (~110% fit scale).
-  const [rosterOpen, setRosterOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    if (isTabletTouchDevice()) {
-      const tabletSaved = localStorage.getItem("oms_roster_open_tablet");
-      return tabletSaved === "true";
-    }
-    const saved = localStorage.getItem("oms_roster_open");
-    return saved === null ? false : saved === "true";
-  });
+  // Floating roster rail open/close.
+  // SheetBuilder's redesigned toolbar uses a compact roster dropdown as the
+  // primary roster surface, so the legacy rail should never boot open from a
+  // previously persisted browser state.
+  const [rosterOpen, setRosterOpen] = useState<boolean>(false);
   useEffect(() => {
     if (isTabletTouchDevice()) {
-      localStorage.setItem("oms_roster_open_tablet", String(rosterOpen));
+      localStorage.removeItem("oms_roster_open_tablet");
     } else {
-      localStorage.setItem("oms_roster_open", String(rosterOpen));
+      localStorage.removeItem("oms_roster_open");
     }
   }, [rosterOpen]);
 

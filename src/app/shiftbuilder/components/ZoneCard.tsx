@@ -32,6 +32,7 @@ import {
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick, padUsesSingleTap } from "./CardTaskZone";
 import { CardTaskBadge } from "./CardTaskBadge";
+import { ShiftCard as PackageShiftCard } from "../redesign/components/ShiftCard";
 
 export interface ZoneCardProps {
   def: any;
@@ -247,7 +248,13 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         ? assignmentState.tmName
         : assignmentState.kind === "unassigned"
           ? "Unassigned"
-          : "";
+        : "";
+  const zoneNumber = Number(String(def.key).replace(/\D/g, "")) || 1;
+  const packageNotes = regularTasks.map((task) => task.taskLabel).filter(Boolean);
+  const packageCoverage = coveredBy.map((entry, index) => ({
+    label: entry.side ? `${String(def.key).replace(/^Z/, "")}${entry.side}` : String(index + 1),
+    name: entry.tmName,
+  }));
 
   return (
     <div
@@ -268,172 +275,24 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       {...(!isLocked ? attributes : {})}
       data-slot-key={def.key}
       data-has-draft={draftActive ? "true" : undefined}
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`assignment-card sb-package-card-wrapper relative h-full min-h-[172px] rounded-xl ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${isTodayKiosk ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
       }}
     >
-      <CardAccentStripe color={color} />
-
-      {/* Refined header matching the design: icon + label, status badge, count pill */}
-      <div className="px-3 pt-2 flex items-center gap-1 flex-nowrap shrink-0">
-        <span className="text-[12px] leading-none shrink-0" style={{ color: cardAccentInk(color) }}>{icon}</span>
-        <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color: cardAccentInk(color) }}>
-          {def.label}
-        </span>
-        <div className="ml-auto flex items-center gap-1 flex-shrink-0">
-          {showTaskBadge && (
-            <CardTaskBadge tmId={currentTmId} slotKey={`zone_${String(def.key).replace(/^Z/, "")}`} />
-          )}
-          {/* Status badge - dynamic fit or omitted for covered + unassigned (no assignee). */}
-          {assignmentState.kind !== "covered" && assignmentState.kind !== "unassigned" && (
-            <PlacementFitChip fit={fitChip} compact />
-          )}
-          <BreakBadge value={currentBreak} onCycle={cycleBreak} size="sm" />
-        </div>
-      </div>
-
-      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${zoneCoverageTasks.length > 0 ? 'sb-card-content-with-footer' : ''}`}>
-        {/* Large name / covered area */}
-        <div
-          className="sb-card-assign-zone px-3.5 pt-1.5 pb-2 shrink-0"
-          {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
-        >
-          {assignmentState.kind === "covered" ? (
-            <CoveredByOverlay
-              scale="zone"
-              coveredBy={coveredBy}
-              targetSlotKey={def.key}
-              onClick={(e) => e.stopPropagation()}
-              onSwapSides={
-                showDigitalAssists &&
-                coveredBy.length === 2 &&
-                coveredBy.every((entry) => !entry.isSynthetic) &&
-                onSwapCoverageSides
-                  ? () => onSwapCoverageSides(def.key, coveredBy)
-                  : undefined
-              }
-            />
-          ) : (
-            <div
-              className="min-w-0"
-              title={
-                placementTrail?.length
-                  ? `${displayName} · prior: ${placementTrail.join(" → ")}`
-                  : displayName
-              }
-            >
-              {assignmentState.kind === "unassigned" ? (
-                <h3
-                  className="min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] text-[#9CA3AF] opacity-70"
-                  style={{ color: "#A1A1AA", opacity: 0.75 }}
-                >
-                  <span className="truncate min-w-0 block">{displayName}</span>
-                </h3>
-              ) : showDigitalAssists ? (
-                <TmNameBlock
-                  name={displayName}
-                  fontSize={25}
-                  placementTrail={placementTrail}
-                  placementTrailMatchSlotKey={def.key}
-                  criticalRepeat={isCriticalRepeatFit(fitChip)}
-                />
-              ) : (
-                <h3 className="min-w-0 text-[25px] font-bold leading-tight tracking-[-0.02em] text-gray-900">
-                  <span className="truncate min-w-0 block">{displayName}</span>
-                </h3>
-              )}
-              {assignmentState.kind === "draft" && assignmentState.previousName ? (
-                <span
-                  className="text-[9px] text-[#9CA3AF] line-through opacity-60 mt-0.5 tracking-[0.2px] block"
-                  style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
-                >
-                  was: {assignmentState.previousName}
-                </span>
-              ) : null}
-            </div>
-          )}
-        </div>
-
-        {assignmentState.kind === "unassigned" ? (
-          <>
-            <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
-            <div
-              className="px-3.5 py-2.5 shrink-0"
-              {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
-            >
-              <UnassignedInvite
-                size="zone"
-                onClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
-                title={`${padUsesSingleTap() ? "Tap" : "Double-click"} to open placement · drag this (unassigned) card to an assigned zone to assign coverage from that TM to it`}
-              />
-            </div>
-          </>
-        ) : null}
-
-        {showDigitalAssists && !isTodayKiosk ? (
-          <>
-            <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
-            <CardTaskZone
-              slotKey={def.key}
-              onOpenTasksPad={onOpenTaskTextEdit}
-              isLocked={isLocked}
-              enabled={showDigitalAssists}
-              className="sb-card-task-scroll px-3 py-2 space-y-0.5 flex-1 min-h-[36px] overflow-y-auto"
-            >
-              {regularTasks.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  slotKey={def.key}
-                  onRemoveTask={onRemoveTask}
-                  onSetTaskColor={onSetTaskColor}
-                  onSetTaskMarker={onSetTaskMarker}
-                  onEditTask={onEditTask}
-                  onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.zoneCard)}
-                  textColorClass={taskLabelColorClass(true)}
-                />
-              ))}
-            </CardTaskZone>
-          </>
-        ) : regularTasks.length > 0 ? (
-          <>
-            <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
-            <div className="sb-card-task-scroll px-3 py-2 space-y-0.5 flex-1 min-h-0 overflow-y-auto">
-              {regularTasks.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  slotKey={def.key}
-                  onRemoveTask={onRemoveTask}
-                  onSetTaskColor={onSetTaskColor}
-                  onSetTaskMarker={onSetTaskMarker}
-                  onEditTask={onEditTask}
-                  onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  textSize={taskLabelSizeClass(TASK_LABEL_SIZE_PX.zoneCard)}
-                  textColorClass={taskLabelColorClass(false)}
-                />
-              ))}
-            </div>
-          </>
-        ) : null}
-      </div>
-
-      {zoneCoverageTasks.length > 0 && (
-        <div className="sb-coverage-footer shrink-0">
-          {zoneCoverageTasks.map((t) => (
-            <CoverageBar
-              key={t.id}
-              task={t}
-              slotKey={def.key}
-              onRemoveTask={onRemoveTask}
-              builderCalm={showDigitalAssists}
-            />
-          ))}
-        </div>
-      )}
+      <PackageShiftCard
+        zone={zoneNumber}
+        name={assignmentState.kind === "covered" ? "" : displayName || "Unassigned"}
+        notes={packageNotes}
+        unassigned={assignmentState.kind === "unassigned" || assignmentState.kind === "covered"}
+        coverage={assignmentState.kind === "covered" ? packageCoverage : undefined}
+        onClick={() => {
+          if (isLocked) return;
+          const el = document.querySelector(`[data-slot-key="${def.key}"]`) as HTMLElement | null;
+          if (el) onCardClick(def.key, el);
+        }}
+      />
     </div>
   );
 }, zoneCardPropsAreEqual);

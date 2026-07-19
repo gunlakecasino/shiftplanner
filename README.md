@@ -1,6 +1,6 @@
-# ShiftPlanner
+# SheetBuilder
 
-**World-class GRAVE shift scheduling and assignment system for ZDS operations.**
+**World-class GRAVE sheet system for ZDS operations** (product name: **SheetBuilder**; formerly ShiftBuilder / ShiftPlanner).
 
 ShiftPlanner is the internal tool used to build precise, fair, and auditable nightly GRAVE sheets. It combines a strict domain-specific placement engine, weighted multi-signal optimization, Grok-powered intelligence, **Draft Mode** for planning roles, and session-gated mutations.
 

@@ -11,7 +11,7 @@ import { BuilderLoadingShell } from "../components/builderPrimitives";
 export default function GravesScheduleRedirect() {
   const router = useRouter();
   useEffect(() => {
-    router.replace("/shiftbuilder/team?tab=schedule");
+    router.replace("/sheetbuilder/team?tab=schedule");
   }, [router]);
 
   return <BuilderLoadingShell label="REDIRECTING" sublabel="Graves schedule moved to Team" />;

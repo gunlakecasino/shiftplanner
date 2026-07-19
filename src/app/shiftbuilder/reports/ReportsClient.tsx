@@ -15,7 +15,7 @@ function ReportsGate() {
 
   useEffect(() => {
     if (!isLoading && !canViewReports) {
-      router.replace("/shiftbuilder");
+      router.replace("/sheetbuilder");
     }
   }, [isLoading, canViewReports, router]);
 

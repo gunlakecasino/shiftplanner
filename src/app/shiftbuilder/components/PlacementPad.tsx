@@ -62,6 +62,8 @@ import {
   isOverlapInsightSlotKey,
   type OverlapTaskInsightModel,
 } from "@/lib/shiftbuilder/rotation/buildOverlapTaskInsight";
+import { RichTaskEditor } from "../redesign/components/RichTaskEditor";
+import { PlacementDockTabs } from "./placement-dock/PlacementDockTabs";
 
 /* ── Refined visual tokens & helpers (from Refined Placement Pad) ─────────── */
 type ExposureLevel = 0 | 1 | 2 | 3;
@@ -251,7 +253,7 @@ function FitIntelBlock({
     : styles;
 
   return (
-    <div className="rounded-2xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
+    <div className="sb-placement-pad-intel rounded-2xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
       <div
         className="px-3 py-2.5 border-b border-black/[0.04]"
         style={{ background: styles.bg }}
@@ -678,6 +680,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const [assignMode, setAssignMode] = useState(false);
   const [assignConfirmed, setAssignConfirmed] = useState(false);
   const [sweeperOpen, setSweeperOpen] = useState(false);
+  const [addingTask, setAddingTask] = useState(false);
   const [taskInput, setTaskInput] = useState("");
   const taskInputRef = useRef<HTMLInputElement>(null);
   const lightRunRef = useRef(0);
@@ -708,6 +711,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     analystRequestRef.current += 1;
     setMatrixExpanded(false);
     setEvidenceOpen(false);
+    setAddingTask(false);
     setTaskInput("");
     setSweeperOpen(false);
     setOverlapInsight(null);
@@ -1297,30 +1301,32 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const usePortalLocal = !isDock && !!hostId && !!portalStyleLocal;
 
   const refinedCard = (
-    <div className="w-full bg-white rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.09),0_1px_3px_rgba(0,0,0,0.05)] flex flex-col min-h-0 flex-1">
-      {/* Header - smaller & tighter */}
-      <div className="px-4 pt-4 pb-3">
+    <div
+      className="sb-sheetbuilder-placement-pad w-full overflow-hidden flex flex-col min-h-0 flex-1"
+      style={{ "--placement-pad-accent": refinedZoneColor } as React.CSSProperties}
+    >
+      <div className="sb-placement-pad-rail" aria-hidden="true" />
+      {/* Header */}
+      <div className="sb-placement-pad-header px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: a.tmName ? refinedZoneColor : "#9CA3AF" }}>
+            <div className="sb-placement-pad-avatar w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: a.tmName ? refinedZoneColor : "#9CA3AF" }}>
               <span className="text-white text-[17px] font-semibold leading-none select-none">{refinedName.charAt(0)}</span>
             </div>
             <div className="min-w-0">
-              <p className="text-[9px] font-bold tracking-[0.14em] uppercase mb-px" style={{ color: refinedZoneColor }}>{label}</p>
-              <h2 id={dialogTitleId} className="text-[18px] font-bold text-gray-900 leading-tight truncate">{refinedName}</h2>
+              <p className="sb-placement-pad-slot text-[9px] font-bold tracking-[0.14em] uppercase mb-px" style={{ color: refinedZoneColor }}>{label}</p>
+              <h2 id={dialogTitleId} className="sb-placement-pad-name text-[18px] font-bold text-gray-900 leading-tight truncate">{refinedName}</h2>
             </div>
           </div>
 
           <div className="flex items-start gap-1.5 flex-shrink-0">
             {refinedBrk > 0 && (
-              <div className="text-right">
-                <p className="text-[8px] font-bold tracking-[0.16em] uppercase text-gray-400 mb-px">BRK</p>
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#FF9500" }}>
-                  <span className="text-white text-base font-bold leading-none">{refinedBrk}</span>
-                </div>
+              <div className="sb-placement-pad-brk" title={`Break group ${refinedBrk}`}>
+                <span>BRK</span>
+                <strong>{refinedBrk}</strong>
               </div>
             )}
-            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="sb-tablet-touch-target mt-0.5 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200" aria-label="Close assignment panel">
+            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="sb-placement-pad-close sb-tablet-touch-target mt-0.5 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200" aria-label="Close assignment panel">
               <X className="w-4 h-4 text-gray-500" />
             </button>
           </div>
@@ -1328,35 +1334,64 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
         {a.tmName && onMarkUnavailable && (
           <div className="mt-2.5">
-            <button onClick={(e) => { e.stopPropagation(); void onMarkUnavailable(a.tmId, a.tmName, "called_off"); }} className="text-[10px] font-semibold px-3 py-1 rounded-lg border border-yellow-300 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 active:scale-95 transition-all">
+            <button onClick={(e) => { e.stopPropagation(); void onMarkUnavailable(a.tmId, a.tmName, "called_off"); }} className="sb-placement-pad-warning-btn text-[10px] font-semibold px-3 py-1 rounded-lg border border-yellow-300 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 active:scale-95 transition-all">
               Mark unavailable
             </button>
           </div>
         )}
       </div>
 
-      <div className="h-px bg-gray-100" />
+      {isDock && onDockTabChange ? (
+        <PlacementDockTabs active={dockTab} onChange={onDockTabChange} />
+      ) : null}
+
+      <div className="sb-placement-pad-divider h-px bg-gray-100" />
 
       {/* Body — picker uses one inner scroll region (Safari breaks on nested overflow-y). */}
       <div
-        className={`px-4 py-3 flex flex-col min-h-0 ${
+        className={`sb-placement-pad-body px-4 py-3 flex flex-col min-h-0 ${
           showTmPicker
             ? "flex-1 overflow-hidden"
-            : coverageMode || analystDetailsOpen
-              ? "space-y-3 overflow-y-auto max-h-[380px]"
-              : "space-y-3 overflow-visible"
+            : "space-y-3 flex-1 overflow-y-auto"
         }`}
       >
+        {showDockAssignedSummary && (
+          <div className="sb-placement-pad-section">
+            <p className="sb-placement-pad-section-title mb-2">Current placement</p>
+            <div className="flex items-center gap-2.5">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[15px] font-black text-white"
+                style={{ backgroundColor: refinedZoneColor }}
+              >
+                {refinedName.charAt(0)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-extrabold text-gray-900">{refinedName}</p>
+                <p className="truncate text-[10px] font-semibold text-gray-400">{label}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={isCurrentNightLocked}
+              onClick={() => setAssignMode(true)}
+              className="sb-placement-pad-primary mt-3 w-full py-2.5 text-[12px] font-bold text-white disabled:opacity-50"
+              style={{ background: accent }}
+            >
+              Change team member
+            </button>
+          </div>
+        )}
+
         {!a.tmName && !showTmPicker && (
           <div className="py-2">
-            <button disabled={isCurrentNightLocked} onClick={() => setAssignMode(true)} className="w-full rounded-2xl py-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: accent }}>
+            <button disabled={isCurrentNightLocked} onClick={() => setAssignMode(true)} className="sb-placement-pad-primary w-full rounded-2xl py-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: accent }}>
               Assign team member
             </button>
           </div>
         )}
 
         {showTmPicker && (
-          <div className="flex flex-col flex-1 min-h-0">
+          <div className="sb-placement-pad-picker flex flex-col flex-1 min-h-0">
             <TmPicker
               key={`${slotKey}:${nightIsoFromDate(selectedDay.date)}`}
               tms={scheduledUnassigned}
@@ -1385,18 +1420,18 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
         {!showTmPicker && !coverageMode && (a.tmName || isOverlapSlot) && (
           <>
             {showTasksPane && (a.tmName || isOverlapSlot) && (
-              <div className="space-y-1.5">
+              <div className="sb-placement-pad-section sb-placement-pad-tasks space-y-1.5">
                 {tasks.map((t) => (
                   <div
                     key={t.id || t.taskLabel}
-                    className={`flex items-center justify-between px-3 py-2 rounded-2xl border border-gray-100 bg-white text-[12px] ${onOpenTasksPad ? "cursor-pointer hover:border-[#007AFF]/30 hover:bg-[#007AFF]/[0.03]" : ""}`}
+                    className={`sb-placement-pad-task-row flex items-center justify-between px-3 py-2 rounded-2xl border border-gray-100 bg-white text-[12px] ${onOpenTasksPad ? "cursor-pointer hover:border-[#007AFF]/30 hover:bg-[#007AFF]/[0.03]" : ""}`}
                     onClick={onOpenTasksPad ? (e) => { e.stopPropagation(); onOpenTasksPad(slotKey, t); } : undefined}
                     onKeyDown={onOpenTasksPad ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTasksPad(slotKey, t); } } : undefined}
                     role={onOpenTasksPad ? "button" : undefined}
                     tabIndex={onOpenTasksPad ? 0 : undefined}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color ?? accent }} />
+                      <span className="sb-placement-pad-task-dot w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color ?? accent }} />
                       <span className="font-medium text-gray-800 truncate">{t.taskLabel}</span>
                     </div>
                     {onRemoveTask && (
@@ -1412,57 +1447,91 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                   </div>
                 ))}
 
-                {onOpenTasksPad ? (
+                {addingTask && onAddTask ? (
+                  <div
+                    className="rounded-xl border border-gray-100 bg-white p-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <RichTaskEditor
+                      onSave={(_html, text) => {
+                        void onAddTask(slotKey, text);
+                        setAddingTask(false);
+                      }}
+                      onCancel={() => setAddingTask(false)}
+                    />
+                  </div>
+                ) : onAddTask ? (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddingTask(true);
+                      }}
+                      className="flex items-center justify-center gap-1.5 flex-1 border border-dashed border-gray-300 rounded-lg py-1.5 text-[11px] font-semibold text-blue-500 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      {tasks.length ? "Add another task" : "Add task"}
+                    </button>
+                    {!isOverlapSlot && onAssignSweeper ? (
+                      <button
+                        type="button"
+                        title="Assign Sweeper"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSweeperOpen(!sweeperOpen);
+                        }}
+                        disabled={isCurrentNightLocked}
+                        className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-amber-400 border border-amber-500 hover:bg-amber-500 transition-colors shadow-sm disabled:opacity-50"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <line x1="3" y1="2" x2="10" y2="9" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                          <rect x="8.5" y="7.5" width="4" height="2" rx="0.5" transform="rotate(45 8.5 7.5)" fill="white" opacity="0.7" />
+                          <path d="M8 10 Q9.5 9 12 10.5 L13.5 14 Q11 13 9.5 13.5 Q8.5 14 7.5 13.5 Z" fill="white" />
+                          <line x1="9.5" y1="10.2" x2="9" y2="13.2" stroke="rgba(180,100,0,0.4)" strokeWidth="0.6" strokeLinecap="round" />
+                          <line x1="11" y1="10.5" x2="10.8" y2="13.5" stroke="rgba(180,100,0,0.4)" strokeWidth="0.6" strokeLinecap="round" />
+                          <line x1="12.3" y1="11.2" x2="12.5" y2="13.8" stroke="rgba(180,100,0,0.4)" strokeWidth="0.6" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    ) : null}
+                  </div>
+                ) : onOpenTasksPad ? (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onOpenTasksPad(slotKey, undefined, { addMode: true }); }}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border border-dashed border-[#007AFF]/35 bg-[#007AFF]/[0.04] text-[12px] font-semibold text-[#007AFF] hover:bg-[#007AFF]/[0.08] active:scale-[0.99] transition-all"
+                    className="sb-placement-pad-add-task w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border border-dashed border-[#007AFF]/35 bg-[#007AFF]/[0.04] text-[12px] font-semibold text-[#007AFF] hover:bg-[#007AFF]/[0.08] active:scale-[0.99] transition-all"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>{tasks.length ? "Add another task" : "Add tasks"}</span>
                   </button>
-                ) : onAddTask ? (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-2xl border border-gray-200">
-                    <input
-                      ref={taskInputRef}
-                      value={taskInput}
-                      onChange={(e) => setTaskInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleInlineAddTask()}
-                      placeholder="Add a task..."
-                      className="flex-1 bg-transparent text-[12px] text-gray-700 placeholder-gray-400 outline-none"
-                    />
-                    {taskInput.trim() ? (
-                      <button type="button" onClick={handleInlineAddTask} className="text-[#007AFF] flex-shrink-0">
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    ) : null}
-                  </div>
                 ) : null}
 
                 {!isOverlapSlot && onAssignSweeper && (() => {
                   const hasSweeper = tasks.some((t: any) => t.taskLabel?.toLowerCase().includes('sweep'));
                   return (
                     <div style={{ position: 'relative' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setSweeperOpen(!sweeperOpen); }}
-                        disabled={hasSweeper || isCurrentNightLocked}
-                        className="w-full text-[11px] py-[5px] rounded-xl flex items-center justify-center gap-1.5 font-semibold"
-                        style={{
-                          background: hasSweeper ? '#f3f4f6' : '#fef3c7',
-                          color: hasSweeper ? '#9ca3af' : '#b45309',
-                          border: hasSweeper ? '1px solid #e5e7eb' : '1px solid #fcd34d',
-                          cursor: hasSweeper ? 'default' : 'pointer',
-                        }}
-                      >
-                        <span style={{ fontSize: 13 }}>🧹</span>
-                        <span>Assign Sweeper</span>
-                        {hasSweeper && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 2 }}>(assigned)</span>}
-                      </button>
+                      {!onAddTask && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setSweeperOpen(!sweeperOpen); }}
+                          disabled={hasSweeper || isCurrentNightLocked}
+                          className="sb-placement-pad-sweeper w-full text-[11px] py-[5px] rounded-xl flex items-center justify-center gap-1.5 font-semibold"
+                          style={{
+                            background: hasSweeper ? '#f3f4f6' : '#fef3c7',
+                            color: hasSweeper ? '#9ca3af' : '#b45309',
+                            border: hasSweeper ? '1px solid #e5e7eb' : '1px solid #fcd34d',
+                            cursor: hasSweeper ? 'default' : 'pointer',
+                          }}
+                        >
+                          <span style={{ fontSize: 13 }}>🧹</span>
+                          <span>Assign Sweeper</span>
+                          {hasSweeper && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 2 }}>(assigned)</span>}
+                        </button>
+                      )}
 
                       {sweeperOpen && !hasSweeper && (
                         <div
-                          className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow text-[12px] z-10 py-1"
+                          className={`${onAddTask ? "relative" : "absolute"} left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow text-[12px] z-10 py-1`}
                           onClick={(e) => e.stopPropagation()}
                         >
                           {sweeperOptions.map((opt) => (
@@ -1488,13 +1557,13 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
             {/* Phase C — OL task insights (hide zone fit / matrix / last-5 / swap language) */}
             {isOverlapSlot && (showIntelPane || !isDock) && (
-              <div className="space-y-3">
+              <div className="sb-placement-pad-section space-y-3">
                 {overlapInsightLoading ? (
                   <BuilderLoadingLine className="text-[11px]">Loading overlap task history</BuilderLoadingLine>
                 ) : (
                   <>
                     <div>
-                      <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
+                      <p className="sb-placement-pad-section-title text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
                         {overlapInsight?.band ?? "OL"} standing pool
                       </p>
                       {overlapInsight?.poolEmpty !== false && !(overlapInsight?.standingPool?.length) ? (
@@ -1515,7 +1584,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
                     {tasks.length > 0 && (
                       <div>
-                        <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
+                        <p className="sb-placement-pad-section-title text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
                           Recent for tonight&apos;s task
                           {overlapInsight?.tonightChips?.[0]?.label
                             ? ` · ${overlapInsight.tonightChips[0].label}`
@@ -1544,7 +1613,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                     )}
 
                     <div>
-                      <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
+                      <p className="sb-placement-pad-section-title text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">
                         Tasks this TM · last 30 nights
                       </p>
                       {overlapInsight?.emptySeat || !a.tmId ? (
@@ -1598,11 +1667,11 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               </>
             )}
 
-            {!isOverlapSlot && a.tmName && (
+            {!isOverlapSlot && a.tmName && (showIntelPane || !isDock) && (
               <>
                 {/* Matrix — full gender-eligible surface (no truncation) */}
-                <div>
-                  <p className="text-[9px] text-gray-400 mb-1">Matrix · last 30 nights (spread) + last 5 placements</p>
+                <div className="sb-placement-pad-section">
+                  <p className="sb-placement-pad-section-title text-[9px] text-gray-400 mb-1">Matrix · last 30 nights (spread) + last 5 placements</p>
 
                   <div className="flex items-center gap-1 mb-1 flex-wrap text-[11px]">
                     <span className="font-bold" style={{ color: "#ff3b30" }}>RR</span>
@@ -1643,8 +1712,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                 </div>
 
                 {/* LAST 5 — slot accent colors (matches deployment card chrome) */}
-                <div>
-                  <p className="text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">LAST 5</p>
+                <div className="sb-placement-pad-section">
+                  <p className="sb-placement-pad-section-title text-[8px] font-bold tracking-[0.14em] uppercase text-gray-400 mb-1">LAST 5</p>
                   <div className="grid grid-cols-5 gap-1">
                     {refinedLastFive.map((p, i) => {
                       const base = p.color;
@@ -1674,7 +1743,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
       {/* Footer - smaller */}
       {(isDock || (!showTmPicker && !coverageMode)) && (
-        <div className="px-3 pb-3 pt-2 border-t border-gray-100 bg-white">
+        <div className="sb-placement-pad-footer px-3 pb-3 pt-2 border-t border-gray-100 bg-white">
           <div className="grid grid-cols-4 gap-1">
             {[
               { label: a.isLocked ? "Locked" : "Lock", onClick: () => onToggleLock?.(slotKey) },
@@ -1682,7 +1751,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               { label: "Coverage", onClick: () => { setCoverageMode(true); onDockTabChange?.("tasks"); } },
               { label: "Swap", onClick: () => { setAssignMode(true); onDockTabChange?.("assign"); } },
             ].map((b, i) => (
-              <button key={i} disabled={isCurrentNightLocked} onClick={b.onClick} className={`py-2 rounded-2xl text-[11px] font-semibold ${ (b as any).danger ? "text-[#FF3B30] bg-[#FFF0F0] border border-[#FFD5D5]" : "text-gray-800 bg-white border border-gray-200" }`}>
+              <button key={i} disabled={isCurrentNightLocked} onClick={b.onClick} className={`sb-placement-pad-action py-2 rounded-2xl text-[11px] font-semibold ${ (b as any).danger ? "sb-placement-pad-action-danger text-[#FF3B30] bg-[#FFF0F0] border border-[#FFD5D5]" : "text-gray-800 bg-white border border-gray-200" }`}>
                 {b.label}
               </button>
             ))}

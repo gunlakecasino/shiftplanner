@@ -54,6 +54,7 @@ export interface RosterRailProps {
   amOverlapDateNum?: number;
   selectedDay: { name: string; dateNum: number };
   isRosterLoading?: boolean;
+  isOpen?: boolean;
 }
 
 function MsIcon({
@@ -172,8 +173,10 @@ const RosterRail = React.memo(function RosterRail({
   amOverlapDateNum,
   selectedDay,
   isRosterLoading = false,
+  isOpen = true,
 }: RosterRailProps) {
   const [unmarkingId, setUnmarkingId] = React.useState<string | null>(null);
+  const searchRef = React.useRef<HTMLInputElement>(null);
   const canUnmarkCalledOff =
     canEditAssignments && !isCurrentNightLocked && !!onUnmarkCalledOff;
   const graveOnly = useGraveOnly();
@@ -214,6 +217,15 @@ const RosterRail = React.memo(function RosterRail({
   const setRosterSearch = (v: string) => {
     useShiftBuilderStore.getState().setRosterSearch(v);
   };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const id = window.setTimeout(() => {
+      searchRef.current?.focus({ preventScroll: true });
+      searchRef.current?.select();
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [isOpen]);
 
   /** Band-filtered schedule pool + any placed TMs (always visible even in Graves-only mode). */
   const rawPool = React.useMemo(() => {
@@ -420,7 +432,7 @@ const RosterRail = React.memo(function RosterRail({
               <MsIcon name="groups" size={15} fill={1} />
             </div>
             <div className="min-w-0">
-              <p className="sb-roster-header__kicker">Tonight</p>
+              <p className="sb-roster-header__kicker">Roster</p>
               <h2 className="sb-roster-header__title">
                 {selectedDay.name.slice(0, 3)} {selectedDay.dateNum}
               </h2>
@@ -440,7 +452,7 @@ const RosterRail = React.memo(function RosterRail({
         </div>
         <p className="sb-roster-header__subtitle">
           {graveOnly
-            ? `Graves band · ${scheduledBandCount} on sheet`
+            ? `Graves band · ${scheduledBandCount} scheduled`
             : `Graves Default · ${scheduleRoster.length} scheduled`}
         </p>
         {(placedCount > 0 || unplacedCount > 0) && (
@@ -468,10 +480,11 @@ const RosterRail = React.memo(function RosterRail({
       <div className="sb-roster-controls">
         <div className="sb-roster-search-wrap">
           <input
+            ref={searchRef}
             type="text"
             value={rosterSearch}
             onChange={(e) => setRosterSearch(e.target.value)}
-            placeholder="Search name or ID…"
+            placeholder="Search team…"
             className="sb-roster-search sb-interactive"
             style={{ fontFamily: "var(--font-atkinson, var(--font-geist-sans), system-ui)" }}
           />
@@ -509,7 +522,7 @@ const RosterRail = React.memo(function RosterRail({
         {scheduleEmpty && (
           <div className="sb-roster-empty">
             No TMs on Graves Default Schedule for tonight. Edit the sheet at{" "}
-            <a href="/shiftbuilder/team?tab=schedule" className="sb-gold-text underline">
+            <a href="/sheetbuilder/team?tab=schedule" className="sb-gold-text underline">
               Graves Schedule
             </a>
             .
@@ -542,7 +555,7 @@ const RosterRail = React.memo(function RosterRail({
           <section className="sb-roster-section">
             <div className="sb-roster-banner">
               <div className="flex-1 h-px sb-gold-rule" />
-              <span className="sb-roster-banner__label">On Sheet — Not Placed</span>
+              <span className="sb-roster-banner__label">On Sheet — Open</span>
               <div className="flex-1 h-px sb-gold-rule" />
             </div>
 

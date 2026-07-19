@@ -36,7 +36,7 @@ export default function ShiftBuilderError({
             <RefreshCw size={14} /> Try again
           </button>
           <Link
-            href="/shiftbuilder"
+            href="/sheetbuilder"
             className="sb-interactive inline-flex items-center rounded-xl border border-black/10 px-4 py-2.5 text-[13px] font-semibold text-[#3A3A3C]"
           >
             Deployment board

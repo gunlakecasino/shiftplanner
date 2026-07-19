@@ -308,7 +308,7 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!canApplySchedules) {
-      router.replace("/shiftbuilder");
+      router.replace("/sheetbuilder");
     }
   }, [isAuthenticated, canApplySchedules, router]);
 
@@ -486,7 +486,7 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
         <div>
           {!embedded && (
             <Link
-              href="/shiftbuilder"
+              href="/sheetbuilder"
               className="text-[11px] font-semibold text-neutral-500 hover:text-neutral-800"
             >
               ← ShiftBuilder

@@ -76,7 +76,7 @@ export function ReportsShell() {
               {canAccessSudo ? (
                 <button
                   type="button"
-                  onClick={() => router.push("/shiftbuilder/settings?tab=reports")}
+                  onClick={() => router.push("/sheetbuilder/settings?tab=reports")}
                   className="sb-settings-back-btn sb-interactive"
                 >
                   <Settings2 size={15} strokeWidth={2.1} />
@@ -85,11 +85,11 @@ export function ReportsShell() {
               ) : null}
               <button
                 type="button"
-                onClick={() => router.push("/shiftbuilder")}
+                onClick={() => router.push("/sheetbuilder")}
                 className="sb-settings-back-btn sb-interactive"
               >
                 <ArrowLeft size={15} strokeWidth={2.25} />
-                Shift Builder
+                SheetBuilder
               </button>
             </div>
           ) : null}

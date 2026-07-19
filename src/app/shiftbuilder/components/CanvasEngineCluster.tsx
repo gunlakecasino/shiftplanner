@@ -27,6 +27,7 @@ export type EngineRunPhase = "idle" | "planner" | "xai";
 export type CoverageEngineRunOptions = {
   forceXai?: boolean;
   useTools?: boolean;
+  runMode?: "fill-open" | "rebuild-day";
   confirmMessage?: string;
   skipConfirm?: boolean;
 };

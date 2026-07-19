@@ -9,11 +9,13 @@ import {
   Check,
   Download,
   Eye,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "./ConfirmDialog";
 import "./printCommandCenter.css";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+import { Toggle } from "../redesign/components/Toggle";
 import {
   defaultPrintDays,
   countPrintPages,
@@ -598,6 +600,39 @@ export function PrintCommandCenter({
 
   if (!mounted) return null;
 
+  return createPortal(
+    <PackagePrintCommandCenterShell
+      visible={visible}
+      modalRef={modalRef}
+      onClose={onClose}
+      isPrinting={isPrinting}
+      printProgress={printProgress}
+      DAY_DEFS={DAY_DEFS}
+      days={days}
+      setDays={setDays}
+      selectedDayIndex={selectedDayIndex}
+      pageCount={pageCount}
+      estSecs={estSecs}
+      deployCount={deployCount}
+      breaksCount={breaksCount}
+      handlePrint={handlePrint}
+      handleExport={handleExport}
+      handlePreview={handlePreview}
+      onExport={onExport}
+      onPreviewSheet={onPreviewSheet}
+      printVariant={printVariant}
+      handlePrintVariantChange={handlePrintVariantChange}
+      includeShiftNotes={includeShiftNotes}
+      setIncludeShiftNotes={setIncludeShiftNotes}
+      planningBlankSlate={planningBlankSlate}
+      setPlanningBlankSlate={setPlanningBlankSlate}
+      includeTimestamp={includeTimestamp}
+      setIncludeTimestamp={setIncludeTimestamp}
+      canAccessSudo={canAccessSudo}
+    />,
+    document.body,
+  );
+
   // ── Theme values ──────────────────────────────────────────────────────────
   const panelBg = isDark ? "rgba(28,28,30,0.97)" : "rgba(250,250,252,0.98)";
   const border = isDark ? "rgba(72,72,74,0.6)" : "rgba(209,209,214,0.7)";
@@ -1020,6 +1055,384 @@ export function PrintCommandCenter({
       </div>
     </div>,
     document.body
+  );
+}
+
+function PackagePrintCommandCenterShell({
+  visible,
+  modalRef,
+  onClose,
+  isPrinting,
+  printProgress,
+  DAY_DEFS,
+  days,
+  setDays,
+  selectedDayIndex,
+  pageCount,
+  estSecs,
+  deployCount,
+  breaksCount,
+  handlePrint,
+  handleExport,
+  handlePreview,
+  onExport,
+  onPreviewSheet,
+  printVariant,
+  handlePrintVariantChange,
+  includeShiftNotes,
+  setIncludeShiftNotes,
+  planningBlankSlate,
+  setPlanningBlankSlate,
+  includeTimestamp,
+  setIncludeTimestamp,
+  canAccessSudo,
+}: {
+  visible: boolean;
+  modalRef: React.RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+  isPrinting: boolean;
+  printProgress: PrintProgress | null;
+  DAY_DEFS: DayDef[];
+  days: PrintDayConfig[];
+  setDays: React.Dispatch<React.SetStateAction<PrintDayConfig[]>>;
+  selectedDayIndex: number;
+  pageCount: number;
+  estSecs: number;
+  deployCount: number;
+  breaksCount: number;
+  handlePrint: () => void;
+  handleExport: () => void;
+  handlePreview: () => void;
+  onExport?: (config: PrintConfig) => void;
+  onPreviewSheet?: PrintCommandCenterProps["onPreviewSheet"];
+  printVariant: PrintVariant;
+  handlePrintVariantChange: (next: PrintVariant) => Promise<void>;
+  includeShiftNotes: boolean;
+  setIncludeShiftNotes: React.Dispatch<React.SetStateAction<boolean>>;
+  planningBlankSlate: boolean;
+  setPlanningBlankSlate: React.Dispatch<React.SetStateAction<boolean>>;
+  includeTimestamp: boolean;
+  setIncludeTimestamp: React.Dispatch<React.SetStateAction<boolean>>;
+  canAccessSudo: boolean;
+}) {
+  const toggle = (i: number, key: "printDeploy" | "printBreaks") =>
+    setDays((prev) =>
+      prev.map((d, j) =>
+        j === i ? { ...d, [key]: !d[key], inOverview: false } : d,
+      ),
+    );
+
+  const setAll = (key: "printDeploy" | "printBreaks") =>
+    setDays((prev) => prev.map((d) => ({ ...d, [key]: true, inOverview: false })));
+
+  const clear = () =>
+    setDays((prev) =>
+      prev.map((d) => ({
+        ...d,
+        printDeploy: false,
+        printBreaks: false,
+        inOverview: false,
+      })),
+    );
+
+  const rangeLabel =
+    DAY_DEFS.length > 0
+      ? `${DAY_DEFS[0].short} ${DAY_DEFS[0].dateNum} – ${DAY_DEFS[DAY_DEFS.length - 1].short} ${DAY_DEFS[DAY_DEFS.length - 1].dateNum} · ${DAY_DEFS[0].monthYear}`
+      : "Graves week";
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 z-[100] flex items-center justify-center p-6 transition-opacity",
+        visible ? "opacity-100" : "opacity-0",
+      )}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !isPrinting) onClose();
+      }}
+    >
+      <div className="absolute inset-0 bg-black/35 backdrop-blur-sm" />
+
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pcc-title"
+        aria-describedby="pcc-summary"
+        tabIndex={-1}
+        className="relative w-full max-w-[680px] bg-white rounded-2xl shadow-[0_32px_80px_rgba(0,0,0,0.22)] overflow-hidden outline-none"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 pt-5 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#EFF6FF] flex items-center justify-center shrink-0">
+              <Printer size={16} className="text-blue-500" />
+            </div>
+            <div>
+              <div id="pcc-title" className="text-[14px] font-bold text-gray-900 leading-tight">
+                Print &amp; Export
+              </div>
+              <div className="text-[11px] text-gray-400">{rangeLabel}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isPrinting ? (
+              <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
+                {printProgress?.label ?? "Working…"}
+              </span>
+            ) : pageCount > 0 ? (
+              <span className="text-[11px] font-bold text-gray-700 bg-gray-100 px-2.5 py-1 rounded-full">
+                {pageCount} sheet{pageCount !== 1 ? "s" : ""}
+              </span>
+            ) : null}
+            <button
+              onClick={onClose}
+              disabled={isPrinting}
+              className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors disabled:opacity-40"
+              aria-label="Close print dialog"
+            >
+              <X size={13} className="text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        <div id="pcc-summary" className="sr-only">
+          {pageCount} selected sheet{pageCount !== 1 ? "s" : ""}.
+        </div>
+
+        <div className="px-6 pb-4 opacity-100" style={{ pointerEvents: isPrinting ? "none" : "auto", opacity: isPrinting ? 0.5 : 1 }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nights</span>
+            <div className="flex items-center gap-1">
+              {([
+                ["printDeploy", "deploy"],
+                ["printBreaks", "breaks"],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setAll(key)}
+                  className="text-[10px] font-semibold text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded-md transition-colors capitalize"
+                >
+                  All {label}
+                </button>
+              ))}
+              <button
+                onClick={clear}
+                className="text-[10px] font-semibold text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-md transition-colors ml-0.5"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div
+            className="grid gap-1.5"
+            style={{ gridTemplateColumns: `repeat(${Math.max(DAY_DEFS.length, 1)}, minmax(0, 1fr))` }}
+          >
+            {DAY_DEFS.map((day, i) => {
+              const ds = days[i] ?? { dayIndex: i, printDeploy: false, printBreaks: false, inOverview: false };
+              const isActive = i === selectedDayIndex;
+              const bothOn = ds.printDeploy && ds.printBreaks;
+              return (
+                <div
+                  key={day.index}
+                  className="rounded-xl overflow-hidden border transition-all"
+                  style={{
+                    borderColor: (ds.printDeploy || ds.printBreaks) ? day.color : "#f0f0f4",
+                    boxShadow: isActive ? `0 0 0 2px ${day.color}40` : undefined,
+                  }}
+                >
+                  <button
+                    onClick={() =>
+                      setDays((prev) =>
+                        prev.map((d, j) =>
+                          j === i
+                            ? { ...d, printDeploy: !bothOn, printBreaks: !bothOn, inOverview: false }
+                            : d,
+                        ),
+                      )
+                    }
+                    className="w-full flex flex-col items-center py-3 transition-colors"
+                    style={{ backgroundColor: bothOn ? day.color : ds.printDeploy || ds.printBreaks ? `${day.color}18` : "#fafafa" }}
+                  >
+                    {isActive && (
+                      <span
+                        className="text-[6px] font-bold uppercase tracking-widest leading-none mb-0.5"
+                        style={{ color: bothOn ? "rgba(255,255,255,0.7)" : day.color }}
+                      >
+                        Tonight
+                      </span>
+                    )}
+                    <span
+                      className="text-[8px] font-semibold leading-none mb-0.5"
+                      style={{ color: bothOn ? "rgba(255,255,255,0.6)" : "#9ca3af" }}
+                    >
+                      {day.short}
+                    </span>
+                    <span
+                      className="text-[17px] font-bold leading-none"
+                      style={{ color: bothOn ? "#fff" : "#111827" }}
+                    >
+                      {day.dateNum}
+                    </span>
+                  </button>
+                  <div className="border-t" style={{ borderColor: (ds.printDeploy || ds.printBreaks) ? `${day.color}30` : "#f3f4f6" }}>
+                    {([
+                      ["printDeploy", "deploy"],
+                      ["printBreaks", "breaks"],
+                    ] as const).map(([key, label], ki) => (
+                      <button
+                        key={key}
+                        onClick={() => toggle(i, key)}
+                        className={`w-full flex items-center justify-between px-1.5 py-1.5 hover:bg-gray-50 transition-colors ${ki === 0 ? "" : "border-t border-gray-100"}`}
+                      >
+                        <span
+                          className="text-[8.5px] font-semibold capitalize leading-none"
+                          style={{ color: ds[key] ? day.color : "#9ca3af" }}
+                        >
+                          {label}
+                        </span>
+                        <div
+                          className="w-3 h-3 rounded-full border-[1.5px] flex items-center justify-center transition-all shrink-0"
+                          style={ds[key] ? { backgroundColor: day.color, borderColor: day.color } : { borderColor: "#d1d5db" }}
+                        >
+                          {ds[key] && (
+                            <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
+                              <path d="M1 3L2.3 4.5L5 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <FileText size={13} className="text-gray-400" />
+            <div>
+              <span className="text-[11px] font-semibold text-gray-700">Floor Sheet</span>
+              <span className="text-[10px] text-gray-400 ml-1.5">Full zone layout · official output</span>
+            </div>
+          </div>
+          <Toggle
+            on={printVariant === "official"}
+            color="#7c3aed"
+            onChange={() => void handlePrintVariantChange(printVariant === "official" ? "planning" : "official")}
+          />
+        </div>
+
+        <div className="px-6 py-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <PackagePrintOption
+            label="Shift notes"
+            detail="Saved notes + dot grid"
+            on={includeShiftNotes}
+            color="#2563eb"
+            onChange={() => setIncludeShiftNotes((value) => !value)}
+          />
+          <PackagePrintOption
+            label="Blank planning"
+            detail="No prefilled hints"
+            on={planningBlankSlate}
+            color="#f59e0b"
+            onChange={() => setPlanningBlankSlate((value) => !value)}
+            disabled={printVariant !== "planning"}
+          />
+          <PackagePrintOption
+            label="Timestamp"
+            detail="Admin quality stamp"
+            on={includeTimestamp}
+            color="#16a34a"
+            onChange={() => setIncludeTimestamp((value) => !value)}
+            disabled={!canAccessSudo}
+          />
+        </div>
+
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-100 bg-gray-50/70">
+          <div className="flex items-center gap-4 text-[10px] text-gray-400">
+            {pageCount > 0 ? (
+              <span className="text-[12px] font-semibold text-gray-600">
+                {pageCount} sheet{pageCount !== 1 ? "s" : ""} · {formatEstTime(estSecs)}
+              </span>
+            ) : (
+              <span className="text-gray-400 italic text-[11px]">No sheets selected</span>
+            )}
+            <span className="hidden sm:inline">
+              {deployCount} deploy · {breaksCount} breaks
+            </span>
+            <span className="hidden md:inline">
+              Print <kbd className="bg-white border border-gray-200 text-gray-500 px-1 py-px rounded text-[9px] font-mono shadow-sm">⌘↵</kbd>
+            </span>
+            {onExport ? (
+              <span className="hidden md:inline">
+                Export <kbd className="bg-white border border-gray-200 text-gray-500 px-1 py-px rounded text-[9px] font-mono shadow-sm">⌘⇧↵</kbd>
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            {onExport ? (
+              <button
+                onClick={handleExport}
+                disabled={isPrinting || pageCount === 0}
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 px-3 py-2 rounded-xl transition-colors disabled:opacity-40"
+              >
+                <Download size={12} /> Export PDF
+              </button>
+            ) : null}
+            {onPreviewSheet ? (
+              <button
+                onClick={handlePreview}
+                disabled={isPrinting || pageCount === 0}
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 px-3 py-2 rounded-xl transition-colors disabled:opacity-40"
+              >
+                <Eye size={12} /> Preview
+              </button>
+            ) : null}
+            <button
+              onClick={handlePrint}
+              disabled={isPrinting || pageCount === 0}
+              className="flex items-center gap-1.5 text-[12px] font-bold text-white px-4 py-2 rounded-xl transition-all disabled:text-white"
+              style={{ backgroundColor: pageCount > 0 ? "#2563EB" : "#d1d5db", cursor: pageCount > 0 && !isPrinting ? "pointer" : "not-allowed" }}
+            >
+              <Printer size={13} />
+              Print{pageCount > 0 ? ` ${pageCount}` : ""}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PackagePrintOption({
+  label,
+  detail,
+  on,
+  color,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  detail: string;
+  on: boolean;
+  color: string;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      aria-disabled={disabled}
+      className={`flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 text-left transition-colors ${disabled ? "opacity-45" : "hover:bg-gray-50"}`}
+    >
+      <span className="min-w-0">
+        <span className="block text-[11px] font-semibold text-gray-700">{label}</span>
+        <span className="block truncate text-[9px] text-gray-400">{detail}</span>
+      </span>
+      <Toggle on={on} color={color} onChange={disabled ? () => {} : onChange} />
+    </div>
   );
 }
 

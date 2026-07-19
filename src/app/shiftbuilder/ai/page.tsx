@@ -247,17 +247,17 @@ export default function EngineAILab() {
 
         <div className="flex items-center gap-3">
           <Link
-            href="/shiftbuilder"
+            href="/sheetbuilder"
             className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[12px] font-medium transition active:scale-[0.985]"
             style={{
               border: "1px solid rgba(255,255,255,0.12)",
               background: "rgba(255,255,255,0.03)",
             }}
           >
-            ← Back to ShiftBuilder
+            ← Back to SheetBuilder
           </Link>
           <Link
-            href="/shiftbuilder?sudo=1"
+            href="/sheetbuilder?sudo=1"
             className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[12px] font-medium transition active:scale-[0.985]"
             style={{
               border: `1px solid ${gold}40`,

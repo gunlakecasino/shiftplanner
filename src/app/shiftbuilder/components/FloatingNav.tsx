@@ -4,28 +4,23 @@ import * as React from "react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
-  FLOATING_NAV_FALLBACK_MAX_WIDTH_PX,
-  FLOATING_NAV_MAX_WIDTH_PX,
-  floatingNavWidthCss,
-} from "@/lib/shiftbuilder/canvasLayout";
-import {
   addDays,
   MONTH_LONG,
-  sameDay,
 } from "@/lib/shiftbuilder/dateUtils";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
 import { RequestBoardModal } from "./RequestBoardModal";
+import { MiniCalendar } from "../redesign/components/MiniCalendar";
 import {
   ChevronDown,
-  LocateFixed,
   ChevronLeft,
   ChevronRight,
-  LayoutGrid,
+  Home,
   Coffee,
   Users,
   Layers,
   Sparkles,
+  Settings,
   MoreHorizontal,
   Eye,
   X,
@@ -35,14 +30,17 @@ import {
   CalendarDays,
   BarChart2,
   RefreshCw,
+  Bell,
   BookOpen,
   Copy,
   Printer,
-  Wand2,
+  Zap,
   ClipboardList,
   ClipboardPlus,
   CalendarRange,
 } from "lucide-react";
+
+const APP_BASE_PATH = "/sheetbuilder";
 
 export interface DayItem {
   id: number;
@@ -55,6 +53,20 @@ export interface DayItem {
   date?: Date;
   /** DAY_DEFS accent — used for the active pill background. */
   color?: string;
+}
+
+export interface RosterDropdownPerson {
+  id: string;
+  name: string;
+  initials?: string;
+  color?: string;
+}
+
+export interface RosterDropdownGroups {
+  scheduledDefault: RosterDropdownPerson[];
+  scheduledOverlaps: RosterDropdownPerson[];
+  markedOff: RosterDropdownPerson[];
+  notScheduled: RosterDropdownPerson[];
 }
 
 export interface FloatingNavProps {
@@ -95,7 +107,7 @@ export interface FloatingNavProps {
   currentUser?: { full_name: string; username: string; role: string };
   onLogout?: () => void;
   onOpenSettings?: (tab?: string) => void;
-  /** Single unified Optimize Night for the day: full placements + optimization. */
+  /** Primary day placement action: opens the SheetBuilder run confirmation. */
   onOptimizeNight?: () => void;
   engineRunning?: boolean;
   deepOptimizeRunning?: boolean;
@@ -106,6 +118,13 @@ export interface FloatingNavProps {
   /** Deep refresh: bust server caches + refetch night + placement histories. */
   onRefreshDay?: () => void;
   refreshDayBusy?: boolean;
+  rosterSummary?: {
+    scheduledCount: number;
+    placedCount: number;
+    openCount: number;
+    calledOffCount: number;
+  };
+  rosterDropdown?: RosterDropdownGroups;
   isDraftMode?: boolean;
   draftSlotCount?: number;
   onToggleDraftMode?: () => void;
@@ -113,7 +132,6 @@ export interface FloatingNavProps {
   onDiscardDraft?: () => void;
   isSyncing?: boolean;
   rosterOpen?: boolean;
-  onRosterToggle?: () => void;
   canvasMode?: "builder" | "print-preview";
   onCanvasModeChange?: (mode: "builder" | "print-preview") => void;
   isDayPublished?: boolean;
@@ -136,6 +154,60 @@ function hexShadow(color: string): string {
   const c = color.startsWith("#") && color.length === 7 ? `${color}59` : "rgba(0,0,0,0.25)";
   return `0 2px 8px ${c}`;
 }
+
+function SheetBuilderMark({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 32 32"
+      role="img"
+      aria-label="SheetBuilder"
+      focusable="false"
+    >
+      <rect width="32" height="32" rx="7" fill="#1e1e28" />
+      <rect x="5" y="5" width="6.5" height="9" rx="1.5" fill="#C8960C" />
+      <rect x="12.75" y="5" width="6.5" height="9" rx="1.5" fill="#D93838" />
+      <rect x="20.5" y="5" width="6.5" height="9" rx="1.5" fill="#4B7BE8" />
+      <rect x="5" y="15.5" width="6.5" height="9" rx="1.5" fill="#D96B9A" />
+      <rect x="12.75" y="15.5" width="6.5" height="9" rx="1.5" fill="#4CAF7D" />
+      <rect x="20.5" y="15.5" width="6.5" height="9" rx="1.5" fill="#9B6A45" />
+    </svg>
+  );
+}
+
+const ROSTER_AVATAR_PALETTE = [
+  "#e0a40c",
+  "#ef4444",
+  "#df5f9c",
+  "#4db783",
+  "#4f7fe5",
+  "#8b5cf6",
+  "#7b675e",
+  "#0ea5b7",
+];
+
+function initialsForName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
+}
+
+function rosterAvatarColor(person: RosterDropdownPerson, fallbackIndex: number): string {
+  if (person.color) return person.color;
+  const key = `${person.id || ""}${person.name || ""}`;
+  let hash = fallbackIndex;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return ROSTER_AVATAR_PALETTE[hash % ROSTER_AVATAR_PALETTE.length] ?? ROSTER_AVATAR_PALETTE[0];
+}
+
+const EMPTY_ROSTER_DROPDOWN: RosterDropdownGroups = {
+  scheduledDefault: [],
+  scheduledOverlaps: [],
+  markedOff: [],
+  notScheduled: [],
+};
 
 export default function FloatingNav(props: FloatingNavProps) {
   const {
@@ -171,13 +243,14 @@ export default function FloatingNav(props: FloatingNavProps) {
     onClearDay,
     onRefreshDay,
     refreshDayBusy = false,
+    rosterSummary,
+    rosterDropdown,
     isDraftMode = false,
     draftSlotCount = 0,
     onToggleDraftMode,
     onSaveAllDraft,
     onDiscardDraft,
     rosterOpen = false,
-    onRosterToggle,
     canvasMode = "builder",
     onCanvasModeChange,
     isDayPublished = false,
@@ -213,22 +286,40 @@ export default function FloatingNav(props: FloatingNavProps) {
   const showTeamLink = canManageTeam || canApplySchedules || canAccessSudo;
 
   const [moreOpen, setMoreOpen] = useState(false);
+  const [launchpadOpen, setLaunchpadOpen] = useState(false);
+  const [rosterMenuOpen, setRosterMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarView, setCalendarView] = useState<Date>(() => new Date());
 
+  const launchpadRef = useRef<HTMLDivElement>(null);
+  const rosterMenuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const selectedDay = days.find((d) => d.id === selectedDayId);
-  const activeColor = selectedDay?.color ?? DEFAULT_ACTIVE_COLOR;
+  const activeColor = "#22c55e";
+  const chromeText = "#f4f4f5";
+  const mutedChromeText = "rgba(244,244,245,0.66)";
+  const chromeDivider = "rgba(255,255,255,0.12)";
+  const rosterScheduledCount = rosterSummary?.scheduledCount ?? 0;
+  const rosterPlacedCount = rosterSummary?.placedCount ?? 0;
+  const rosterOpenCount = rosterSummary?.openCount ?? 0;
+  const rosterCalledOffCount = rosterSummary?.calledOffCount ?? 0;
+  const rosterButtonTitle =
+    `Roster · ${rosterPlacedCount}/${rosterScheduledCount} placed` +
+    (rosterOpenCount > 0 ? ` · ${rosterOpenCount} open` : "") +
+    (rosterCalledOffCount > 0 ? ` · ${rosterCalledOffCount} marked off` : "");
+  const notificationCount = rosterCalledOffCount;
+  const navRoster = rosterDropdown ?? EMPTY_ROSTER_DROPDOWN;
 
   const firstDay = days[0]?.date || new Date();
   const monthLabel = `${MONTHS[firstDay.getMonth()]} ${firstDay.getFullYear()}`;
 
   const closeAllMenus = () => {
+    setLaunchpadOpen(false);
+    setRosterMenuOpen(false);
     setMoreOpen(false);
     setProfileOpen(false);
     setCalendarOpen(false);
@@ -237,6 +328,8 @@ export default function FloatingNav(props: FloatingNavProps) {
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
+      if (launchpadRef.current && !launchpadRef.current.contains(target)) setLaunchpadOpen(false);
+      if (rosterMenuRef.current && !rosterMenuRef.current.contains(target)) setRosterMenuOpen(false);
       if (moreRef.current && !moreRef.current.contains(target)) setMoreOpen(false);
       if (profileRef.current && !profileRef.current.contains(target)) setProfileOpen(false);
       if (calendarRef.current && !calendarRef.current.contains(target)) setCalendarOpen(false);
@@ -253,32 +346,48 @@ export default function FloatingNav(props: FloatingNavProps) {
   }, []);
 
   const toggleCalendar = () => {
-    const anchor = selectedDate ?? selectedDay?.date ?? new Date();
-    setCalendarView(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
     setCalendarOpen((v) => !v);
+    setLaunchpadOpen(false);
+    setRosterMenuOpen(false);
     setMoreOpen(false);
     setProfileOpen(false);
   };
 
-  const pickCalendarDate = (date: Date) => {
-    onNavigateToDate?.(date);
-    setCalendarOpen(false);
-  };
+  const menuPanelClass =
+    "rounded-xl border border-white/10 bg-[#1d1d20] shadow-xl py-1 text-[13px] text-zinc-100";
+  const menuItemClass =
+    "w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 disabled:opacity-40";
+  const menuDividerClass = "h-px bg-white/10 my-1 mx-2";
 
-  const menuPanelClass = isDark
-    ? "rounded-xl border border-white/10 bg-zinc-900 shadow-xl py-1 text-[13px] text-zinc-100"
-    : "rounded-xl border bg-white shadow-xl py-1 text-[13px] text-zinc-900";
-  const menuItemClass = isDark
-    ? "w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 disabled:opacity-40"
-    : "w-full text-left px-3 py-1.5 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-40";
-  const menuDividerClass = isDark ? "h-px bg-white/10 my-1 mx-2" : "h-px bg-gray-100 my-1 mx-2";
-
-  const calendarHighlight = selectedDate ?? selectedDay?.date;
   const isViewingToday = !!selectedDay?.isToday;
+  const packageCalendarActiveIndex = Math.max(0, days.findIndex((day) => day.id === selectedDayId));
 
   const handleGoToToday = () => {
     closeAllMenus();
     onToday();
+  };
+
+  const renderRosterRows = (people: RosterDropdownPerson[], emptyLabel = "No team members") => {
+    if (!people.length) {
+      return <div className="sb-sheetbuilder-roster-popover__empty">{emptyLabel}</div>;
+    }
+
+    return people.map((person, index) => {
+      const initials = person.initials || initialsForName(person.name);
+      const color = rosterAvatarColor(person, index);
+      return (
+        <div className="sb-sheetbuilder-roster-popover__row" key={person.id || `${person.name}-${index}`}>
+          <span
+            className="sb-sheetbuilder-roster-popover__avatar"
+            style={{ background: color }}
+            aria-hidden
+          >
+            {initials.slice(0, 2)}
+          </span>
+          <span className="sb-sheetbuilder-roster-popover__name">{person.name}</span>
+        </div>
+      );
+    });
   };
 
   return (
@@ -296,21 +405,25 @@ export default function FloatingNav(props: FloatingNavProps) {
       `}</style>
 
       <nav
+        className="sb-sheetbuilder-topbar"
         style={{
           position: "fixed",
           top: top,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: floatingNavWidthCss(
-            contentMaxWidth ? FLOATING_NAV_MAX_WIDTH_PX : FLOATING_NAV_FALLBACK_MAX_WIDTH_PX,
-          ),
-          background: isDark ? "rgba(9,9,11,0.97)" : "rgba(249, 247, 244, 0.97)",
+          left: 0,
+          right: 0,
+          width: "100%",
+          minWidth: 0,
+          background: "linear-gradient(180deg, #343340 0%, #292933 100%)",
           backdropFilter: "blur(24px)",
           WebkitBackdropFilter: "blur(24px)",
-          borderRadius: 9999,
-          border: "1px solid rgba(0,0,0,0.075)",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.07), 0 16px 40px rgba(0,0,0,0.06)",
-          padding: "8px 14px",
+          borderRadius: 0,
+          border: "none",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 16px 40px -28px rgba(0,0,0,0.8)",
+          boxSizing: "border-box",
+          height: 54,
+          maxHeight: 54,
+          padding: "0 16px",
           fontFamily: "var(--font-ui, var(--font-builder, 'Helvetica Neue', Helvetica, Arial, sans-serif))",
           userSelect: "none",
           display: "flex",
@@ -319,16 +432,100 @@ export default function FloatingNav(props: FloatingNavProps) {
           zIndex: 40,
         }}
       >
+        {/* BRAND — SheetBuilder launchpad */}
+        <div className="relative flex shrink-0 items-center gap-2.5 border-r border-white/10 pr-5" ref={launchpadRef}>
+          <button
+            type="button"
+            className="sb-sheetbuilder-launch-trigger flex min-w-0 items-center gap-2.5 rounded-md"
+            onClick={() => {
+              setLaunchpadOpen((v) => !v);
+              setRosterMenuOpen(false);
+              setMoreOpen(false);
+              setProfileOpen(false);
+              setCalendarOpen(false);
+            }}
+            title="SheetBuilder launchpad"
+            aria-label="Open SheetBuilder launchpad"
+            aria-haspopup="menu"
+            aria-expanded={launchpadOpen}
+          >
+            <SheetBuilderMark className="sb-sheetbuilder-brand-mark shrink-0" />
+            <div className="min-w-0 pr-1 text-left leading-none">
+              <div
+                className="truncate text-[13px] font-semibold"
+                style={{ color: chromeText, letterSpacing: "-0.025em" }}
+              >
+                SheetBuilder
+              </div>
+            </div>
+          </button>
+
+          {launchpadOpen && (
+            <div
+              role="menu"
+              aria-label="SheetBuilder launchpad"
+              className="sb-sheetbuilder-launchpad absolute left-0 top-full z-[90] mt-2 overflow-hidden rounded-[26px] border border-white/10 bg-[#252532] p-5 text-zinc-100 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sb-sheetbuilder-launchpad-grid grid grid-cols-2 gap-5">
+                <Link href={APP_BASE_PATH} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
+                  <span className="sb-sheetbuilder-launchpad-card-icon">
+                    <Home size={28} strokeWidth={2} />
+                  </span>
+                  <strong>Home</strong>
+                </Link>
+
+                {showTeamLink && (
+                  <Link href={`${APP_BASE_PATH}/team`} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
+                    <span className="sb-sheetbuilder-launchpad-card-icon">
+                      <Users size={28} strokeWidth={2} />
+                    </span>
+                    <strong>Team</strong>
+                  </Link>
+                )}
+
+                {showReportsLink && (
+                  <Link href={`${APP_BASE_PATH}/reports`} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
+                    <span className="sb-sheetbuilder-launchpad-card-icon">
+                      <BarChart2 size={28} strokeWidth={2} />
+                    </span>
+                    <strong>Reports</strong>
+                  </Link>
+                )}
+
+                {showAdminLinks && onOpenSettings && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="sb-sheetbuilder-launchpad-card"
+                    onClick={() => {
+                      onOpenSettings();
+                      setLaunchpadOpen(false);
+                    }}
+                  >
+                    <span className="sb-sheetbuilder-launchpad-card-icon">
+                      <Settings size={28} strokeWidth={2} />
+                    </span>
+                    <strong>Settings</strong>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0 w-4" />
+
         {/* LEFT — month picker + go to today */}
         <div className="relative flex items-center gap-1 shrink-0" ref={calendarRef}>
           <button
             type="button"
             className="icon-btn flex items-center gap-1 rounded-full px-2.5 py-1.5"
             style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: isDark ? "#f4f4f5" : "#1a1a1a",
-              letterSpacing: "-0.015em",
+              fontSize: 13,
+              fontWeight: 850,
+              color: chromeText,
+              letterSpacing: "-0.02em",
             }}
             onClick={toggleCalendar}
             title="Pick a date"
@@ -337,10 +534,10 @@ export default function FloatingNav(props: FloatingNavProps) {
           >
             {monthLabel}
             <ChevronDown
-              size={11}
+              size={12}
               strokeWidth={2.8}
               style={{
-                color: "#999",
+                color: mutedChromeText,
                 marginTop: 1,
                 transform: calendarOpen ? "rotate(180deg)" : undefined,
                 transition: "transform 0.15s ease",
@@ -349,166 +546,37 @@ export default function FloatingNav(props: FloatingNavProps) {
           </button>
           <button
             type="button"
-            className="icon-btn flex items-center justify-center w-6 h-6 rounded-full"
+            className="icon-btn sb-month-status-diamond-btn flex items-center justify-center w-6 h-6 rounded-full"
             style={{
-              color: isViewingToday ? (isDark ? "#71717a" : "#a1a1aa") : activeColor,
-              opacity: isViewingToday ? 0.5 : 1,
+              opacity: isViewingToday ? 0.72 : 1,
             }}
             onClick={handleGoToToday}
             title={isViewingToday ? "Viewing today" : "Go to today"}
             aria-label={isViewingToday ? "Viewing today" : "Go to today"}
             disabled={isViewingToday}
           >
-            <LocateFixed size={13} strokeWidth={1.8} />
+            <span className="sb-month-status-diamond" aria-hidden />
           </button>
 
-          {calendarOpen && onNavigateToDate && (
-            <div
-              id="floating-nav-calendar-popover"
-              role="dialog"
-              aria-label="Choose a date"
-              className={`absolute left-0 top-full mt-2 w-[280px] z-[80] p-3 backdrop-blur-xl ${
-                isDark
-                  ? "rounded-2xl border border-white/10 bg-zinc-900/95 text-zinc-100"
-                  : "rounded-2xl border border-white/70 bg-[color-mix(in_srgb,var(--ios-background-secondary)_95%,transparent)] text-[12px]"
-              }`}
-              style={{ boxShadow: "0 16px 40px rgba(0,0,0,0.12)" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-2 px-1">
-                <button
-                  type="button"
-                  onClick={() => setCalendarView((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                    isDark ? "hover:bg-white/10 text-zinc-400" : "hover:bg-[var(--ios-gray-6)] text-[var(--ios-label-tertiary)]"
-                  }`}
-                  aria-label="Previous month"
-                >
-                  ‹
-                </button>
-                <div className="font-semibold tabular-nums">
-                  {MONTHS[calendarView.getMonth()]} {calendarView.getFullYear()}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCalendarView((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                    isDark ? "hover:bg-white/10 text-zinc-400" : "hover:bg-[var(--ios-gray-6)] text-[var(--ios-label-tertiary)]"
-                  }`}
-                  aria-label="Next month"
-                >
-                  ›
-                </button>
-              </div>
-
-              <div className="grid grid-cols-7 text-center font-medium mb-1 opacity-70">
-                {DAY_LETTERS.map((d, i) => (
-                  <div key={`hdr-${i}`}>{d}</div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-0.5 text-center">
-                {(() => {
-                  const year = calendarView.getFullYear();
-                  const month = calendarView.getMonth();
-                  const firstOfMonth = new Date(year, month, 1);
-                  const startWeekday = firstOfMonth.getDay();
-                  const daysInMonth = new Date(year, month + 1, 0).getDate();
-                  const cells: React.ReactNode[] = [];
-
-                  for (let i = 0; i < startWeekday; i++) {
-                    const d = new Date(year, month, 1 - (startWeekday - i));
-                    cells.push(
-                      <button
-                        key={`prev-${i}`}
-                        type="button"
-                        onClick={() => pickCalendarDate(d)}
-                        className={`h-7 w-7 text-[11px] rounded-md ${
-                          isDark ? "text-zinc-500 hover:bg-white/10" : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)]"
-                        }`}
-                      >
-                        {d.getDate()}
-                      </button>,
-                    );
-                  }
-
-                  for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
-                    const d = new Date(year, month, dayNum);
-                    const isSelectedDay = calendarHighlight && sameDay(d, calendarHighlight);
-                    cells.push(
-                      <button
-                        key={dayNum}
-                        type="button"
-                        onClick={() => pickCalendarDate(d)}
-                        className={`h-7 w-7 text-[11px] rounded-md transition-colors ${
-                          isSelectedDay
-                            ? "text-white font-semibold"
-                            : isDark
-                              ? "hover:bg-white/10 text-zinc-200"
-                              : "hover:bg-[var(--ios-gray-6)] text-[var(--ios-label)]"
-                        }`}
-                        style={isSelectedDay ? { background: activeColor } : undefined}
-                      >
-                        {dayNum}
-                      </button>,
-                    );
-                  }
-
-                  const remaining = 42 - cells.length;
-                  for (let i = 1; i <= remaining; i++) {
-                    const d = new Date(year, month + 1, i);
-                    cells.push(
-                      <button
-                        key={`next-${i}`}
-                        type="button"
-                        onClick={() => pickCalendarDate(d)}
-                        className={`h-7 w-7 text-[11px] rounded-md ${
-                          isDark ? "text-zinc-500 hover:bg-white/10" : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)]"
-                        }`}
-                      >
-                        {d.getDate()}
-                      </button>,
-                    );
-                  }
-
-                  return cells;
-                })()}
-              </div>
-
-              <div
-                className={`mt-2 pt-2 flex justify-between ${
-                  isDark ? "border-t border-white/10" : "border-t border-[var(--ios-gray-4)]"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    onToday();
-                    setCalendarOpen(false);
-                  }}
-                  className={`text-[11px] px-2 py-0.5 rounded-md ${
-                    isDark
-                      ? "text-sky-400 hover:bg-white/10"
-                      : "text-[var(--ios-blue)] hover:bg-[color-mix(in_srgb,var(--ios-blue)_10%,transparent)]"
-                  }`}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCalendarOpen(false)}
-                  className={`text-[11px] px-2 py-0.5 rounded-md ${
-                    isDark ? "text-zinc-400 hover:bg-white/10" : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)]"
-                  }`}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
+          {calendarOpen && (
+            <MiniCalendar
+              activeDate={packageCalendarActiveIndex}
+              onClose={() => setCalendarOpen(false)}
+              onSelect={(railIndex) => {
+                const day = days[railIndex];
+                if (day?.date) {
+                  onDaySelect(day.id, day.date);
+                  return;
+                }
+                if (day?.dateNum && selectedDate) {
+                  onNavigateToDate?.(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day.dateNum));
+                }
+              }}
+            />
           )}
         </div>
 
-        <div className="shrink-0 mx-2" style={{ width: 1, height: 16, background: "rgba(0,0,0,0.12)" }} />
+        <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
 
         {/* CENTER — day scroller */}
         <div className="flex items-center flex-1 min-w-0 gap-0.5">
@@ -516,7 +584,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             type="button"
             onClick={onPrevWeek}
             className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
-            style={{ color: "#aaa" }}
+            style={{ color: mutedChromeText }}
             title="Previous GRAVE week"
             aria-label="Previous GRAVE week"
           >
@@ -529,7 +597,6 @@ export default function FloatingNav(props: FloatingNavProps) {
               const isToday = !!day.isToday;
               const letter = day.dayLetter || DAY_LETTERS[(day.date?.getDay() ?? 0) % 7];
               const dateNum = day.dateNum ?? day.label;
-              const pillColor = isSelected ? (day.color ?? activeColor) : undefined;
 
               if (isSelected) {
                 return (
@@ -537,22 +604,22 @@ export default function FloatingNav(props: FloatingNavProps) {
                     key={day.id}
                     type="button"
                     onClick={() => onDaySelect(day.id, day.date || new Date())}
-                    className="sb-day-strip-btn flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
+                    className="sb-day-strip-btn sb-day-strip-btn--active flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
                     style={{
-                      background: pillColor,
-                      borderRadius: 10,
-                      width: 38,
-                      height: 43,
+                      background: activeColor,
+                      borderRadius: 999,
+                      width: 42,
+                      height: 42,
                       gap: 0,
-                      boxShadow: hexShadow(pillColor ?? DEFAULT_ACTIVE_COLOR),
+                      boxShadow: "0 6px 16px -9px rgba(34,197,94,0.95), inset 0 1px 0 rgba(255,255,255,0.22)",
                     }}
                   >
                     <span
                       style={{
-                        fontSize: 8,
-                        fontWeight: 700,
-                        color: "rgba(255,255,255,0.6)",
-                        letterSpacing: "0.12em",
+	                        fontSize: 8,
+	                        fontWeight: 900,
+                        color: "rgba(255,255,255,0.76)",
+                        letterSpacing: "0.08em",
                         lineHeight: 1,
                         marginBottom: 2,
                       }}
@@ -561,11 +628,11 @@ export default function FloatingNav(props: FloatingNavProps) {
                     </span>
                     <span
                       style={{
-                        fontSize: 20,
-                        fontWeight: 800,
+	                        fontSize: 18,
+	                        fontWeight: 950,
                         color: "#fff",
                         lineHeight: 1,
-                        letterSpacing: "-0.04em",
+                        letterSpacing: "0",
                       }}
                     >
                       {dateNum}
@@ -580,16 +647,19 @@ export default function FloatingNav(props: FloatingNavProps) {
                   type="button"
                   onClick={() => onDaySelect(day.id, day.date || new Date())}
                   onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
-                  className="icon-btn sb-interactive sb-day-strip-btn flex flex-col items-center justify-center shrink-0 rounded-full"
+                  className="sb-interactive sb-day-strip-btn sb-day-strip-btn--inactive flex flex-col items-center justify-center shrink-0"
                   style={{
-                    width: 31,
-                    height: 40,
-                    gap: 4,
-                    border: isToday ? "1.5px dashed rgba(0,0,0,0.22)" : "1px solid transparent",
+                    width: 36,
+                    height: 44,
+                    gap: 3,
+                    border: "1px solid transparent",
                   }}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#a1a1aa" : "#444", lineHeight: 1 }}>
+                  <span style={{ fontSize: 9, fontWeight: 850, color: isToday ? "rgba(255,255,255,0.72)" : "rgba(244,244,245,0.46)", lineHeight: 1, letterSpacing: "0.08em" }}>
                     {letter}
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 850, color: isToday ? "rgba(255,255,255,0.82)" : "rgba(244,244,245,0.64)", lineHeight: 1 }}>
+                    {dateNum}
                   </span>
                 </button>
               );
@@ -600,7 +670,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             type="button"
             onClick={onNextWeek}
             className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
-            style={{ color: "#aaa" }}
+            style={{ color: mutedChromeText }}
             title="Next GRAVE week"
             aria-label="Next GRAVE week"
           >
@@ -608,40 +678,139 @@ export default function FloatingNav(props: FloatingNavProps) {
           </button>
         </div>
 
-        <div className="shrink-0 mx-2" style={{ width: 1, height: 16, background: "rgba(0,0,0,0.12)" }} />
+        <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
 
         {/* RIGHT — actions + avatar + more */}
         <div className="flex items-center gap-0.5 shrink-0">
+          {showEngineTools && onOptimizeNight && (
+            <button
+              type="button"
+              className="icon-btn sb-interactive sb-run-day-btn flex items-center gap-1.5 rounded-full px-3 py-1.5"
+              style={{
+                color: engineBusy ? "#888" : "#fff",
+                background: engineBusy ? "rgba(255,255,255,0.08)" : activeColor,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: "0.02em",
+                boxShadow: engineBusy ? undefined : hexShadow(activeColor),
+              }}
+              disabled={engineBusy}
+              onClick={onOptimizeNight}
+              title="Run day placements"
+              aria-label="Run day placements"
+            >
+              <Zap size={13} strokeWidth={2.4} fill="currentColor" />
+              <span className="hidden min-[860px]:inline">Run Day</span>
+            </button>
+          )}
+
           <button
             type="button"
-            className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+            className="sb-topbar-notification-btn icon-btn flex items-center justify-center rounded-full"
             style={{
-              color: rosterOpen ? activeColor : "#666",
-              background: rosterOpen
-                ? isDark
-                  ? "rgba(255,255,255,0.1)"
-                  : `${activeColor}18`
-                : undefined,
+              color: mutedChromeText,
+              background: "rgba(255,255,255,0.04)",
             }}
-            onClick={onRosterToggle}
-            title={rosterOpen ? "Hide team roster" : "Show team roster"}
-            aria-label={rosterOpen ? "Hide team roster" : "Show team roster"}
-            aria-pressed={rosterOpen}
+            title={
+              notificationCount > 0
+                ? `${notificationCount} roster notifications`
+                : "No roster notifications"
+            }
+            aria-label={
+              notificationCount > 0
+                ? `${notificationCount} roster notifications`
+                : "No roster notifications"
+            }
           >
-            <Users size={14} strokeWidth={1.8} />
+            <Bell size={15} strokeWidth={2} />
+            {notificationCount > 0 && (
+              <span className="sb-topbar-notification-badge">{notificationCount}</span>
+            )}
           </button>
+
+          <div className="relative" ref={rosterMenuRef}>
+            <button
+              type="button"
+              className="sb-sheetbuilder-roster-toggle icon-btn flex items-center justify-center rounded-full"
+              style={{
+                color: rosterMenuOpen || rosterOpen ? "#fff" : mutedChromeText,
+                background: rosterMenuOpen || rosterOpen
+                  ? "rgba(255,255,255,0.13)"
+                  : "rgba(255,255,255,0.04)",
+              }}
+              onClick={() => {
+                setRosterMenuOpen((v) => !v);
+                setLaunchpadOpen(false);
+                setMoreOpen(false);
+                setProfileOpen(false);
+                setCalendarOpen(false);
+              }}
+              title={rosterButtonTitle}
+              aria-label="Open roster"
+              aria-haspopup="menu"
+              aria-expanded={rosterMenuOpen}
+              aria-pressed={rosterMenuOpen || rosterOpen}
+            >
+              <ClipboardList size={16} strokeWidth={2} />
+              {rosterCalledOffCount > 0 && (
+                <span className="sb-sheetbuilder-roster-alert" title={`${rosterCalledOffCount} marked off`}>
+                  {rosterCalledOffCount}
+                </span>
+              )}
+            </button>
+
+            {rosterMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Roster"
+                className="sb-sheetbuilder-roster-popover absolute right-0 top-full z-[92] mt-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="sb-sheetbuilder-roster-popover__title">ROSTER</div>
+
+                <section className="sb-sheetbuilder-roster-popover__section">
+                  <div className="sb-sheetbuilder-roster-popover__section-header sb-sheetbuilder-roster-popover__section-header--scheduled">
+                    <span className="sb-sheetbuilder-roster-popover__state-icon">✓</span>
+                    <span>SCHEDULED</span>
+                  </div>
+                  <div className="sb-sheetbuilder-roster-popover__subhead">DEFAULT</div>
+                  {renderRosterRows(navRoster.scheduledDefault, "No default schedule")}
+                  <div className="sb-sheetbuilder-roster-popover__subhead">OVERLAPS</div>
+                  {renderRosterRows(navRoster.scheduledOverlaps, "No overlap team members")}
+                </section>
+
+                <div className="sb-sheetbuilder-roster-popover__divider" />
+
+                <section className="sb-sheetbuilder-roster-popover__section">
+                  <div className="sb-sheetbuilder-roster-popover__section-header sb-sheetbuilder-roster-popover__section-header--off">
+                    <span className="sb-sheetbuilder-roster-popover__state-icon">−</span>
+                    <span>MARKED OFF</span>
+                  </div>
+                  {renderRosterRows(navRoster.markedOff, "Nobody marked off")}
+                </section>
+
+                <div className="sb-sheetbuilder-roster-popover__divider" />
+
+                <section className="sb-sheetbuilder-roster-popover__section">
+                  <div className="sb-sheetbuilder-roster-popover__section-header sb-sheetbuilder-roster-popover__section-header--unscheduled">
+                    <span className="sb-sheetbuilder-roster-popover__state-icon">○</span>
+                    <span>NOT SCHEDULED</span>
+                  </div>
+                  {renderRosterRows(navRoster.notScheduled, "Everyone is scheduled")}
+                </section>
+              </div>
+            )}
+          </div>
 
           {onViewChange && (
             <button
               type="button"
               className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
               style={{
-                color: currentView === "breaks" ? activeColor : "#666",
+                color: currentView === "breaks" ? "#fff" : mutedChromeText,
                 background:
                   currentView === "breaks"
-                    ? isDark
-                      ? "rgba(255,255,255,0.1)"
-                      : `${activeColor}18`
+                    ? `${activeColor}66`
                     : undefined,
               }}
               onClick={() => onViewChange(currentView === "breaks" ? "deployment" : "breaks")}
@@ -657,7 +826,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             <button
               type="button"
               className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
-              style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#f4f4f5" : "#1a1a1a", letterSpacing: "0.06em" }}
+              style={{ fontSize: 10, fontWeight: 700, color: chromeText, letterSpacing: "0.06em" }}
               onClick={onToggleDayPublished}
               disabled={!canPublishDay || publishDayBusy}
               aria-busy={publishDayBusy}
@@ -678,7 +847,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           ) : (
             <span
               className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
-              style={{ color: isDark ? "#a1a1aa" : "#666" }}
+              style={{ color: mutedChromeText }}
               title={
                 isDayPublished
                   ? "Published night"
@@ -707,14 +876,16 @@ export default function FloatingNav(props: FloatingNavProps) {
                 fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: "0.02em",
-                color: isDark ? "#f4f4f5" : "#1a1a1a",
-                background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                color: chromeText,
+                background: "rgba(255,255,255,0.08)",
               }}
-              onClick={() => {
-                setProfileOpen((v) => !v);
-                setMoreOpen(false);
-                setCalendarOpen(false);
-              }}
+            onClick={() => {
+              setProfileOpen((v) => !v);
+              setRosterMenuOpen(false);
+              setLaunchpadOpen(false);
+              setMoreOpen(false);
+              setCalendarOpen(false);
+            }}
               title="Account"
               aria-label="Account menu"
               aria-expanded={profileOpen}
@@ -728,7 +899,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className={`px-3 py-2 text-[12px] border-b ${isDark ? "text-zinc-400 border-white/10" : "text-gray-500"}`}>
+                <div className="border-b border-white/10 px-3 py-2 text-[12px] text-zinc-400">
                   {currentUser.full_name}
                   <div className="opacity-80">{currentUser.username} · {roleLabel(currentUser.role)}</div>
                 </div>
@@ -746,7 +917,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 )}
                 {showTeamLink && (
                   <Link
-                    href="/shiftbuilder/team"
+                    href={`${APP_BASE_PATH}/team`}
                     className={menuItemClass}
                     onClick={() => setProfileOpen(false)}
                   >
@@ -756,7 +927,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 )}
                 {showProjectsLink && (
                   <Link
-                    href="/shiftbuilder/projects"
+                    href={`${APP_BASE_PATH}/projects`}
                     className={menuItemClass}
                     onClick={() => setProfileOpen(false)}
                   >
@@ -779,7 +950,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 )}
                 {showReportsLink && (
                   <Link
-                    href="/shiftbuilder/reports"
+                    href={`${APP_BASE_PATH}/reports`}
                     className={menuItemClass}
                     onClick={() => setProfileOpen(false)}
                   >
@@ -799,11 +970,13 @@ export default function FloatingNav(props: FloatingNavProps) {
               type="button"
               className="icon-btn flex items-center justify-center w-6 h-6 rounded-full"
               style={{ color: "#aaa" }}
-              onClick={() => {
-                setMoreOpen((v) => !v);
-                setProfileOpen(false);
-                setCalendarOpen(false);
-              }}
+            onClick={() => {
+              setMoreOpen((v) => !v);
+              setRosterMenuOpen(false);
+              setLaunchpadOpen(false);
+              setProfileOpen(false);
+              setCalendarOpen(false);
+            }}
               title="More actions"
               aria-label="More actions"
               aria-expanded={moreOpen}
@@ -835,7 +1008,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                       setMoreOpen(false);
                     }}
                   >
-                    <Sparkles size={14} /> Optimize Night
+                    <Sparkles size={14} /> Run Day Placements
                     {engineRunning && (
                       <span className="ml-auto text-[10px] opacity-60">Running…</span>
                     )}
@@ -1006,7 +1179,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 {/* Admin & Schedule */}
                 {showTeamLink && (
                   <Link
-                    href="/shiftbuilder/team?tab=schedule"
+                    href={`${APP_BASE_PATH}/team?tab=schedule`}
                     className={menuItemClass}
                     onClick={() => setMoreOpen(false)}
                   >

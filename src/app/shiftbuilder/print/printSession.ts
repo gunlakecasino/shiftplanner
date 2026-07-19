@@ -294,7 +294,7 @@ function injectSessionStyles(config: PrintConfig, mode: GoldenPrintSessionMode):
 function buildPrintIframe(): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  iframe.setAttribute("title", "Shift Builder print");
+  iframe.setAttribute("title", "SheetBuilder print");
   iframe.style.cssText = [
     "position:fixed",
     "left:-10960px",

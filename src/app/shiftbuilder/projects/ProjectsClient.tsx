@@ -81,7 +81,7 @@ function ProjectsGate() {
 
   useEffect(() => {
     if (!isLoading && !canAccessTasks) {
-      router.replace("/shiftbuilder");
+      router.replace("/sheetbuilder");
     }
   }, [isLoading, canAccessTasks, router]);
 
@@ -194,11 +194,11 @@ function ProjectsShell() {
           </div>
           <button
             type="button"
-            onClick={() => router.push("/shiftbuilder")}
+            onClick={() => router.push("/sheetbuilder")}
             className="sb-settings-back-btn sb-interactive"
           >
             <ArrowLeft size={15} strokeWidth={2.25} />
-            Shift Builder
+            SheetBuilder
           </button>
         </div>
 

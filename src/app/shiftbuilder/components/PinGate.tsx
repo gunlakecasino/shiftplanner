@@ -148,7 +148,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
           </div>
           <div className="min-w-0 pt-0.5">
             <h2 id={titleId} className="sb-auth-title">
-              ShiftBuilder Access
+              SheetBuilder Access
             </h2>
             <p id={descId} className="sb-auth-subtitle mt-1.5">
               Enter your 6-digit ops PIN

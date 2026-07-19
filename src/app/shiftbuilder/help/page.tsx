@@ -3,8 +3,8 @@ import { readFloorGuideMarkdown } from "@/lib/shiftbuilder/floorGuideContent";
 import HelpPageClient from "./HelpPageClient";
 
 export const metadata = {
-  title: "ShiftBuilder Help — Floor Guide & Tutorial",
-  description: "Gun Lake Casino ShiftBuilder floor guide and interactive grave-shift tutorial.",
+  title: "SheetBuilder Help — Floor Guide & Tutorial",
+  description: "Gun Lake Casino SheetBuilder floor guide and interactive grave-shift tutorial.",
 };
 
 export default function ShiftBuilderHelpPage() {

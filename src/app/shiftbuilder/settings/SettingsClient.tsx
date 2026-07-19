@@ -14,7 +14,7 @@ function SettingsGate() {
 
   useEffect(() => {
     if (!isLoading && !permissions?.canAccessSudo) {
-      router.replace("/shiftbuilder");
+      router.replace("/sheetbuilder");
     }
   }, [isLoading, permissions?.canAccessSudo, router]);
 

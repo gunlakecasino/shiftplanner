@@ -129,11 +129,11 @@ export function TeamShell() {
           </div>
           <button
             type="button"
-            onClick={() => router.push("/shiftbuilder")}
+            onClick={() => router.push("/sheetbuilder")}
             className="sb-interactive inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-neutral-700 hover:bg-neutral-50"
           >
             <ArrowLeft size={14} strokeWidth={2.2} />
-            Shift Builder
+            SheetBuilder
           </button>
         </div>
 
@@ -185,7 +185,7 @@ export function TeamShell() {
 
         <div className="mt-6 text-center text-[11px] text-neutral-400">
           Engine, card defaults, and operator PINs live in{" "}
-          <Link href="/shiftbuilder/settings" className="font-semibold text-neutral-500 underline-offset-2 hover:underline">
+          <Link href="/sheetbuilder/settings" className="font-semibold text-neutral-500 underline-offset-2 hover:underline">
             Settings
           </Link>
           .

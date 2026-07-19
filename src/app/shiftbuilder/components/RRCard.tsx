@@ -308,7 +308,7 @@ function RRSideShell({
       <CardAccentStripe color={color} />
 
       {/* Refined header to match ZoneCard exactly for visual uniformity */}
-      <div className="px-3 pt-2 flex items-center gap-1 flex-nowrap">
+      <div className="sb-card-slot-header sb-rr-card-header px-3 pt-2 flex items-center gap-1 flex-nowrap">
         <span className="text-[12px] leading-none shrink-0" style={{ color: cardAccentInk(color) }}>◆</span>
         <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color: cardAccentInk(color) }}>
           {sideLabel}

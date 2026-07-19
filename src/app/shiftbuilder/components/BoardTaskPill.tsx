@@ -52,7 +52,7 @@ export function BoardTaskPill() {
       aria-live="polite"
     >
       <Link
-        href="/shiftbuilder/projects"
+        href="/sheetbuilder/projects"
         className="flex items-center gap-2 text-[12.5px] font-medium text-foreground"
         title="Open Projects & Tasks"
       >

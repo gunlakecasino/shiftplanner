@@ -168,7 +168,7 @@ export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigT
             </div>
           </div>
           <Link
-            href="/shiftbuilder/ai"
+            href="/sheetbuilder/ai"
             className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#C5A26F]/40 bg-[#C5A26F]/10 px-3 py-1 text-[11px] font-medium text-[#C5A26F] hover:bg-[#C5A26F]/15"
           >
             Engine AI Lab ↗

@@ -108,7 +108,7 @@ function breakdownTitle(
     "",
     `${counts.strong_fit} strong · ${counts.acceptable} acceptable · ${counts.questionable} check · ${counts.critical_repeat} critical · ${counts.needs_swap} swap · ${counts.poor_fit} poor`,
     "",
-    "Click the orb to open engine tools — Optimize Night (full placements + optimization), Optimize Week, Clear board.",
+    "Click the orb to open engine tools — Run Day Placements, Optimize Week, Clear board.",
   ];
   return lines.join("\n");
 }
@@ -228,8 +228,8 @@ export function RotationHealthFloater({
     whiteSpace: "nowrap",
   };
 
-  let engineLabel = "Optimize Night";
-  if (engineRunning) engineLabel = "Optimizing…";
+  let engineLabel = "Run Day Placements";
+  if (engineRunning) engineLabel = "Running…";
 
   const drawerWidth = isDraftMode ? 320 : 280;
 
@@ -273,7 +273,7 @@ export function RotationHealthFloater({
           style={velvetGlassPillStyle({ borderRadius: 16 })}
           role="status"
           aria-live="polite"
-          aria-label="Optimize Night — running"
+          aria-label="Run day placements — running"
         >
           <div className="flex items-center gap-2">
             <Loader2
@@ -282,7 +282,7 @@ export function RotationHealthFloater({
               style={{ color: "var(--sb-optimize-ink)" }}
             />
             <div className="min-w-0 flex-1 truncate text-[13px] font-extrabold tracking-[-0.01em] text-foreground">
-              Optimize Night
+              Run Day Placements
             </div>
             <div className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
               …
@@ -394,7 +394,7 @@ export function RotationHealthFloater({
                 type="button"
                 onClick={onOptimizeNight}
                 disabled={engineDisabled}
-                title="Optimize Night — full placements (planner) + optimization (local search + optional AI). Enters Draft Mode with the complete result."
+                title="Run day placements — opens the SheetBuilder confirmation, then previews the result in Draft Mode."
                 className={`sb-interactive flex items-center gap-1 rounded px-2 py-1.5 disabled:opacity-40 shrink-0 ${engineRunning ? "sb-engine-running" : ""}`}
                 style={{
                   ...actionBtnBase,
@@ -412,7 +412,7 @@ export function RotationHealthFloater({
                 type="button"
                 onClick={onOptimizeNight}
                 disabled={engineDisabled}
-                title="Re-run Optimize Night (replaces current draft)"
+                title="Re-run day placements (replaces current draft)"
                 className="rounded px-2 py-1.5 disabled:opacity-40 shrink-0"
                 style={{
                   ...actionBtnBase,

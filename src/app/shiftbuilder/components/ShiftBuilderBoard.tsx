@@ -665,6 +665,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     : "sb-overlap-grid sb-overlap-card-grid flex-1 min-w-0";
   const breaksOverlapGridClass =
     "sb-overlap-grid sb-overlap-card-grid sb-breaks-overlap-grid grid grid-cols-6 gap-2 w-full flex-1 min-h-0";
+  const [openDeploymentOverlapBand, setOpenDeploymentOverlapBand] = React.useState<"PM" | "AM">("PM");
 
   /** Exactly one anchored pad host — prevents duplicate RR pads. */
   const activePlacementPad = React.useMemo((): {
@@ -692,19 +693,22 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     setActiveTaskEditPad(null);
   }, []);
 
-  // Coarse pointer (incl. Split View < 768px) — dock inspector instead of flyout pads.
-  // Declared before handleOpenTaskTextEdit so tablet open keeps slot selection for stage inset.
+  // The SheetBuilder redesign uses one persistent inspector instead of card-attached
+  // flyouts. Coarse-pointer devices still opt into the same dock regardless of the
+  // digital-assists flag so the tablet interaction contract remains intact.
+  // Declared before handleOpenTaskTextEdit so opening tasks keeps slot selection.
   const [useTabletDock, setUseTabletDock] = React.useState(false);
   React.useEffect(() => {
     const apply = () =>
       setUseTabletDock(
-        !isPrintPreview && (isTabletTouchDevice() || isCoarsePointerDevice()),
+        !isPrintPreview &&
+          (showDigitalAssists || isTabletTouchDevice() || isCoarsePointerDevice()),
       );
     apply();
     const mq = window.matchMedia("(pointer: coarse)");
     mq.addEventListener?.("change", apply);
     return () => mq.removeEventListener?.("change", apply);
-  }, [isPrintPreview]);
+  }, [isPrintPreview, showDigitalAssists]);
 
   const handleOpenTaskTextEdit = React.useCallback((
     slotKey: string,
@@ -1332,10 +1336,37 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                  Row 1: Z1 | Z3 | Z4 | Z5 | Z9
                  Row 2: Z2 | Z6 | Z7 | Z8 | Z10
                  (5-col CSS grid; child order = visual positions. Mirrored in print overview for PDF consistency.) */}
-            <div className="sb-with-aux-sidebar flex-1 min-h-0">
-            <section className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}>
+            <div
+              className="sb-with-aux-sidebar flex-1 min-h-0"
+              style={
+                isPrintPreview
+                  ? undefined
+                  : {
+                      gridTemplateRows: "max-content max-content",
+                      alignContent: "start",
+                      alignItems: "start",
+                      height: "auto",
+                      minHeight: 0,
+                      flex: "0 0 auto",
+                    }
+              }
+            >
+            <section
+              className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}
+              style={
+                isPrintPreview
+                  ? undefined
+                  : {
+                      flex: "0 0 auto",
+                      height: "auto",
+                      minHeight: 0,
+                      overflow: "visible",
+                    }
+              }
+            >
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
+                <span className="sb-section-live-meta">5 zones</span>
                 <div className="divider" />
                 <span
                   className={sectionCountClass(
@@ -1440,9 +1471,22 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* RESTROOMS — Golden: 1 row × 5 cols */}
-            <section className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}>
+            <section
+              className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}
+              style={
+                isPrintPreview
+                  ? undefined
+                  : {
+                      flex: "0 0 auto",
+                      height: "auto",
+                      minHeight: 0,
+                      overflow: "visible",
+                    }
+              }
+            >
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
+                <span className="sb-section-live-meta">2 rows</span>
                 <div className="divider" />
                 <span
                   className={sectionCountClass(
@@ -1571,7 +1615,22 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
 
             {/* AUXILIARY */}
-            <section className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`} style={{ position: 'relative' }}>
+            <section
+              className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}
+              style={
+                isPrintPreview
+                  ? { position: "relative" }
+                  : {
+                      position: "sticky",
+                      top: 12,
+                      alignSelf: "start",
+                      flex: "0 0 auto",
+                      height: "auto",
+                      minHeight: 0,
+                      overflow: "visible",
+                    }
+              }
+            >
               <div className="sheet-section-header">
                 <span className="label">AUXILIARY</span>
                 <div className="divider" />
@@ -1779,94 +1838,111 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             </section>
             </div>
 
-            {/* OVERLAPS — visible on deployment when GROUP filter is OL */}
-            {breakGroup === BREAK_GROUP_OVERLAPS && !isPrintPreview ? (
-              <section className="sb-builder-section pt-1.5 overlaps-section" data-print-target="overlaps">
-                <div className="sheet-section-header">
-                  <span className="label">OVERLAPS</span>
-                  <div className="divider" />
-                </div>
-                <div className="space-y-2">
-                  {[
+            {/* OVERLAPS — SheetBuilder-style two-header accordion; active cards render six across. */}
+            {!isPrintPreview
+              ? (() => {
+                  const rows = [
                     {
-                      time: "11p – 1a",
+                      label: "SWINGS OVERLAPS",
                       key: "PM" as const,
-                      dayName: selectedDay.name,
-                      dateNum: selectedDay.dateNum,
-                      headerColor: selectedDay.color,
+                      accent: "#7C3AED",
+                      countLabel: "11p – 1a",
                     },
                     {
-                      time: "5a – 7a",
+                      label: "DAYS OVERLAPS",
                       key: "AM" as const,
-                      dayName: amOverlapDayName,
-                      dateNum: amOverlapDateNum,
-                      headerColor: nextDayColor,
+                      accent: "#0F766E",
+                      countLabel: "5a – 7a",
                     },
-                  ].map((row) => (
-                    <div key={row.key}>
-                      <div className="flex items-baseline gap-2 pl-1 mb-0.5">
-                        <div
-                          className="font-black tabular-nums leading-none"
-                          style={{ fontSize: 22, color: isDark ? "#E5E5E7" : "#1C1C1E", fontFamily: "var(--font-atkinson)" }}
-                        >
-                          {row.dateNum}
-                        </div>
-                        <div
-                          className="font-bold tracking-[-0.4px] leading-none"
-                          style={{ fontSize: 16, color: row.headerColor, fontFamily: "var(--font-atkinson)" }}
-                        >
-                          {row.dayName}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-[60px] flex-shrink-0 text-[10px] font-bold tracking-[0.4px] text-[#1C1C1E]" style={{ fontFamily: "var(--font-atkinson)" }}>
-                          {row.time}
-                        </div>
-                        <div className={overlapGridClass}>
-                          {Array.from({ length: 6 }).map((_, i) => {
-                            const slotKey = `OL-${row.key}-${i}`;
-                            return (
-                              <motion.div
-                                key={`${dayTransitionKey}-${slotKey}`}
-                                className={`${gridHostClass} sb-day-card-host`}
-                                data-slot-key={slotKey}
-                                data-placement-host={slotKey}
-                                {...builderDayCardMotionProps(i, reducedMotion, allowCardDayEnter)}
+                  ];
+                  const activeRow =
+                    rows.find((row) => row.key === openDeploymentOverlapBand) ?? rows[0];
+                  const allSlotKeysByBand = {
+                    PM: Array.from({ length: 6 }, (_, i) => `OL-PM-${i}`),
+                    AM: Array.from({ length: 6 }, (_, i) => `OL-AM-${i}`),
+                  } as const;
+                  const activeSlotKeys = allSlotKeysByBand[activeRow.key];
+
+                  return (
+                    <section className="sb-builder-section sb-flow-overlap-group overlaps-section">
+                      {rows.map((row) => {
+                        const slotKeys = allSlotKeysByBand[row.key];
+                        const filledCount = slotKeys.filter((slotKey) =>
+                          slotShowsFilled(slotKey, assignments, isDraftMode, draftAssignments),
+                        ).length;
+                        const isOpen = row.key === activeRow.key;
+                        return (
+                          <div
+                            key={row.key}
+                            className={`sb-flow-overlap-panel sb-flow-overlap-panel--${row.key.toLowerCase()} ${
+                              isOpen ? "sb-flow-overlap-panel--open" : "sb-flow-overlap-panel--collapsed"
+                            }`}
+                            data-print-target={`overlaps-${row.key.toLowerCase()}`}
+                            style={{ ["--sb-section-accent" as string]: row.accent }}
+                          >
+                            <div className="sheet-section-header sb-flow-overlap-header">
+                              <button
+                                type="button"
+                                className="sb-flow-overlap-toggle"
+                                aria-expanded={isOpen}
+                                aria-label={`${row.label}: ${filledCount} assigned, ${row.countLabel}`}
+                                onClick={() => setOpenDeploymentOverlapBand(row.key)}
+                                title={isOpen ? `${row.label} is open` : `Open ${row.label}`}
                               >
-                                <OverlapSlot
-                                  slotKey={slotKey}
-                                  assignments={displayAssignments}
-                                  selectedTasks={selectedTasks}
-                                  setBreakGroupForSlot={setBreakGroupForSlot}
-                                  onCardClick={handleCardClickForPad}
-                                  loading={loadingAssignments}
-                                  isDraftMode={isDraftMode}
-                                  draftInfo={draftAssignments[slotKey]}
-                                  onRemoveTask={onRemoveTask}
-                                  onSetTaskColor={onSetTaskColor}
-                        onSetTaskMarker={onSetTaskMarker}
-                                  onEditTask={onEditTask}
-                                  onOpenTaskTextEdit={handleOpenTaskTextEdit}
-                                  isLocked={isCurrentNightLocked}
-                                  onLiveAssign={onLiveAssign}
-                                  onLiveUnassign={onLiveUnassign}
-                                  fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
-                                  placementTrail={trailForTm(tmIdForSlot(slotKey, displayAssignments[slotKey]))}
-                                  showDigitalAssists={showDigitalAssists}
-                                  focusedTmId={focusedTmId}
-                                  conflictingTms={conflictingTms}
-                                  tmConflictSlots={tmConflictSlots}
-                                />
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                                <span className="label">{row.label}</span>
+                                <span className="sb-flow-overlap-count">{filledCount}</span>
+                                <span className="sb-flow-overlap-time">{row.countLabel}</span>
+                                <span className="ms sb-flow-overlap-chevron" aria-hidden="true">
+                                  chevron_right
+                                </span>
+                              </button>
+                              <div className="divider" />
+                            </div>
+                            {isOpen ? (
+                              <div className={overlapGridClass}>
+                                {activeSlotKeys.map((slotKey, i) => (
+                                  <motion.div
+                                    key={`${dayTransitionKey}-${slotKey}`}
+                                    className={`${gridHostClass} sb-day-card-host`}
+                                    data-slot-key={slotKey}
+                                    data-placement-host={slotKey}
+                                    {...builderDayCardMotionProps(i, reducedMotion, allowCardDayEnter)}
+                                  >
+                                    <OverlapSlot
+                                      slotKey={slotKey}
+                                      assignments={displayAssignments}
+                                      selectedTasks={selectedTasks}
+                                      setBreakGroupForSlot={setBreakGroupForSlot}
+                                      onCardClick={handleCardClickForPad}
+                                      loading={loadingAssignments}
+                                      isDraftMode={isDraftMode}
+                                      draftInfo={draftAssignments[slotKey]}
+                                      onRemoveTask={onRemoveTask}
+                                      onSetTaskColor={onSetTaskColor}
+                                      onSetTaskMarker={onSetTaskMarker}
+                                      onEditTask={onEditTask}
+                                      onOpenTaskTextEdit={handleOpenTaskTextEdit}
+                                      isLocked={isCurrentNightLocked}
+                                      onLiveAssign={onLiveAssign}
+                                      onLiveUnassign={onLiveUnassign}
+                                      fitChip={showFitChips ? fitBySlot[slotKey] : undefined}
+                                      placementTrail={trailForTm(tmIdForSlot(slotKey, displayAssignments[slotKey]))}
+                                      showDigitalAssists={showDigitalAssists}
+                                      focusedTmId={focusedTmId}
+                                      conflictingTms={conflictingTms}
+                                      tmConflictSlots={tmConflictSlots}
+                                    />
+                                  </motion.div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </section>
+                  );
+                })()
+              : null}
           </>
         ) : (
           <div

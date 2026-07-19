@@ -104,7 +104,7 @@ export function TmNameBlock({
     <div className={`flex flex-col min-w-0 w-full ${className}`.trim()}>
       <div className="flex items-center gap-1 min-w-0">
         <span
-          className={`font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate min-w-0 ${nameClassName}`.trim()}
+          className={`sb-tm-primary-name font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate min-w-0 ${nameClassName}`.trim()}
           style={{
             fontSize,
             lineHeight: 1.05,
@@ -197,11 +197,11 @@ export function coverageBodyPadding(
   return showDigitalAssists ? 10 : 12;
 }
 
-/** 3px accent stripe — matching refined design. */
+/** Accent stripe — the live SheetBuilder redesign promotes this into a full-width top bar. */
 export function CardAccentStripe({ color }: { color: string }) {
   return (
     <div
-      className={`h-[3px] w-full shrink-0 ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
+      className={`sb-card-accent-stripe h-[3px] w-full shrink-0 ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
       style={{ backgroundColor: color }}
     />
   );
@@ -228,7 +228,7 @@ export function CardSlotHeader({
 
   return (
     <div
-      className={`flex items-center justify-between gap-1.5 px-3.5 ${compact ? "pt-2 pb-1.5" : "pt-2.5 pb-2"} leading-none`}
+      className={`sb-card-slot-header flex items-center justify-between gap-1.5 px-3.5 ${compact ? "pt-2 pb-1.5" : "pt-2.5 pb-2"} leading-none`}
       style={{ color: ink }}
     >
       <div className="flex items-center gap-1.5 leading-none min-w-0" style={{ color: ink }}>

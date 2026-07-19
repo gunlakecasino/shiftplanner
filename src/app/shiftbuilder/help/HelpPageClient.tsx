@@ -16,9 +16,9 @@ export default function HelpPageClient({ markdown }: { markdown: string }) {
     <div className="sb-help-page">
       <div className="sb-help-page__inner">
         <header className="sb-help-page__header">
-          <h1 className="sb-help-page__title">ShiftBuilder Help</h1>
+          <h1 className="sb-help-page__title">SheetBuilder Help</h1>
           <div className="sb-help-page__actions">
-            <Link href="/shiftbuilder" className="sb-help-page__btn">
+            <Link href="/sheetbuilder" className="sb-help-page__btn">
               Back to board
             </Link>
             <button

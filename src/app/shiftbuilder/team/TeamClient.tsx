@@ -20,7 +20,7 @@ function TeamGate() {
 
   useEffect(() => {
     if (!isLoading && !canViewTeam) {
-      router.replace("/shiftbuilder");
+      router.replace("/sheetbuilder");
     }
   }, [isLoading, canViewTeam, router]);
 

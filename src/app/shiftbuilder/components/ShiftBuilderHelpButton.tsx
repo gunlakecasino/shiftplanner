@@ -16,7 +16,7 @@ export default function ShiftBuilderHelpButton() {
       <button
         type="button"
         className="sb-help-fab no-print"
-        aria-label="Open ShiftBuilder help"
+        aria-label="Open SheetBuilder help"
         title="Help — interactive tutorial & floor guide"
         onClick={() => setTutorialOpen(true)}
       >
@@ -31,8 +31,8 @@ export default function ShiftBuilderHelpButton() {
       />
 
       {/* Screen-reader path to full help page (non-visual) */}
-      <Link href="/shiftbuilder/help" className="sr-only">
-        ShiftBuilder help and floor guide
+      <Link href="/sheetbuilder/help" className="sr-only">
+        SheetBuilder help and floor guide
       </Link>
     </>
   );

@@ -55,8 +55,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Shift Builder — GLCR Grave Deployment",
-  description: "Shift Builder — grave shift zone deployment, assignments, and print for Gun Lake Casino Resort operations.",
+  title: "SheetBuilder — GLCR Grave Deployment",
+  description: "SheetBuilder — grave shift zone deployment, assignments, and print for Gun Lake Casino Resort operations.",
   icons: {
     icon: "/favicon.ico",
     apple: "/icons/apple-touch-icon.png",
@@ -66,7 +66,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "ShiftForge",
+    title: "SheetBuilder",
   },
 };
 

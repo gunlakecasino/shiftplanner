@@ -85,6 +85,9 @@ import {
   PrintCommandCenter,
   type PrintConfig,
 } from "./components/PrintCommandCenter";
+import RunDayPlacementsModal, {
+  type DayPlacementRunMode,
+} from "./components/RunDayPlacementsModal";
 import { PrintExportProgressOverlay } from "./components/PrintExportProgressOverlay";
 // print config utils now used inside usePrintManager hook (no longer needed at top level in Client)
 import type { OverviewNight } from "./print/printOverviewTables";
@@ -996,6 +999,19 @@ function AuthedShiftBuilder() {
     rosterOpen, setRosterOpen,
     xaiSphereOpen, setXaiSphereOpen,
   } = useRosterPanels();
+
+  React.useEffect(() => {
+    // SheetBuilder redesign uses the topbar roster dropdown as the primary roster
+    // surface. Clear the legacy floating rail's persisted open state so a previous
+    // session cannot boot the board with an extra side panel already covering it.
+    setRosterOpen(false);
+    try {
+      localStorage.removeItem("oms_roster_open");
+      localStorage.removeItem("oms_roster_open_tablet");
+    } catch {
+      /* ignore */
+    }
+  }, [setRosterOpen]);
 
   /** Roster rail filter — single source of truth in Zustand (3.4). */
   const graveOnly = useGraveOnly();
@@ -1968,11 +1984,12 @@ function AuthedShiftBuilder() {
           }
         })());
     const dockOpen =
-      coarse &&
       !!selectedSlotKey &&
       isBuilderLiveCanvas &&
       currentView === "deployment";
-    const dockInset = dockOpen ? placementDockStageRightInset() : 0;
+    const dockInset = dockOpen
+      ? Math.max(placementDockStageRightInset(), coarse ? 388 : 316)
+      : 0;
     // Floating roster is portaled over the stage — shift the live canvas left so
     // zone cards never sit under the panel (same contract as placement dock right).
     const rosterLeft = rosterOpen ? rosterStageLeftInset() : 0;
@@ -2803,7 +2820,7 @@ function AuthedShiftBuilder() {
   const builderOperatorName =
     currentOperator?.full_name?.trim() ||
     currentOperator?.username?.trim() ||
-    "Shift Builder";
+    "SheetBuilder";
 
   const logBuilderChange = useCallback(
     (params: {
@@ -4421,8 +4438,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         const okToRun = options?.confirmMessage
           ? await confirmDialog(options.confirmMessage, { confirmLabel: "Run" })
           : await confirmDialog(
-              "Optimize Night: full placements via planner + optimization (local search + optional AI). Results go to Draft for review.",
-              { title: "Optimize Night — enter Draft Mode?", confirmLabel: "Optimize" },
+              "Run day placements: results go to Draft Mode for review before anything is applied live.",
+              { title: "Run Day Placements?", confirmLabel: "Run" },
             );
         if (!okToRun) return;
       }
@@ -4512,7 +4529,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             const { result: deterministic, ctx: engineCtx } =
               runNightEngineFromClientWithContext(engineInputs, {
                 mode: "no-ai",
-                preserve: options?.forceXai ? "locked-only" : "all-existing",
+                preserve:
+                  options?.runMode === "rebuild-day" || options?.forceXai
+                    ? "locked-only"
+                    : "all-existing",
               });
             await yieldUnified();
 
@@ -4626,8 +4646,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               aiInfo && aiInfo.accepted.length
                 ? ` · ${aiInfo.accepted.length} AI refinement${aiInfo.accepted.length === 1 ? "" : "s"}`
                 : "";
+            const runLabel =
+              options?.runMode === "rebuild-day"
+                ? "Rebuild day"
+                : "Fill open slots";
             showToast(
-              `Unified engine draft: ${finalResult.scorecard.coverage} placements${rescueNote}${aiNote}`,
+              `${runLabel} draft: ${finalResult.scorecard.coverage} placements${rescueNote}${aiNote}`,
               "success",
             );
             return;
@@ -5033,6 +5057,36 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   React.useEffect(() => {
     runCoverageEngineRef.current = optimizeNight;
   }, [optimizeNight]);
+
+  const [runDayPlacementsOpen, setRunDayPlacementsOpen] = React.useState(false);
+
+  const runDayPlacementsSummary = React.useMemo(() => {
+    const orderedSlots = getSlotsInPlacementOrder(auxDefs);
+    const placedCount = Object.values(assignments ?? {}).filter(
+      (row: any) => !!row?.tmId,
+    ).length;
+    const lockedCount = Object.values(assignments ?? {}).filter(
+      (row: any) => !!row?.tmId && !!row?.isLocked,
+    ).length;
+
+    return {
+      dateLabel: `${selectedDay.name} · ${formatLocalDateISO(selectedDay.date)}`,
+      scheduledCount: effectiveScheduledTmIdsTonight?.size ?? 0,
+      placedCount,
+      openSlotCount: Math.max(0, orderedSlots.length - placedCount),
+      lockedCount,
+      callOffCount: calledOffIds?.size ?? 0,
+      draftActive: isDraftMode && draftSlotCount > 0,
+    };
+  }, [
+    auxDefs,
+    assignments,
+    calledOffIds,
+    draftSlotCount,
+    effectiveScheduledTmIdsTonight,
+    isDraftMode,
+    selectedDay,
+  ]);
 
   // Clear the unified-engine Thought Process panel whenever Draft Mode exits
   // (apply or discard) — the reasoning belongs to a specific draft.
@@ -6334,6 +6388,157 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   const placedCount = allSlotKeys.filter(k => !!assignments[k]?.tmId).length;
   const totalSlots = allSlotKeys.length;
 
+  const navRosterSummary = React.useMemo(() => {
+    const scheduledIds: string[] = [];
+    const seen = new Set<string>();
+    const useScheduledFilter = effectiveScheduledTmIdsTonight.size > 0;
+
+    for (const row of effectiveGravesScheduleRoster as any[]) {
+      const tmId = boardTmId(row);
+      if (!tmId || seen.has(tmId)) continue;
+      if (useScheduledFilter && !idSetMatchesBoardId(effectiveScheduledTmIdsTonight, tmId)) {
+        continue;
+      }
+      seen.add(tmId);
+      scheduledIds.push(tmId);
+    }
+
+    const scheduledCount = scheduledIds.length || effectiveScheduledTmIdsTonight.size;
+    const placedScheduledCount = scheduledIds.filter((tmId) =>
+      idSetMatchesBoardId(alreadyAssignedThisNight, tmId),
+    ).length;
+    const calledOffScheduledCount = scheduledIds.filter((tmId) =>
+      idSetMatchesBoardId(calledOffIds, tmId),
+    ).length;
+
+    return {
+      scheduledCount,
+      placedCount: placedScheduledCount,
+      openCount: Math.max(0, scheduledCount - placedScheduledCount - calledOffScheduledCount),
+      calledOffCount: calledOffScheduledCount,
+    };
+  }, [
+    alreadyAssignedThisNight,
+    calledOffIds,
+    effectiveGravesScheduleRoster,
+    effectiveScheduledTmIdsTonight,
+    idSetMatchesBoardId,
+  ]);
+
+  const navRosterDropdown = React.useMemo(() => {
+    type NavRosterRow = {
+      id?: string;
+      tmId?: string;
+      tm_id?: string;
+      profileId?: string;
+      name?: string;
+      fullName?: string;
+      full_name?: string;
+      displayName?: string;
+      isFullGrave?: boolean;
+      isFullGraveTonight?: boolean;
+      isPMOverlap?: boolean;
+      isPMOverlapTonight?: boolean;
+      isAMOverlap?: boolean;
+      isAMOverlapTonight?: boolean;
+      active?: boolean;
+      status?: string;
+    };
+    type NavRosterPerson = {
+      id: string;
+      name: string;
+      initials?: string;
+    };
+
+    const scheduledDefault: NavRosterPerson[] = [];
+    const scheduledOverlaps: NavRosterPerson[] = [];
+    const markedOff: NavRosterPerson[] = [];
+    const notScheduled: NavRosterPerson[] = [];
+    const seenScheduled = new Set<string>();
+    const seenMarkedOff = new Set<string>();
+    const useScheduledFilter = effectiveScheduledTmIdsTonight.size > 0;
+    const nameForRow = (row: NavRosterRow, fallbackId: string) =>
+      row.name ||
+      row.fullName ||
+      row.full_name ||
+      row.displayName ||
+      fallbackId;
+    const initialsForRow = (name: string) =>
+      name
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? "")
+        .join("") || undefined;
+    const personFromRow = (row: NavRosterRow, fallbackId?: string): NavRosterPerson | null => {
+      const tmId = boardTmId(row) || row.profileId || fallbackId || "";
+      if (!tmId) return null;
+      const name = nameForRow(row, tmId);
+      return { id: tmId, name, initials: initialsForRow(name) };
+    };
+    const pushUnique = (
+      target: NavRosterPerson[],
+      person: NavRosterPerson | null,
+      seen: Set<string>,
+      max = 12,
+    ) => {
+      if (!person || seen.has(person.id) || target.length >= max) return;
+      seen.add(person.id);
+      target.push(person);
+    };
+    const isOverlapRow = (row: NavRosterRow) =>
+      !!(row.isPMOverlap || row.isPMOverlapTonight || row.isAMOverlap || row.isAMOverlapTonight);
+
+    for (const row of effectiveGravesScheduleRoster as NavRosterRow[]) {
+      const tmId = boardTmId(row);
+      if (!tmId || seenScheduled.has(tmId)) continue;
+      if (useScheduledFilter && !idSetMatchesBoardId(effectiveScheduledTmIdsTonight, tmId)) continue;
+
+      seenScheduled.add(tmId);
+      const person = personFromRow(row, tmId);
+      if (idSetMatchesBoardId(calledOffIds, tmId)) {
+        pushUnique(markedOff, person, seenMarkedOff);
+        continue;
+      }
+      pushUnique(isOverlapRow(row) ? scheduledOverlaps : scheduledDefault, person, new Set([
+        ...scheduledDefault.map((p) => p.id),
+        ...scheduledOverlaps.map((p) => p.id),
+      ]));
+    }
+
+    for (const calledOffId of calledOffIds) {
+      const resolved = resolveTmFromLookup(markerRosterLookup, calledOffId) as NavRosterRow | undefined;
+      const fallbackRow = resolved ?? ({ id: calledOffId, name: calledOffId } as NavRosterRow);
+      pushUnique(markedOff, personFromRow(fallbackRow, calledOffId), seenMarkedOff);
+    }
+
+    const seenNotScheduled = new Set<string>();
+    for (const row of effectiveRealRoster as NavRosterRow[]) {
+      const tmId = boardTmId(row);
+      if (!tmId) continue;
+      if (row.active === false || String(row.status || "").toLowerCase() === "inactive") continue;
+      if (seenScheduled.has(tmId)) continue;
+      if (idSetMatchesBoardId(effectiveScheduledTmIdsTonight, tmId)) continue;
+      if (idSetMatchesBoardId(calledOffIds, tmId)) continue;
+      pushUnique(notScheduled, personFromRow(row, tmId), seenNotScheduled, 10);
+    }
+
+    return {
+      scheduledDefault,
+      scheduledOverlaps,
+      markedOff,
+      notScheduled,
+    };
+  }, [
+    calledOffIds,
+    effectiveGravesScheduleRoster,
+    effectiveRealRoster,
+    effectiveScheduledTmIdsTonight,
+    idSetMatchesBoardId,
+    markerRosterLookup,
+  ]);
+
   // Index catalog by `${slotType}:${slotKey}:${rrSide ?? ""}` so the popover
   // can list options for any given card in O(1).
   const catalogIndex = React.useMemo(() => {
@@ -7309,6 +7514,22 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     return optimizeNight(options);
   });
 
+  const stableOpenRunDayPlacements = useStableCallback(() => {
+    if (boardInteractionLocked) {
+      showToast("This day is locked — placements cannot be run", "error");
+      return;
+    }
+    setRunDayPlacementsOpen(true);
+  });
+
+  const stableRunDayPlacements = useStableCallback((mode: DayPlacementRunMode) => {
+    setRunDayPlacementsOpen(false);
+    return optimizeNight({
+      runMode: mode,
+      skipConfirm: true,
+    });
+  });
+
   const stableDiscardDraft = useStableCallback(() => {
     return discardDraft();
   });
@@ -8010,7 +8231,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
   return (
     <div
-      className={`sb-builder-shell flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder${isPrintPreview ? "" : " sb-canvas-builder"}`}
+      className={`sb-builder-shell sb-sheetbuilder-redesign flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder${isPrintPreview ? "" : " sb-canvas-builder"}`}
       style={{
         "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",
         "--sb-builder-canvas-max": `${BUILDER_CANVAS_MAX_WIDTH_PX}px`,
@@ -8114,7 +8335,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onOpenCoverGuide={() => setCoverGuideOpen(true)}
         isSyncing={boardBackgroundSync}
         rosterOpen={rosterOpen}
-        onRosterToggle={() => setRosterOpen((v) => !v)}
+        rosterSummary={navRosterSummary}
+        rosterDropdown={navRosterDropdown}
         canvasMode={canvasMode}
         onCanvasModeChange={handleCanvasModeChange}
         isDayPublished={currentNightStatus === "published"}
@@ -8130,7 +8352,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           canPublish ? () => void handleToggleWeekPublished(false) : undefined
         }
         publishWeekBusy={publishWeekBusy}
-        onOptimizeNight={canRunEngine ? stableOptimizeNight : undefined}
+        onOptimizeNight={canRunEngine ? stableOpenRunDayPlacements : undefined}
         engineRunning={engineRunPhase !== "idle"}
         onRunWeek={canRunEngine ? () => void runWeekPreview() : undefined}
         weekRunBusy={weekRunBusy}
@@ -8150,6 +8372,68 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onDiscardDraft={stableDiscardDraft}
         permissions={permissions}
       />
+
+      <RunDayPlacementsModal
+        open={runDayPlacementsOpen}
+        running={engineRunPhase !== "idle"}
+        summary={runDayPlacementsSummary}
+        onClose={() => setRunDayPlacementsOpen(false)}
+        onRun={stableRunDayPlacements}
+      />
+
+      {!isPrintPreview && (
+        <aside className="sb-sheetbuilder-utility-rail no-print" aria-label="SheetBuilder tools">
+          <button
+            type="button"
+            className="sb-sheetbuilder-rail-btn"
+            aria-label={rosterOpen ? "Hide roster" : "Show roster"}
+            aria-pressed={rosterOpen}
+            data-active={rosterOpen || undefined}
+            onClick={() => setRosterOpen((v) => !v)}
+          >
+            <span className="ms" aria-hidden>groups</span>
+            <span>Roster</span>
+          </button>
+          <button
+            type="button"
+            className="sb-sheetbuilder-rail-btn"
+            aria-label="Run day placements"
+            onClick={stableOpenRunDayPlacements}
+          >
+            <span className="ms" aria-hidden>auto_awesome</span>
+            <span>Run</span>
+          </button>
+          <button
+            type="button"
+            className="sb-sheetbuilder-rail-btn"
+            aria-label="Open print and export"
+            onClick={() => setIsPrintCenterOpen(true)}
+          >
+            <span className="ms" aria-hidden>print</span>
+            <span>Print</span>
+          </button>
+          <button
+            type="button"
+            className="sb-sheetbuilder-rail-btn"
+            aria-label="Open reports"
+            onClick={() => router.push("/sheetbuilder/reports")}
+          >
+            <span className="ms" aria-hidden>bar_chart</span>
+            <span>Reports</span>
+          </button>
+          {canAccessSudo && (
+            <button
+              type="button"
+              className="sb-sheetbuilder-rail-btn"
+              aria-label="Open settings"
+              onClick={stableOpenSettings}
+            >
+              <span className="ms" aria-hidden>settings</span>
+              <span>Settings</span>
+            </button>
+          )}
+        </aside>
+      )}
 
       {/* Shift notes — operator pad (hydrated from server; saves via session mutation) */}
       {canEditAssignments && (
@@ -8268,7 +8552,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           createPortal(
             <RosterDropZone
               isLocked={boardInteractionLocked || !canEditAssignments}
-              className={`sb-roster-shell z-[55] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "sb-roster-shell--open" : "pointer-events-none"}`}
+              className={`sb-roster-shell sb-sheetbuilder-roster-shell z-[55] overflow-hidden flex flex-col ${isDark ? "dark" : ""} ${rosterOpen ? "sb-roster-shell--open" : "pointer-events-none"}`}
               style={{
                 width: rosterPanelWidth(),
                 top: stageTopInsetPx() + 6,
@@ -8309,6 +8593,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 amOverlapDateNum={amOverlapDateNum}
                 selectedDay={selectedDay}
                 isRosterLoading={boardColdLoading}
+                isOpen={rosterOpen}
               />
             </RosterDropZone>,
             document.body,
@@ -8379,8 +8664,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           {/* Unified builder canvas: week health + scaled board as one seamless surface. */}
           {isBuilderLiveCanvas && (
             <div
-              className="sb-builder-canvas mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col"
-              style={{ maxWidth: BUILDER_CANVAS_MAX_WIDTH_PX }}
+              className="sb-builder-canvas flex min-h-0 w-full max-w-full flex-1 flex-col"
             >
               <div className="sb-builder-fluid-viewport w-full min-h-0 flex-1 flex flex-col">
               <div className={`sb-builder-scale-viewport w-full min-h-0 flex-1 flex flex-col ${isDraftMode && draftSlotCount > 0 ? "sb-draft-frame-active" : ""}`}>
@@ -8401,7 +8685,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 selectedDayIndex={selectedDayIndex}
                 canRunEngine={canRunEngine}
                 canEditAssignments={canEditAssignments}
-                onOptimizeNight={canRunEngine ? stableOptimizeNight : undefined}
+                onOptimizeNight={canRunEngine ? stableOpenRunDayPlacements : undefined}
                 onClearBoard={handleClearBoard}
                 engineRunning={engineRunPhase !== "idle"}
                 onApplyDraft={stableApplyDraft}
