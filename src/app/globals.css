@@ -4257,17 +4257,21 @@ button,
   margin-inline: 0;
   padding: 1px 2px !important;
   border-radius: 4px;
-  color: #9ca3af !important;
+  color: #4b5563 !important;
   font-size: 10px !important;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.2;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-list-row::before {
   content: "•";
   flex: 0 0 auto;
-  margin-right: 1px;
-  color: #d1d5db;
+  margin-top: -1px;
+  margin-right: 2px;
+  color: var(--card-accent, #64748b);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-list-row:hover,
@@ -5921,6 +5925,23 @@ button,
   border-color: rgba(255, 59, 48, 0.22) !important;
   background: rgba(255, 59, 48, 0.075) !important;
   color: #ff3b30 !important;
+}
+
+/* The package ShiftCard owns its own border and accent rail. Its draggable
+   host must stay visually transparent or the host's border/padding appears as
+   a white hairline beside the colored rail. */
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid .assignment-card.sb-package-card-wrapper {
+  overflow: visible;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid .sb-package-card-wrapper > div {
+  min-height: inherit;
+  height: 100%;
+  border-left-width: 0 !important;
 }
 
 /* SheetBuilder refinement: the placement experience is a persistent inspector.

@@ -6,7 +6,7 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 
-import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
+import { isCriticalRepeatFit } from "./PlacementFitChip";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick } from "./CardTaskZone";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import {
@@ -16,7 +16,6 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import {
   CardAccentStripe,
-  CardSlotHeader,
   SlotAssignmentBody,
   TaskListDivider,
   type SlotAssignmentState,
@@ -82,7 +81,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   setBreakGroupForSlot,
   isLocked = false,
   fitChip,
-  placementTrail,
   showDigitalAssists = false,
   focusedTmId,
   conflictingTms,
@@ -143,6 +141,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(!isLocked ? listeners : {})}
       {...(!isLocked ? attributes : {})}
       data-slot-key={slotKey}
+      aria-label={`${overlapSlotLabel(slotKey)} overlap assignment`}
       className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[64px] flex flex-col overflow-hidden rounded-xl ${
         isOver ? "drop-target-active" : ""
       } ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
@@ -154,19 +153,8 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
     >
       <CardAccentStripe color={accent} />
 
-      <CardSlotHeader
-        icon="◆"
-        label={overlapSlotLabel(slotKey)}
-        accentColor={accent}
-        compact
-        titleClassName="!normal-case tracking-[0.01em]"
-        trailing={
-          fitChip && showDigitalAssists ? <PlacementFitChip fit={fitChip} compact /> : null
-        }
-      />
-
       <div
-        className="sb-card-assign-zone flex flex-col flex-1 min-h-0 px-2 pb-1.5"
+        className="sb-card-assign-zone flex flex-col flex-1 min-h-0 px-3 pt-4 pb-1.5"
         {...(onCardClick ? assignZoneOpenHandlers(slotKey, onCardClick, isLocked) : {})}
       >
         <SlotAssignmentBody
@@ -177,8 +165,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           otherSlotsForTm={otherSlotsForTm}
           inviteSize="rr"
           criticalRepeat={isCriticalRepeatFit(fitChip)}
-          placementTrail={placementTrail}
-          placementTrailMatchSlotKey={slotKey}
           nameSizeOverride={showDigitalAssists ? 16 : 14}
           onUnassignedClick={(e) => {
             if (!isLocked && onCardClick) {

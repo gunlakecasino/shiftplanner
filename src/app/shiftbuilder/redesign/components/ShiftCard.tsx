@@ -22,14 +22,30 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
             <MoreHorizontal size={12} className="text-gray-300 ml-auto" />
           </div>
           {coverage && coverage.length > 0 ? (
-            <div className="flex-1 flex flex-col justify-center gap-1">
-              <div className="text-[8px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>Covered by</div>
-              {coverage.map((c) => (
-                <div key={c.label} className="flex items-baseline gap-1.5">
-                  <span className="text-[10px] font-bold text-gray-500">{c.label}</span>
-                  <span className="text-[15px] font-bold text-gray-400">{c.name}</span>
+            <div className={`flex-1 grid items-center ${notes && notes.length > 0 ? "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2" : "grid-cols-1"}`}>
+              <div className="min-w-0 flex flex-col gap-1">
+                <div className="text-[8px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>Covered by</div>
+                {coverage.map((c) => (
+                  <div key={c.label} className="flex items-baseline gap-1.5 min-w-0">
+                    <span className="text-[10px] font-bold text-gray-500 shrink-0">{c.label}</span>
+                    <span className="text-[15px] font-bold text-gray-400 truncate">{c.name}</span>
+                  </div>
+                ))}
+              </div>
+              {notes && notes.length > 0 && (
+                <div className="min-w-0 self-stretch border-l border-gray-200/80 pl-2 flex flex-col justify-center gap-1">
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Tasks</div>
+                  {notes.map((note, index) => (
+                    <div key={`${note}-${index}`} className="flex items-start gap-1 min-w-0">
+                      <span
+                        className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: accentColor, opacity: 0.85 }}
+                      />
+                      <span className="text-[8px] leading-tight text-gray-600 break-words">{note}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
@@ -67,8 +83,8 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
           <div className="mt-auto flex flex-col gap-1">
             {notes.map((n, i) => (
               <div key={i} className="flex items-start gap-1.5">
-                <div className="w-1 h-1 rounded-full mt-[5px] shrink-0" style={{ backgroundColor: accentColor, opacity: 0.5 }} />
-                <span className="text-[10px] text-gray-500 leading-snug truncate">{n}</span>
+                <div className="w-1.5 h-1.5 rounded-full mt-[4px] shrink-0" style={{ backgroundColor: accentColor, opacity: 0.85 }} />
+                <span className="text-[10px] font-medium text-gray-600 leading-snug truncate">{n}</span>
               </div>
             ))}
           </div>
