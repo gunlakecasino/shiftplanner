@@ -88,14 +88,17 @@ export type NightSecondaryBundlePayload = {
 
 export async function buildNightSecondaryBundle(
   isoDate: string,
-  options: { includeSideTasks?: boolean } = {},
+  options: { includeSideTasks?: boolean; printOnly?: boolean } = {},
 ): Promise<NightSecondaryBundlePayload> {
   const supabase = getSupabase();
   const anchorDate = parseLocalDateISO(isoDate);
+  const printOnly = options.printOnly === true;
 
   const [nightId, recentZoneHistory] = await Promise.all([
     getCachedNightIdForDate(isoDate),
-    fetchRecentZoneHistoryServer(anchorDate, 7, supabase),
+    printOnly
+      ? Promise.resolve({} as ZoneHistoryRecord)
+      : fetchRecentZoneHistoryServer(anchorDate, 7, supabase),
   ]);
 
   const [notesRes, tasksRes, breaksRes, bordersRes, callOffsRes, sideTasksRes] = await Promise.all([
@@ -109,14 +112,14 @@ export async function buildNightSecondaryBundle(
           .eq("night_id", nightId)
           .order("sort_order", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
-    nightId
+    nightId && !printOnly
       ? supabase
           .from("break_assignments")
           .select("*")
           .eq("night_id", nightId)
           .order("sort_order", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
-    nightId
+    nightId && !printOnly
       ? supabase
           .from("night_card_borders")
           .select("slot_key, border_color")
@@ -125,7 +128,9 @@ export async function buildNightSecondaryBundle(
     // call_offs is keyed by night_date (not night_id). Without this, Mark
     // unavailable only clears board slots; the roster never learns they are
     // called off and they reappear under "On Sheet — Not Placed" after poll.
-    supabase.from("call_offs").select("tm_id").eq("night_date", isoDate),
+    printOnly
+      ? Promise.resolve({ data: [], error: null })
+      : supabase.from("call_offs").select("tm_id").eq("night_date", isoDate),
     options.includeSideTasks
       ? supabase
           .from("ops_work_items")

@@ -43,6 +43,7 @@ export async function handleNightLayerGet(
     }
 
     if (layer === "core") {
+      const printOnly = request.nextUrl.searchParams.get("purpose") === "print";
       const policy = request.nextUrl.searchParams.get("policy");
       if (policy === "today") {
         const allowed = await isNightCoreAllowedForTodayPolicy(dateParam);
@@ -53,7 +54,7 @@ export async function handleNightLayerGet(
           );
         }
       }
-      const payload = await getNightCoreBundleForDate(dateParam);
+      const payload = await getNightCoreBundleForDate(dateParam, { printOnly });
       return NextResponse.json(payload, {
         headers: { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
       });
@@ -63,6 +64,7 @@ export async function handleNightLayerGet(
     // (Previous unstable_cache(45s) could re-show pre-edit tasks after refresh/poll.)
     const payload = await buildNightSecondaryBundle(dateParam, {
       includeSideTasks: session.actor.permissions.canAccessTasks === true,
+      printOnly: request.nextUrl.searchParams.get("purpose") === "print",
     });
     return NextResponse.json(payload, {
       headers: { "Cache-Control": "private, no-cache, no-store, must-revalidate" },

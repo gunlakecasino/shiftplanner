@@ -19,7 +19,6 @@ import {
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { fetchNightCoreData } from "@/app/shiftbuilder/hooks/fetchNightCoreData";
 import { fetchNightSecondaryData } from "@/app/shiftbuilder/hooks/fetchNightSecondaryData";
-import { getNightMeta } from "@/lib/shiftbuilder/data";
 import type {
   PrintDaySnapshot,
   PrintPlanningCardModel,
@@ -88,18 +87,14 @@ function accentForSlot(slotKey: string, auxDefs: AuxDef[]): string {
 
 export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Promise<PrintDaySnapshot> {
   const [core, secondary] = await Promise.all([
-    fetchNightCoreData(day),
-    fetchNightSecondaryData(day),
+    fetchNightCoreData(day, { printOnly: true }),
+    fetchNightSecondaryData(day, { printOnly: true }),
   ]);
 
   const amDate = addDays(day.date, 1);
   const assignments = core.assignments ?? {};
 
-  let nightStatus: "published" | "draft" = "draft";
-  if (core.nightId) {
-    const meta = await getNightMeta(core.nightId);
-    nightStatus = meta.status === "published" ? "published" : "draft";
-  }
+  const nightStatus: "published" | "draft" = core.status === "published" ? "published" : "draft";
 
   return {
     dayIndex,

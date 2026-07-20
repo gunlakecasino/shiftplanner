@@ -5,6 +5,8 @@ import { defaultAuxDefsForNewNight } from "@/lib/shiftbuilder/auxLayout";
 
 type NightCoreApiPayload = {
   nightId: string | null;
+  status?: string | null;
+  isLocked?: boolean;
   assignments: Record<string, any>;
   auxDefs?: AuxDef[];
   members: any[];
@@ -29,6 +31,8 @@ function toSet(values: string[] | Set<string> | undefined | null): Set<string> {
 function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
   return {
     nightId: raw.nightId,
+    status: raw.status ?? null,
+    isLocked: raw.isLocked ?? false,
     assignments: raw.assignments,
     auxDefs: raw.auxDefs ?? defaultAuxDefsForNewNight(),
     members: raw.members,
@@ -48,6 +52,8 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
 function emptyNightCoreResult(accessBlocked = false) {
   return {
     nightId: null,
+    status: null,
+    isLocked: false,
     assignments: {} as Record<string, unknown>,
     auxDefs: defaultAuxDefsForNewNight(),
     members: [] as unknown[],
@@ -70,6 +76,8 @@ export type FetchNightCoreOptions = {
   todayPolicy?: boolean;
   /** When true, treat 403 as blocked access (viewer published-only policy). */
   publishedOnlyPolicy?: boolean;
+  /** Skip board-only roster/history payload work when hydrating a print sheet. */
+  printOnly?: boolean;
 };
 
 /**
@@ -78,13 +86,25 @@ export type FetchNightCoreOptions = {
  */
 async function fetchNightCoreViaApi(dateStr: string, options?: FetchNightCoreOptions) {
   const policyQs = options?.todayPolicy ? "&policy=today" : "";
+  const purposeQs = options?.printOnly ? "&purpose=print" : "";
   // Add unique bust param to ensure browser / any intermediate layers don't serve a stale response
   // even with cache: "no-store". Server still keys on date only.
   const bust = `&_=${Date.now()}`;
-  const res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}${policyQs}${bust}`, {
-    credentials: "same-origin",
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20_000);
+  let res: Response;
+  try {
+    res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}${policyQs}${purposeQs}${bust}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`Night core timed out for ${dateStr}`);
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (res.status === 403) {
     return emptyNightCoreResult(true);
   }

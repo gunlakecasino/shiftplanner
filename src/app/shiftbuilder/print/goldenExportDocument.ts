@@ -161,7 +161,13 @@ function mountIsolatedGoldenCaptureHost(artboard: HTMLElement): () => void {
 
 async function captureArtboardPixels(
   artboard: HTMLElement,
-  args: { pixelRatio: number; usePng: boolean; center?: boolean; direct?: boolean },
+  args: {
+    pixelRatio: number;
+    usePng: boolean;
+    center?: boolean;
+    direct?: boolean;
+    fontEmbedCss?: string;
+  },
 ): Promise<RasterResult> {
   stripGoldenRasterChrome(artboard);
   const mount = args.direct
@@ -172,9 +178,10 @@ async function captureArtboardPixels(
     pixelRatio: args.pixelRatio,
     width: GOLDEN_WIDTH_PX,
     height: GOLDEN_HEIGHT_PX,
-    cacheBust: true,
+    cacheBust: false,
     backgroundColor: "#ffffff",
-    skipFonts: false,
+    preferredFontFormat: "woff2",
+    ...(args.fontEmbedCss !== undefined ? { fontEmbedCSS: args.fontEmbedCss } : {}),
     style: {
       ...GOLDEN_RASTER_ROOT_STYLE,
       width: `${GOLDEN_WIDTH_PX}px`,
@@ -238,6 +245,8 @@ export async function rasterizeGoldenArtboardElement(args: {
   kind: PrintPageKind;
   pixelRatio: number;
   usePng: boolean;
+  /** Precomputed once per print job so every sheet does not refetch/re-embed fonts. */
+  fontEmbedCss?: string;
 }): Promise<RasterResult> {
   const isGravesSheet = args.artboard.classList.contains("sb-graves-sheet");
   if (!isGravesSheet && args.kind === "breaks") {
@@ -284,6 +293,7 @@ export async function rasterizeGoldenArtboardElement(args: {
         usePng: args.usePng,
         center: !isGravesSheet,
         direct: isGravesSheet,
+        fontEmbedCss: args.fontEmbedCss,
       }),
     );
   } finally {

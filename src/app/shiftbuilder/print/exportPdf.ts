@@ -1,7 +1,8 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+import { getFontEmbedCSS } from "html-to-image";
 import type { PrintConfig } from "../components/PrintCommandCenter";
 import type { GoldenPrintPage } from "./assemblePages";
-import { goldenRasterScale, prepareExportSessionForRaster } from "./rasterPrep";
+import { goldenRasterScaleForClient, prepareExportSessionForRaster } from "./rasterPrep";
 import { rasterizeGoldenArtboardElement } from "./goldenExportDocument";
 import {
   getPrintImagePlacementPt,
@@ -18,6 +19,22 @@ export type ExportProgress = {
 };
 
 export type GoldenRasterPage = { dataUrl: string; format: "PNG" | "JPEG" };
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 /** Match browser print: fit the full Golden page inside the selected margins. */
 export function getGoldenPdfPlacement(config: PrintConfig): {
@@ -118,9 +135,21 @@ export async function rasterizeGoldenPrintPages(
       );
     }
 
-    const pixelRatio = goldenRasterScale(pages.length);
+    const pixelRatio = goldenRasterScaleForClient(
+      pages.length,
+      navigator.userAgent,
+      navigator.maxTouchPoints,
+    );
     const usePng = pages.length <= 8;
     const out: GoldenRasterPage[] = [];
+    const fontEmbedCss = await withTimeout(
+      getFontEmbedCSS(artboards[0], {
+        cacheBust: false,
+        preferredFontFormat: "woff2",
+      }),
+      15_000,
+      "Print fonts took too long to prepare. Please retry.",
+    );
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
@@ -139,12 +168,17 @@ export async function rasterizeGoldenPrintPages(
       artboards[i].getBoundingClientRect();
       await waitForGoldenRenderSettled();
 
-      const raster = await rasterizeGoldenArtboardElement({
-        artboard: artboards[i],
-        kind: page.kind,
-        pixelRatio,
-        usePng,
-      });
+      const raster = await withTimeout(
+        rasterizeGoldenArtboardElement({
+          artboard: artboards[i],
+          kind: page.kind,
+          pixelRatio,
+          usePng,
+          fontEmbedCss,
+        }),
+        30_000,
+        `Sheet ${i + 1} took too long to render. Please retry.`,
+      );
 
       if (typeof window !== "undefined") {
         console.info("[shiftbuilder export]", {

@@ -65,6 +65,8 @@ function hydrateSecondaryPayload(data: NightSecondaryApiPayload) {
 
 export type FetchNightSecondaryOptions = {
   publishedOnlyPolicy?: boolean;
+  /** Request only notes, printable tasks, and side-task rows. */
+  printOnly?: boolean;
 };
 
 function emptyNightSecondaryResult(accessBlocked = false) {
@@ -95,10 +97,22 @@ export async function fetchNightSecondaryData(
     // Unique bust param for same reason as core: guarantee the request reaches a fresh server computation
     // after a mutation + revalidate (Safari and other caches can be stubborn).
     const bust = `&_=${Date.now()}`;
-    const res = await fetch(`/api/shiftbuilder/night-secondary?date=${dateStr}${bust}`, {
-      credentials: "same-origin",
-      cache: "no-store",
-    });
+    const purposeQs = options?.printOnly ? "&purpose=print" : "";
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    let res: Response;
+    try {
+      res = await fetch(`/api/shiftbuilder/night-secondary?date=${dateStr}${purposeQs}${bust}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error(`Night secondary timed out for ${dateStr}`);
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
     if (res.status === 403) {
       return emptyNightSecondaryResult(true);
     }

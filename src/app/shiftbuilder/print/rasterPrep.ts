@@ -339,6 +339,20 @@ export function goldenRasterScale(pageCount: number): number {
   return 1.5;
 }
 
+/** Keep memory-bound print engines responsive without lowering desktop Chromium output. */
+export function goldenRasterScaleForClient(
+  pageCount: number,
+  userAgent: string,
+  maxTouchPoints = 0,
+): number {
+  const base = goldenRasterScale(pageCount);
+  const safari = /Safari/i.test(userAgent) && !/(Chrome|Chromium|CriOS|Edg|OPR)/i.test(userAgent);
+  const ios = /(iPad|iPhone|iPod)/i.test(userAgent);
+  const desktopModeIpad = /Macintosh/i.test(userAgent) && maxTouchPoints > 1;
+  const legacyMicrosoft = /(MSIE|Trident)/i.test(userAgent);
+  return safari || ios || desktopModeIpad || legacyMicrosoft ? Math.min(base, 1.5) : base;
+}
+
 const RASTER_SKIP_PROPS = new Set([
   "animation",
   "animation-delay",

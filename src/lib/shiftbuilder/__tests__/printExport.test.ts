@@ -12,7 +12,10 @@ import {
   getPrintImagePlacementPt,
   getPrintZoom,
 } from "@/app/shiftbuilder/print/printSession";
-import { goldenRasterScale } from "@/app/shiftbuilder/print/rasterPrep";
+import {
+  goldenRasterScale,
+  goldenRasterScaleForClient,
+} from "@/app/shiftbuilder/print/rasterPrep";
 
 const baseConfig = (over: Partial<PrintConfig> = {}): PrintConfig => ({
   days: Array.from({ length: 7 }, (_, i) => ({
@@ -130,5 +133,14 @@ describe("goldenRasterScale", () => {
     expect(goldenRasterScale(2)).toBe(2);
     expect(goldenRasterScale(8)).toBe(1.75);
     expect(goldenRasterScale(14)).toBe(1.5);
+  });
+
+  it("caps Safari and iPad raster work while preserving desktop Chromium quality", () => {
+    const safari = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15";
+    const chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/138.0.0.0 Safari/537.36";
+    const ipadDesktop = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.5 Safari/605.1.15";
+    expect(goldenRasterScaleForClient(2, safari)).toBe(1.5);
+    expect(goldenRasterScaleForClient(2, ipadDesktop, 5)).toBe(1.5);
+    expect(goldenRasterScaleForClient(2, chrome)).toBe(2);
   });
 });

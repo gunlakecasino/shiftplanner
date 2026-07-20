@@ -222,12 +222,16 @@ async function fetchNightMeta(
   };
 }
 
-async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreBundlePayload> {
+async function buildNightCoreBundleUncached(
+  isoDate: string,
+  options: { printOnly?: boolean } = {},
+): Promise<NightCoreBundlePayload> {
   const nightDate = new Date(`${isoDate}T12:00:00`);
+  const printOnly = options.printOnly === true;
 
   const [nightId, graveMembers, slotDefaults, allMembers] = await Promise.all([
     getCachedNightIdForDate(isoDate),
-    getCachedGraveAvailableTeamMembers(),
+    printOnly ? Promise.resolve([]) : getCachedGraveAvailableTeamMembers(),
     getCachedSlotDefaults(),
     getCachedActiveTeamMembers(),
   ]);
@@ -236,7 +240,7 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
 
   const [dbAssignments, weekOnScheduleSet, scheduled] = await Promise.all([
     nightId ? fetchAssignmentsForNight(nightId, nameById) : Promise.resolve([]),
-    nightId ? fetchOnScheduleTmIds(nightId, isoDate) : Promise.resolve(new Set<string>()),
+    nightId && !printOnly ? fetchOnScheduleTmIds(nightId, isoDate) : Promise.resolve(new Set<string>()),
     getScheduledTmsFromGravesDefault(nightDate, nightId),
   ]);
 
@@ -263,17 +267,21 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
   auxDefs = ensureAuxShellsForAssignmentKeys(auxDefs, Object.keys(legacyAssignments));
   const assignments = remapAssignmentsToAuxKeys(legacyAssignments, auxDefs);
 
-  const members = allMembers.map((tm) => ({
-    ...tm,
-    isOnSchedule: weekOnScheduleSet.has(tm.id),
-  }));
+  const members = printOnly
+    ? []
+    : allMembers.map((tm) => ({
+        ...tm,
+        isOnSchedule: weekOnScheduleSet.has(tm.id),
+      }));
 
-  const graveRoster = graveMembers.map((m) => ({
-    ...m,
-    isOnWeek: weekOnScheduleSet.has(m.id),
-    isPMOverlap: m.gravePool === "PM",
-    isAMOverlap: m.gravePool === "AM",
-  }));
+  const graveRoster = printOnly
+    ? []
+    : graveMembers.map((m) => ({
+        ...m,
+        isOnWeek: weekOnScheduleSet.has(m.id),
+        isPMOverlap: m.gravePool === "PM",
+        isAMOverlap: m.gravePool === "AM",
+      }));
 
   const scheduledId = (t: any) => t.tmId || t.tm_id || t.id;
   const fullGrave = new Set((scheduled.fullGraveScheduled || []).map(scheduledId));
@@ -289,7 +297,7 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
       isFullGraveTonight: fullGrave.has(m.id),
     }));
 
-  const gravesScheduleRoster = buildGravesScheduleRosterRows(scheduled, allMembers);
+  const gravesScheduleRoster = printOnly ? [] : buildGravesScheduleRosterRows(scheduled, allMembers);
 
   const nightMeta = await fetchNightMeta(nightId, isoDate);
 
@@ -339,6 +347,9 @@ export async function isNightCoreAllowedForTodayPolicy(isoDate: string): Promise
  * Intentionally uncached: board mutations must be visible on the next poll/refresh.
  * Roster/slot-defaults inside the builder still use short-lived data.server caches.
  */
-export async function getNightCoreBundleForDate(isoDate: string): Promise<NightCoreBundlePayload> {
-  return buildNightCoreBundleUncached(isoDate);
+export async function getNightCoreBundleForDate(
+  isoDate: string,
+  options: { printOnly?: boolean } = {},
+): Promise<NightCoreBundlePayload> {
+  return buildNightCoreBundleUncached(isoDate, options);
 }
