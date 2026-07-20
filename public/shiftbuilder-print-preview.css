@@ -1379,28 +1379,38 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-approved-as-of {
   position: absolute;
-  top: 7px;
+  top: 5px;
   right: 0;
-  min-width: 150px;
+  min-width: 122px;
+  min-height: 43px;
+  padding: 5px 8px 4px;
+  border: 2px solid #b42318;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px #fecaca;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  color: #6b7280;
-  text-align: right;
+  align-items: center;
+  justify-content: center;
+  color: #b42318;
+  background: #fff7f7;
+  text-align: center;
 }
 
 .sb-approved-as-of > span {
-  font-size: 8px;
+  font-size: 7.5px;
   line-height: 1;
   font-weight: 800;
+  letter-spacing: 1.15px;
 }
 
 .sb-approved-as-of > strong {
-  margin-top: 14px;
-  color: #4b5563;
-  font-size: 11px;
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 10.5px;
   line-height: 1;
   font-weight: 800;
+  letter-spacing: 0.2px;
 }
 
 .sb-approved-deployment-body {

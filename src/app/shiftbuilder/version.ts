@@ -2,7 +2,7 @@
  * ShiftBuilder UI version (sheet footer).
  * Bump for releases. Use semver (e.g. 1.1).
  */
-export const SHIFTBUILDER_VERSION = "1.231";
+export const SHIFTBUILDER_VERSION = "1.232";
 
 export function shiftBuilderVersionLabel(): string {
   return `v${SHIFTBUILDER_VERSION}`;

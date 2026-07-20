@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AUX_ROLE_COLORS,
+  BREAK_GROUP_OVERLAPS,
   RR_DEFS,
   ZONE_DEFS,
   ZONE_VISUAL_ORDER,
@@ -265,7 +266,11 @@ function ApprovedAssignmentCard({
       <div className="sb-approved-card-accent" />
       <div className="sb-approved-card-header">
         <span>{label}</span>
-        {breakGroup && names.length === 1 ? <span className="sb-approved-break-pill">B{breakGroup}</span> : null}
+        {breakGroup && names.length === 1 ? (
+          <span className="sb-approved-break-pill">
+            {breakGroup === BREAK_GROUP_OVERLAPS ? "OL" : `B${breakGroup}`}
+          </span>
+        ) : null}
       </div>
       <div className="sb-approved-card-body">
         {showOpenWork ? <span className="sb-approved-open-work">OPEN WORK</span> : null}
