@@ -25,6 +25,7 @@ import {
   clearPlacementHistoryForSlotServer,
   recordPlacementHistoryServer,
   refreshTmZoneMatrixServer,
+  removeAssignmentCoverageServer,
   removeNightCardBorderServer,
   removeNightSlotTaskServer,
   moveNightSlotTaskServer,
@@ -85,6 +86,7 @@ const ACTION_PERMISSIONS: Record<string, ActionPerm> = {
   delete_break_assignment: "canEditAssignments",
   add_night_slot_task: "canEditAssignments",
   remove_night_slot_task: "canEditAssignments",
+  remove_assignment_coverage: "canEditAssignments",
   move_night_slot_task: "canEditAssignments",
   update_night_slot_task_color: "canEditAssignments",
   update_night_slot_task_style: "canEditAssignments",
@@ -290,6 +292,11 @@ export async function POST(request: NextRequest) {
         await removeNightSlotTaskServer(body as never);
         await bustCache(body);
         return NextResponse.json({ ok: true });
+      }
+      case "remove_assignment_coverage": {
+        const result = await removeAssignmentCoverageServer(body as never);
+        await bustCache(body);
+        return NextResponse.json(result);
       }
       case "move_night_slot_task": {
         await moveNightSlotTaskServer(body as never);

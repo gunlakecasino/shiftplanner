@@ -198,7 +198,6 @@ export default function XDStyleComponentLibrary() {
   const commonProps = {
     assignments,
     selectedTasks,
-    setBreakGroupForSlot: () => {},
     onCardClick: () => {},
     loading: false,
     showDigitalAssists: controls.showDigitalAssists,
@@ -292,7 +291,6 @@ export default function XDStyleComponentLibrary() {
             def={mockRRDef}
             assignments={{ MRR1: ass, WRR1: { ...ass, tmName: undefined } }}
             selectedTasks={{ MRR1: all, WRR1: [] }}
-            setBreakGroupForSlot={() => {}}
             onGenderClick={() => {}}
             loading={false}
             showDigitalAssists={c.showDigitalAssists}

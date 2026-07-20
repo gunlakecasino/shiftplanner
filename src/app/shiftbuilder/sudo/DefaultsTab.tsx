@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * DefaultsTab — configure per-slot default **break groups**, then push them to
- * the current night or the entire GRAVE week (Fri–Thu).
+ * DefaultsTab — configure the per-slot break groups used automatically on
+ * every GRAVE night.
  *
  * Sections: Zones | Restrooms | AUX | AM Overlaps | PM Overlaps.
  * Each row: accent strip, icon + label, BreakBadge (click to cycle + auto-save).
@@ -10,7 +10,7 @@
  * Standing task pools for OL live in Projects → Defaults (AM/PM Overlap Pool)
  * and are applied via Apply Overlap Tasks — not from this tab.
  *
- * Push buttons live in a sticky action bar at the top.
+ * There is no per-night push or override; changes become the effective defaults.
  */
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -187,13 +187,6 @@ export interface DefaultsTabProps {
 
 type ToastKind = "error" | "success" | "info";
 
-const PUSH_CONFIRM_MESSAGES: Record<"breaks-today" | "breaks-week", string> = {
-  "breaks-today":
-    "Push card-default break groups to tonight? This overwrites any per-shift break overrides on assigned slots.",
-  "breaks-week":
-    "Push card-default break groups to the entire GRAVE week (Fri–Thu)? This overwrites per-shift break overrides on all existing nights with assignments.",
-};
-
 const SAVE_GRAVE_BREAK_MAP_CONFIRM =
   "Save the canonical GRAVE break map to Card Defaults? This overwrites every stored break default with the built-in rotation map.";
 
@@ -201,7 +194,7 @@ const SAVE_GRAVE_BREAK_MAP_CONFIRM =
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark = false }: DefaultsTabProps) {
+export function DefaultsTab({ isDark = false }: DefaultsTabProps) {
   const ios = sudoIosClasses(isDark);
   const confirmDialog = useConfirm();
   const [loading, setLoading] = useState(true);
@@ -209,8 +202,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
   // Default break groups: compositeKey → 0|1|2|3
   const [breakGroups, setBreakGroups] = useState<Record<string, BreakGroup>>({});
 
-  // Push operation loading states
-  const [pushing, setPushing] = useState<"breaks-today" | "breaks-week" | null>(null);
   const [seedingGrave, setSeedingGrave] = useState(false);
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -290,36 +281,6 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
     [breakGroups]
   );
 
-  // ── Push operations (break-group defaults only) ─────────────────────────────
-  const handlePush = useCallback(
-    async (op: "breaks-today" | "breaks-week") => {
-      if (pushing) return;
-      if (!(await confirmDialog(PUSH_CONFIRM_MESSAGES[op], { confirmLabel: "Push" }))) return;
-      setPushing(op);
-
-      try {
-        const { pushBreakDefaultsToNight, pushBreakDefaultsToWeek } = await import("@/lib/shiftbuilder/data");
-
-        if (op === "breaks-today") {
-          if (!currentNightId) { showToast("No current night loaded", "error"); return; }
-          const { applied } = await pushBreakDefaultsToNight(currentNightId);
-          showToast(`Break defaults pushed — ${applied} slot${applied !== 1 ? "s" : ""} updated`, "success");
-          onDataChanged?.();
-        } else if (op === "breaks-week") {
-          if (!weekStart) { showToast("Week start date not available", "error"); return; }
-          const { nights, applied } = await pushBreakDefaultsToWeek(weekStart);
-          showToast(`Break defaults pushed — ${applied} slot${applied !== 1 ? "s" : ""} across ${nights} nights`, "success");
-          onDataChanged?.();
-        }
-      } catch (e: any) {
-        showToast("Push failed: " + (e?.message ?? "unknown"), "error");
-      } finally {
-        setPushing(null);
-      }
-    },
-    [pushing, currentNightId, weekStart, onDataChanged, confirmDialog]
-  );
-
   // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
@@ -350,29 +311,13 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
             </span>
           </div>
 
-          {/* Push buttons */}
+          {/* Canonical reset */}
           <div className="flex items-center gap-2 flex-wrap">
-            <PushButton
-              label="Breaks → Today"
-              icon={<span className="ms" style={{ fontSize: 14 }}>calendar_month</span>}
-              loading={pushing === "breaks-today"}
-              disabled={!currentNightId || pushing !== null}
-              onClick={() => handlePush("breaks-today")}
-              isDark={isDark}
-            />
-            <PushButton
-              label="Breaks → Week"
-              icon={<span className="ms" style={{ fontSize: 14 }}>upload</span>}
-              loading={pushing === "breaks-week"}
-              disabled={!weekStart || pushing !== null}
-              onClick={() => handlePush("breaks-week")}
-              isDark={isDark}
-            />
             <PushButton
               label="Save GRAVE break map"
               icon={<span className="ms" style={{ fontSize: 14 }}>save</span>}
               loading={seedingGrave}
-              disabled={seedingGrave || pushing !== null}
+              disabled={seedingGrave}
               onClick={handleSaveGraveBreakMap}
               isDark={isDark}
             />
@@ -401,6 +346,7 @@ export function DefaultsTab({ onDataChanged, currentNightId, weekStart, isDark =
             <span className="w-[18px] h-[12px] bg-[#1C1C1E] text-white text-[8px] font-bold rounded-[2px] flex items-center justify-center">1</span>
             Break group default (click to cycle: 1 → 2 → 3 → OL → –)
           </span>
+          <span>· Defaults apply automatically to every night</span>
           <span>· Standing OL tasks: Projects → Defaults (Apply Overlap for staffed seats)</span>
         </div>
       </div>

@@ -7,7 +7,8 @@ import { premiumSpring } from "@/lib/premiumSpring";
 import { BREAK_GROUP_OVERLAPS, breakHeaderMark } from "@/lib/shiftbuilder/constants";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
-// BreakBadge: header-style break mark (1/2/3/OL/–). Tap to cycle.
+// BreakBadge: header-style break mark (1/2/3/OL/–). Display-only on the
+// deployment board; Sudo Card Defaults may still opt into cycling.
 const BreakBadge = React.memo(function BreakBadge({
   value,
   onCycle,
@@ -15,7 +16,7 @@ const BreakBadge = React.memo(function BreakBadge({
   kioskSize = false,
 }: {
   value: number;
-  onCycle: () => void;
+  onCycle?: () => void;
   size?: "sm" | "md";
   kioskSize?: boolean;
 }) {
@@ -23,12 +24,13 @@ const BreakBadge = React.memo(function BreakBadge({
   const isOl = value === BREAK_GROUP_OVERLAPS;
   const isOff = value === 0;
 
-  const label =
+  const displayLabel =
     value === 0
-      ? "Off the break sheet — tap to cycle"
+      ? "Off the break sheet"
       : isOl
-        ? "Overlaps break group — tap to cycle"
-        : `Break Group ${value} — tap to cycle`;
+        ? "Overlaps break group"
+        : `Break Group ${value}`;
+  const label = onCycle ? `${displayLabel} — tap to cycle` : displayLabel;
 
   const sizeClass =
     tablet || kioskSize
@@ -39,6 +41,34 @@ const BreakBadge = React.memo(function BreakBadge({
         ? "sb-break-header-num--sm"
         : "sb-break-header-num--md";
 
+  const badgeClass = cn(
+    "sb-break-badge-btn sb-break-header-num sb-kiosk-action inline-flex items-center justify-center shrink-0",
+    onCycle && "sb-interactive",
+    sizeClass,
+    isOff ? "sb-break-header-num--off" : "sb-break-header-num--on",
+    isOl && "sb-break-header-num--ol",
+    kioskSize && "sb-break-header-num--kiosk",
+    tablet || kioskSize ? "min-h-11 min-w-11 p-2" : "-m-1 p-1",
+  );
+  const mark = (
+    <motion.span
+      className="leading-none"
+      transition={premiumSpring}
+      whileHover={onCycle ? { scale: 1.04, transition: premiumSpring } : undefined}
+      whileTap={onCycle ? { scale: 0.96, transition: { ...premiumSpring, stiffness: 600, damping: 15 } } : undefined}
+    >
+      {breakHeaderMark(value)}
+    </motion.span>
+  );
+
+  if (!onCycle) {
+    return (
+      <span className={badgeClass} title={label} aria-label={label}>
+        {mark}
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -47,25 +77,11 @@ const BreakBadge = React.memo(function BreakBadge({
         onCycle();
       }}
       onPointerDown={(e) => e.stopPropagation()}
-      className={cn(
-        "sb-interactive sb-break-badge-btn sb-break-header-num sb-kiosk-action inline-flex items-center justify-center shrink-0",
-        sizeClass,
-        isOff ? "sb-break-header-num--off" : "sb-break-header-num--on",
-        isOl && "sb-break-header-num--ol",
-        kioskSize && "sb-break-header-num--kiosk",
-        tablet || kioskSize ? "min-h-11 min-w-11 p-2" : "-m-1 p-1",
-      )}
+      className={badgeClass}
       title={label}
       aria-label={label}
     >
-      <motion.span
-        className="leading-none"
-        transition={premiumSpring}
-        whileHover={{ scale: 1.04, transition: premiumSpring }}
-        whileTap={{ scale: 0.96, transition: { ...premiumSpring, stiffness: 600, damping: 15 } }}
-      >
-        {breakHeaderMark(value)}
-      </motion.span>
+      {mark}
     </button>
   );
 });

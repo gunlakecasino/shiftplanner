@@ -80,6 +80,7 @@ export async function handleScheduledRosterGet(request: NextRequest): Promise<Ne
       fullGraveScheduled: result.fullGraveScheduled,
       pmOverlapScheduled: result.pmOverlapScheduled,
       amOverlapScheduled: result.amOverlapScheduled,
+      overlapBreakScheduled: result.overlapBreakScheduled,
       scheduledWithRoles: result.scheduledWithRoles,
     };
 

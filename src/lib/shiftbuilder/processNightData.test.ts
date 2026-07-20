@@ -23,7 +23,7 @@ describe("buildAssignmentsRecord", () => {
     expect(buildAssignmentsRecord(undefined)).toEqual({});
   });
 
-  it("maps DB zone rows to UI keys with resolved break groups", () => {
+  it("maps DB rows to UI keys and always uses card defaults", () => {
     const out = buildAssignmentsRecord([
       {
         slotKey: "zone_4",
@@ -44,13 +44,12 @@ describe("buildAssignmentsRecord", () => {
     expect(out.Z4).toMatchObject({
       tmId: "tm_a",
       tmName: "Alice",
-      breakGroup: 2,
-      breakGroupExplicit: true,
+      breakGroup: 1,
     });
     expect(out.MRR6).toMatchObject({
       tmId: "tm_b",
       tmName: "Bob",
-      breakGroup: 1,
+      breakGroup: 2,
     });
   });
 

@@ -1407,6 +1407,30 @@ export async function removeNightSlotTask(params: RemoveTaskParams): Promise<voi
   );
 }
 
+export interface RemoveAssignmentCoverageParams {
+  nightId: string;
+  sourceSlotKey: string;
+  sourceSlotType: 'zone' | 'rr' | 'aux' | 'overlap';
+  sourceRrSide?: 'mens' | 'womens' | null;
+  targetSlotKey: string;
+  presentationTaskId?: string | null;
+  presentationTaskLabel?: string | null;
+}
+
+/** Remove coverage stored canonically on zone_assignments. */
+export async function removeAssignmentCoverage(
+  params: RemoveAssignmentCoverageParams,
+): Promise<{ ok: true; removed: boolean }> {
+  return runBoardMutation(
+    'remove_assignment_coverage',
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { removeAssignmentCoverageServer } = await import('./opsMutations.server');
+      return removeAssignmentCoverageServer(params);
+    },
+  );
+}
+
 /**
  * Set (or clear) the highlight color on a specific task row.
  * Used for the per-task colored sphere feature.

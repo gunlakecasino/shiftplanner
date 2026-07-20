@@ -117,7 +117,6 @@ import {
   type BreakGroup,
   type ActiveBreakGroupFilter,
   BREAK_GROUP_OVERLAPS,
-  nextBreakGroup,
   COVERAGE_BAR_H,
 } from "@/lib/shiftbuilder/constants";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
@@ -248,7 +247,6 @@ import {
 } from "./components/placementPadHelpers";
 import { DragFitContext, computeDragFitMap } from "@/lib/shiftbuilder/dragFit";
 import DraftStatusPill from "./components/DraftStatusPill";
-import { BoardTaskPill } from "./components/BoardTaskPill";
 import { useBoardTaskSummary } from "./hooks/useBoardTaskSummary";
 import {
   allWeekPlacementHistoriesCached,
@@ -339,8 +337,10 @@ import {
 
 // Coverage helpers — support "Add Coverage" command (now imported from shared lib to eliminate duplication with today/lib and future surfaces).
 import {
+  buildCoverageLabelIndex,
   getSlotAccentColor,
   getSlotCoverageLabel,
+  parseCoverageTargetFromTaskLabel,
 } from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
@@ -581,7 +581,7 @@ const RosterDropZone: React.FC<{
  * Identity-stable wrapper around a handler that closes over fresh state every
  * render. React.memo(ShiftBuilderBoard) only bails out when every function
  * prop keeps its identity; the big plain handlers (assign, toggleLock,
- * setBreakGroupForSlot, applyDraft) can't be usefully useCallback'd because
+ * applyDraft) can't be usefully useCallback'd because
  * their dependency sets change each render — so we route calls through a ref.
  */
 function useStableCallback<T extends (...args: never[]) => unknown>(fn: T): T {
@@ -902,7 +902,6 @@ function AuthedShiftBuilder() {
   const [currentNightStatus, setCurrentNightStatus] = useState<string | null>(null);
   const [publishDayBusy, setPublishDayBusy] = useState(false);
   const [publishWeekBusy, setPublishWeekBusy] = useState(false);
-  const [restoreDefaultBreaksBusy, setRestoreDefaultBreaksBusy] = useState(false);
   const [applyOverlapTasksBusy, setApplyOverlapTasksBusy] = useState(false);
 
   // Active drag state declared early so it can be safely read in measurement/zoom setup
@@ -2883,106 +2882,6 @@ function AuthedShiftBuilder() {
   // Notes handlers now from useNotes hook (decomposition). Refs + logic centralized.
 
   // === Handlers (fully restored) ===
-  // Cycle the break group on a slot AND persist to break_assignments.
-  // group=0 ("-") means the TM/slot is not on the break rotation for this shift.
-  // For Option 1 we treat "-" as "no break record" (delete the row) rather than
-  // storing group_num=0. This keeps the DB clean and means "no row = not on breaks".
-  // Overlaps (AM/PM) default to no break (see assignment loading below).
-  const setBreakGroupForSlot = (slotKey: string, group: BreakGroup) => {
-    const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
-    pendingHistoryRef.current = { description: `Cycled break group on ${slotKey}`, before };
-
-    const targetNightId = nightId;
-    const captureDate = selectedDay.date;
-    const captureDayName = selectedDay.name;
-    const slotAssignment = assignments[slotKey] || {};
-    const tmId = slotAssignment.tmId ?? null;
-    const rrSide = slotAssignment.rrSide ?? null;
-
-    // Pre-translate the slot key + rrSide to the canonical DB form used in zone_assignments
-    // (regular persistAssign does uiToDb; updateSlotBreakGroup does not, so we must).
-    // Capture so the async write always targets the real row even if render state changes.
-    let dbSlotKey = slotKey;
-    let dbRrSide = rrSide;
-    try {
-      const translated = uiToDb(slotKey);
-      dbSlotKey = translated.slot_key;
-      dbRrSide = translated.rr_side ?? rrSide ?? null;
-    } catch {}
-
-    setAssignments((prev: any) => ({
-      ...prev,
-      [slotKey]: { ...prev[slotKey], breakGroup: group },
-    }));
-
-    logBuilderChange({
-      action: "break_change",
-      slotKey,
-      targetNightId,
-      payload: { breakGroup: group, tmId },
-    });
-
-    // Also push into the narrow store the board actually subscribes to (3.4), so BreakBadge
-    // updates instantly when the operator taps a pill on the new isolated board.
-    try {
-      useShiftBuilderStore.getState().setAssignments((prev: any) => ({
-        ...prev,
-        [slotKey]: { ...(prev[slotKey] || {}), breakGroup: group },
-      }));
-    } catch {}
-
-    (async () => {
-      let nid = targetNightId;
-      if (!nid) nid = await resolveNightIdForDate(captureDate, captureDayName);
-      if (!nid) {
-        showToast(`Couldn't save break group: no night context yet`);
-        return;
-      }
-      try {
-        const { updateSlotBreakGroup, deleteBreakAssignment, upsertBreakAssignment } = await import("@/lib/shiftbuilder/data");
-        // Write using the canonical db keys so it hits the actual zone_assignments row.
-        // Pass the captured tmId so the callee can recover if the assignment row
-        // is still being created by an in-flight optimistic assign (common when
-        // user immediately taps a break pill on a just-dropped TM).
-        await updateSlotBreakGroup(nid, dbSlotKey, dbRrSide, group, tmId);
-
-        // Also keep break_assignments in sync for the break-sheet / print path.
-        if (tmId) {
-          if (group === 0) {
-            await deleteBreakAssignment(nid, tmId);
-          } else {
-            await upsertBreakAssignment({
-              nightId: nid,
-              tmId,
-              groupNum: group,
-              slotRef: slotKey,  // ui form is fine here (match key is night+tm_id)
-            });
-          }
-        }
-
-        const dateKey = formatLocalDateISO(captureDate);
-        const patchNightCache = (old: any) => {
-          if (!old?.assignments) return old;
-          return {
-            ...old,
-            assignments: {
-              ...old.assignments,
-              [slotKey]: {
-                ...(old.assignments[slotKey] || {}),
-                breakGroup: group,
-                breakGroupExplicit: true,
-              },
-            },
-          };
-        };
-        currentNight.queryClient?.setQueryData(["nightCore", dateKey], patchNightCache);
-        currentNight.queryClient?.setQueryData(["night", dateKey], patchNightCache);
-      } catch (e: any) {
-        showToast(`Couldn't save break group: ${e?.message ?? "unknown error"}`);
-      }
-    })();
-  };
-
   // Optimistic local update + fire-and-forget persist. The DB write doesn't
   // block the UI — we accept that the operator will see the assignment land
   // immediately and any error gets surfaced via toast.
@@ -3704,14 +3603,6 @@ function AuthedShiftBuilder() {
     [nightId, showToast, logBuilderChange, selectedDay.date, currentNight.queryClient, auxDefs]
   );
 
-  const handleCmdkCycleBreak = React.useCallback(
-    (slotKey: string) => {
-      const current = (assignments[slotKey]?.breakGroup ?? 0) as BreakGroup;
-      setBreakGroupForSlot(slotKey, nextBreakGroup(current));
-    },
-    [assignments, setBreakGroupForSlot]
-  );
-
   const handleCmdkSetGravePool = React.useCallback(
     async (tmId: string, value: "Full" | "AM" | "PM" | null) => {
       const { setTMGravePool } = await import("@/lib/shiftbuilder/tmCommands");
@@ -4069,7 +3960,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   const deploymentRotationFitEnabled =
     (currentView === "deployment" || !!selectedSlotKey) &&
     engineRunPhase === "idle" &&
-    !restoreDefaultBreaksBusy &&
     !applyOverlapTasksBusy &&
     !currentNight.isFetching;
 
@@ -6730,93 +6620,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     [handleCopyTasksFromSource],
   );
 
-  const handleRestoreDefaultBreaks = React.useCallback(async () => {
-    if (isCurrentNightLocked) {
-      showToast("This day is locked — cannot restore break defaults", "error");
-      return;
-    }
-
-    const okToRestore = await confirmDialog(
-      "This overwrites any per-shift break overrides.",
-      { title: "Restore card-default break groups for all assigned slots tonight?", confirmLabel: "Restore" },
-    );
-    if (!okToRestore) {
-      return;
-    }
-
-    setRestoreDefaultBreaksBusy(true);
-    try {
-      let nid = queryNightId || nightId;
-      if (!nid) {
-        nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
-      }
-      if (!nid) {
-        showToast("No night loaded — pick a day first", "error");
-        return;
-      }
-
-      const { pushBreakDefaultsToNight, getNightBreakAssignments } =
-        await import("@/lib/shiftbuilder/data");
-      const { applied } = await pushBreakDefaultsToNight(nid);
-
-      const dateKey = formatLocalDateISO(selectedDay.date);
-      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
-      await currentNight.queryClient?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
-      await currentNight.queryClient?.invalidateQueries({ queryKey: ["night", dateKey] });
-
-      const { yieldToMain } = await import("@/lib/shiftbuilder/yieldToMain");
-      await yieldToMain();
-
-      const freshBreaks = await getNightBreakAssignments(nid);
-      const breakByTm: Record<string, number> = {};
-      freshBreaks.forEach((r: { tmId?: string | null; groupNum?: number | null }) => {
-        if (r.tmId && r.groupNum != null) breakByTm[r.tmId] = r.groupNum;
-      });
-
-      const patchBreakGroups = (prev: Record<string, any>) => {
-        const next = { ...prev };
-        Object.keys(next).forEach((k) => {
-          const a = next[k];
-          if (a?.tmId && breakByTm[a.tmId] !== undefined) {
-            next[k] = { ...a, breakGroup: breakByTm[a.tmId], breakGroupExplicit: true };
-          }
-        });
-        return next;
-      };
-
-      startHeavyTransition(() => {
-        setAssignments(patchBreakGroups);
-        try {
-          useShiftBuilderStore.getState().setAssignments(patchBreakGroups);
-        } catch {
-          /* store optional */
-        }
-      });
-
-      showToast(
-        `Restored default breaks — ${applied} slot${applied !== 1 ? "s" : ""} updated`,
-        "success",
-      );
-    } catch (e: unknown) {
-      console.error("[shiftbuilder] restore default breaks failed", e);
-      const msg = e instanceof Error ? e.message : "Failed to restore default breaks";
-      showToast(msg, "error");
-    } finally {
-      setRestoreDefaultBreaksBusy(false);
-    }
-  }, [
-    isCurrentNightLocked,
-    queryNightId,
-    nightId,
-    selectedDay.date,
-    selectedDay.name,
-    showToast,
-    currentNight.queryClient,
-    resolveNightIdForDate,
-    startHeavyTransition,
-    confirmDialog,
-  ]);
-
   const handleApplyOverlapTasks = React.useCallback(async () => {
     if (isCurrentNightLocked) {
       showToast("This day is locked — cannot apply overlap tasks", "error");
@@ -7025,6 +6828,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       const captureDate = selectedDay.date;
       const captureDateKey = formatLocalDateISO(captureDate);
       const snap = snapshotSlotTasks(uiKey);
+      const removedTask = taskId
+        ? snap.find((task) => task.id === taskId)
+        : snap.find((task) => task.taskLabel === taskLabel);
+      const derivedCoverageMatch =
+        typeof taskId === "string"
+          ? /^coverage:([^:]+):([^:]+)$/.exec(taskId)
+          : null;
+      const coverageTargetSlotKey = derivedCoverageMatch?.[2] ?? (
+        removedTask?.isCoverage
+          ? parseCoverageTargetFromTaskLabel(
+              removedTask.taskLabel,
+              buildCoverageLabelIndex(auxDefs),
+            )
+          : null
+      );
 
       setSelectedTasks((prev) => {
         const existing = prev[uiKey] || [];
@@ -7035,7 +6853,42 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       });
 
       try {
-        const { removeNightSlotTask, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+        const {
+          removeAssignmentCoverage,
+          removeNightSlotTask,
+          getNightSlotTasks,
+        } = await import("@/lib/shiftbuilder/data");
+
+        if (coverageTargetSlotKey) {
+          const sourceKey = derivedCoverageMatch?.[1] ?? uiKey;
+          const source = uiToDb(sourceKey, auxDefs);
+          await removeAssignmentCoverage({
+            nightId,
+            sourceSlotKey: source.slot_key,
+            sourceSlotType: source.slot_type,
+            sourceRrSide: source.rr_side,
+            targetSlotKey: coverageTargetSlotKey,
+            presentationTaskId: derivedCoverageMatch ? null : taskId,
+            presentationTaskLabel: derivedCoverageMatch ? null : taskLabel,
+          });
+          await currentNight.queryClient?.invalidateQueries({
+            queryKey: ["nightCore", captureDateKey],
+          });
+          logBuilderChange({
+            action: "task_remove",
+            slotKey: sourceKey,
+            targetNightId: nightId,
+            payload: {
+              taskLabel,
+              taskId,
+              targetSlotKey: coverageTargetSlotKey,
+              coverage: true,
+              canonical: true,
+            },
+          });
+          return;
+        }
+
         const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
         await removeNightSlotTask({
           nightId,
@@ -7070,6 +6923,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       showToast,
       currentNight.queryClient,
       logBuilderChange,
+      auxDefs,
     ],
   );
 
@@ -7484,10 +7338,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
   const handlePadToggleLock = useStableCallback((slotKey: string) => {
     toggleLock(slotKey);
-  });
-
-  const stableSetBreakGroupForSlot = useStableCallback((slotKey: string, group: BreakGroup) => {
-    setBreakGroupForSlot(slotKey, group);
   });
 
   const stableApplyDraft = useStableCallback(() => {
@@ -8313,8 +8163,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onNextWeek={goNextWeek}
         onCopyPriorWeekTasks={handleCopyPriorWeekSameDayTasks}
         onCopyYesterdayTasks={handleCopyYesterdayTasks}
-        onRestoreDefaultBreaks={handleRestoreDefaultBreaks}
-        restoreDefaultBreaksBusy={restoreDefaultBreaksBusy}
         onApplyOverlapTasks={canAccessSudo ? handleApplyOverlapTasks : undefined}
         applyOverlapTasksBusy={applyOverlapTasksBusy}
         onToggleWeekHealth={handleToggleWeekHealthTracker}
@@ -8712,7 +8560,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onSetTaskAppearance={handleBoardSetTaskAppearance}
                 onSetTaskTextStyle={handleBoardSetTaskTextStyle}
                 onEditTask={handleBoardEditTask}
-                setBreakGroupForSlot={stableSetBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
                 onLiveUnassign={handleBoardLiveUnassign}
                 onAddAuxSlot={addAuxSlot}
@@ -9109,7 +8956,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                     auxDefs,
                     isDark,
                     isCurrentNightLocked,
-                    setBreakGroupForSlot,
                     onAddCoverage: handlePadAddCoverage,
                     onLiveUnassign: handleBoardLiveUnassign,
                     onToggleLock: handlePadToggleLock,
@@ -9335,7 +9181,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onSetTaskAppearance={handleBoardSetTaskAppearance}
                 onSetTaskTextStyle={handleBoardSetTaskTextStyle}
                 onEditTask={handleBoardEditTask}
-                setBreakGroupForSlot={stableSetBreakGroupForSlot}
                 onLiveAssign={handleBoardLiveAssign}
                 onLiveUnassign={handleBoardLiveUnassign}
                 onAddAuxSlot={addAuxSlot}
@@ -9428,9 +9273,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           }}
         />
       )}
-
-      {/* Board task awareness — floating "N tasks due tonight" ops pill. */}
-      {mounted && isBuilderLiveCanvas && !isPrintPreview && <BoardTaskPill />}
 
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of

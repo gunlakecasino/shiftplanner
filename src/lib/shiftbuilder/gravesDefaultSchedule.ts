@@ -91,6 +91,7 @@ export interface GravesScheduleRow {
   tmId: string;
   band: GravesBand;
   days: GravesDaysMap;
+  overlapBreak: boolean;
   tmName: string;
   gravePool?: string | null;
   gender?: string | null;
@@ -101,6 +102,7 @@ export interface ScheduledIdsForNight {
   grave: Set<string>;
   amOverlap: Set<string>;
   pmOverlap: Set<string>;
+  overlapBreak: Set<string>;
   onCall: Set<string>;
 }
 
@@ -136,15 +138,18 @@ export async function getScheduledIdsForNight(
   const grave = new Set<string>();
   const amOverlap = new Set<string>();
   const pmOverlap = new Set<string>();
+  const overlapBreak = new Set<string>();
   const onCall = new Set<string>();
 
   if (!supabase) {
-    return { grave, amOverlap, pmOverlap, onCall };
+    return { grave, amOverlap, pmOverlap, overlapBreak, onCall };
   }
 
   const dayKey = dayKeyForDate(nightDate);
 
-  const { data: rows } = await supabase.from("graves_default_schedule").select("tm_id, band, days");
+  const { data: rows } = await supabase
+    .from("graves_default_schedule")
+    .select("tm_id, band, days, overlap_break");
 
   for (const row of rows || []) {
     const days = normalizeDaysMap(row.days);
@@ -153,6 +158,7 @@ export async function getScheduledIdsForNight(
     if (row.band === "grave") grave.add(id);
     else if (row.band === "am_overlap") amOverlap.add(id);
     else if (row.band === "pm_overlap") pmOverlap.add(id);
+    if (row.overlap_break) overlapBreak.add(id);
   }
 
   if (nightId) {
@@ -166,7 +172,7 @@ export async function getScheduledIdsForNight(
     }
   }
 
-  return { grave, amOverlap, pmOverlap, onCall };
+  return { grave, amOverlap, pmOverlap, overlapBreak, onCall };
 }
 
 /** All scheduled TM ids for a night (grave + overlaps + on-call), alias-expanded. */
@@ -215,6 +221,7 @@ export async function expandScheduledIdsForNight(
     grave: expandIdSetWithProfiles(scheduledIds.grave, profileIndex),
     amOverlap: expandIdSetWithProfiles(scheduledIds.amOverlap, profileIndex),
     pmOverlap: expandIdSetWithProfiles(scheduledIds.pmOverlap, profileIndex),
+    overlapBreak: expandIdSetWithProfiles(scheduledIds.overlapBreak, profileIndex),
     onCall: expandIdSetWithProfiles(scheduledIds.onCall, profileIndex),
   };
 }
@@ -245,6 +252,7 @@ export async function getScheduledTmsFromGravesDefault(
       fullGraveScheduled: [],
       pmOverlapScheduled: [],
       amOverlapScheduled: [],
+      overlapBreakScheduled: [],
       scheduledWithRoles: [],
     };
   }
@@ -267,6 +275,7 @@ export async function getScheduledTmsFromGravesDefault(
   const fullGraveScheduled = pick(ids.grave);
   const pmOverlapScheduled = pick(ids.pmOverlap);
   const amOverlapScheduled = pick(ids.amOverlap);
+  const overlapBreakScheduled = pick(ids.overlapBreak);
 
   const allIds = new Set<string>([
     ...ids.grave,
@@ -281,6 +290,7 @@ export async function getScheduledTmsFromGravesDefault(
     isFullGrave: isTmIdOnScheduleSet(tm.id, ids.grave, profileIndex),
     isPMOverlap: isTmIdOnScheduleSet(tm.id, ids.pmOverlap, profileIndex),
     isAMOverlap: isTmIdOnScheduleSet(tm.id, ids.amOverlap, profileIndex),
+    isOverlapBreak: isTmIdOnScheduleSet(tm.id, ids.overlapBreak, profileIndex),
   }));
 
   return {
@@ -288,6 +298,7 @@ export async function getScheduledTmsFromGravesDefault(
     fullGraveScheduled,
     pmOverlapScheduled,
     amOverlapScheduled,
+    overlapBreakScheduled,
     scheduledWithRoles,
   };
 }
@@ -303,6 +314,7 @@ export type GravesScheduleRosterRow = {
   isFullGrave: boolean;
   isPMOverlap: boolean;
   isAMOverlap: boolean;
+  isOverlapBreak: boolean;
 };
 
 /**
@@ -330,6 +342,9 @@ export function buildGravesScheduleRosterRows(
   const amBoardIds = new Set(
     scheduled.amOverlapScheduled.map(boardIdFromScheduled).filter(Boolean),
   );
+  const overlapBreakBoardIds = new Set(
+    scheduled.overlapBreakScheduled.map(boardIdFromScheduled).filter(Boolean),
+  );
 
   const byBoardId = new Map<string, GravesScheduleRosterRow>();
 
@@ -350,11 +365,13 @@ export function buildGravesScheduleRosterRows(
       isFullGrave: false,
       isPMOverlap: false,
       isAMOverlap: false,
+      isOverlapBreak: false,
     };
 
     if (graveBoardIds.has(boardId)) row.isFullGrave = true;
     if (pmBoardIds.has(boardId)) row.isPMOverlap = true;
     if (amBoardIds.has(boardId)) row.isAMOverlap = true;
+    if (overlapBreakBoardIds.has(boardId)) row.isOverlapBreak = true;
 
     byBoardId.set(boardId, row);
   }
@@ -442,7 +459,7 @@ export async function getGravesDefaultScheduleGrid(): Promise<GravesDefaultSched
       .eq("active", true)
       .order("display_name"),
     supabase.from("tm_groups").select("id, name, tm_group_members (tm_id)"),
-    supabase.from("graves_default_schedule").select("tm_id, band, days"),
+    supabase.from("graves_default_schedule").select("tm_id, band, days, overlap_break"),
   ]);
 
   const amGroupIds = groupMemberIds(groups, "AM Overlaps", "AM Overlap");
@@ -453,7 +470,7 @@ export async function getGravesDefaultScheduleGrid(): Promise<GravesDefaultSched
     profileById.set(p.id, p);
   }
 
-  const scheduledByBand: Record<GravesBand, Map<string, GravesDaysMap>> = {
+  const scheduledByBand: Record<GravesBand, Map<string, { days: GravesDaysMap; overlapBreak: boolean }>> = {
     grave: new Map(),
     am_overlap: new Map(),
     pm_overlap: new Map(),
@@ -462,18 +479,22 @@ export async function getGravesDefaultScheduleGrid(): Promise<GravesDefaultSched
   for (const r of scheduleRows || []) {
     const band = r.band as GravesBand;
     if (!scheduledByBand[band]) continue;
-    scheduledByBand[band].set(r.tm_id as string, normalizeDaysMap(r.days));
+    scheduledByBand[band].set(r.tm_id as string, {
+      days: normalizeDaysMap(r.days),
+      overlapBreak: !!r.overlap_break,
+    });
   }
 
   const buildSection = (band: GravesBand): GravesScheduleRow[] => {
     const rows: GravesScheduleRow[] = [];
-    for (const [tmId, days] of scheduledByBand[band]) {
+    for (const [tmId, schedule] of scheduledByBand[band]) {
       const p = profileById.get(tmId);
       if (!p) continue;
       rows.push({
         tmId,
         band,
-        days,
+        days: schedule.days,
+        overlapBreak: schedule.overlapBreak,
         tmName: profileDisplayName(p),
         gravePool: p.grave_pool,
         gender: p.gender,
@@ -513,7 +534,12 @@ export async function getGravesDefaultScheduleGrid(): Promise<GravesDefaultSched
 }
 
 export async function upsertGravesDefaultScheduleRows(
-  updates: Array<{ tmId: string; band: GravesBand; days: GravesDaysMap }>,
+  updates: Array<{
+    tmId: string;
+    band: GravesBand;
+    days: GravesDaysMap;
+    overlapBreak: boolean;
+  }>,
 ): Promise<void> {
   const supabase = createAdminClientSafe();
   if (!supabase || !updates.length) return;
@@ -522,6 +548,7 @@ export async function upsertGravesDefaultScheduleRows(
     tm_id: u.tmId,
     band: u.band,
     days: u.days,
+    overlap_break: u.overlapBreak,
   }));
 
   const { error } = await supabase
@@ -536,7 +563,12 @@ export async function addGravesDefaultScheduleMember(
   band: GravesBand,
 ): Promise<void> {
   await upsertGravesDefaultScheduleRows([
-    { tmId, band, days: { ...EMPTY_GRAVES_DAYS } },
+    {
+      tmId,
+      band,
+      days: { ...EMPTY_GRAVES_DAYS },
+      overlapBreak: band !== "grave",
+    },
   ]);
 }
 

@@ -53,6 +53,18 @@ export type RemoveTaskParams = {
   taskId?: string | null;
 };
 
+export type RemoveAssignmentCoverageParams = {
+  nightId: string;
+  sourceSlotKey: string;
+  sourceSlotType: "zone" | "rr" | "aux" | "overlap";
+  sourceRrSide?: "mens" | "womens" | null;
+  /** Canonical UI key stored in zone_assignments.additional_coverage_slots. */
+  targetSlotKey: string;
+  /** Optional legacy presentation row to remove with the canonical coverage. */
+  presentationTaskId?: string | null;
+  presentationTaskLabel?: string | null;
+};
+
 function adminClient() {
   const client = createAdminClientSafe();
   if (!client) throw new Error("Service role not configured");
@@ -992,6 +1004,106 @@ export async function removeNightSlotTaskServer(params: RemoveTaskParams): Promi
 
   const { error } = await q;
   if (error) throw new Error(`Failed to remove task: ${error.message}`);
+}
+
+/** Remove one canonical secondary-coverage target from an assignment. */
+export async function removeAssignmentCoverageServer(
+  params: RemoveAssignmentCoverageParams,
+): Promise<{ ok: true; removed: boolean }> {
+  const {
+    nightId,
+    sourceSlotKey,
+    sourceSlotType,
+    sourceRrSide = null,
+    targetSlotKey,
+    presentationTaskId = null,
+    presentationTaskLabel = null,
+  } = params;
+
+  if (!nightId || !sourceSlotKey || !sourceSlotType || !targetSlotKey?.trim()) {
+    throw new Error(
+      "removeAssignmentCoverage requires nightId, source slot, and targetSlotKey",
+    );
+  }
+
+  const {
+    finalSlotKey,
+    finalSlotType,
+    finalRrSide,
+  } = normalizeSlotKeys(sourceSlotKey, sourceSlotType, sourceRrSide);
+  const client = adminClient();
+
+  let read = client
+    .from("zone_assignments")
+    .select("id, additional_coverage_slots")
+    .eq("night_id", nightId)
+    .eq("slot_key", finalSlotKey)
+    .eq("slot_type", finalSlotType);
+  read = finalRrSide
+    ? read.eq("rr_side", finalRrSide)
+    : read.is("rr_side", null);
+
+  const { data: row, error: readError } = await read.maybeSingle();
+  if (readError) {
+    throw new Error(`Failed to read assignment coverage: ${readError.message}`);
+  }
+  const hasPresentationTask =
+    Boolean(presentationTaskId?.trim()) || Boolean(presentationTaskLabel?.trim());
+  if (!row && !hasPresentationTask) {
+    throw new Error("Coverage source assignment no longer exists");
+  }
+
+  const target = targetSlotKey.trim().toUpperCase();
+  const current = Array.isArray(row?.additional_coverage_slots)
+    ? row.additional_coverage_slots.filter(
+        (slot): slot is string => typeof slot === "string" && slot.trim().length > 0,
+      )
+    : [];
+  const next = current.filter((slot) => slot.trim().toUpperCase() !== target);
+  const removedCanonical = next.length !== current.length;
+
+  if (row && removedCanonical) {
+    const { error: updateError } = await client
+      .from("zone_assignments")
+      .update({
+        additional_coverage_slots: next,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+
+    if (updateError) {
+      throw new Error(`Failed to remove assignment coverage: ${updateError.message}`);
+    }
+  }
+
+  let removedPresentation = false;
+  if (hasPresentationTask) {
+    let removeTask = client
+      .from("night_slot_tasks")
+      .delete()
+      .eq("night_id", nightId)
+      .eq("is_coverage", true);
+
+    if (presentationTaskId?.trim()) {
+      removeTask = removeTask.eq("id", presentationTaskId.trim());
+    } else {
+      removeTask = removeTask
+        .eq("slot_key", finalSlotKey)
+        .eq("slot_type", finalSlotType)
+        .eq("task_label", presentationTaskLabel!.trim());
+      removeTask = finalRrSide
+        ? removeTask.eq("rr_side", finalRrSide)
+        : removeTask.is("rr_side", null);
+    }
+
+    const { error: removeTaskError } = await removeTask;
+    if (removeTaskError) {
+      throw new Error(`Failed to remove coverage banner: ${removeTaskError.message}`);
+    }
+    removedPresentation = true;
+  }
+
+  return { ok: true, removed: removedCanonical || removedPresentation };
 }
 
 export async function moveNightSlotTaskServer(params: MoveTaskParams): Promise<void> {
@@ -2565,4 +2677,3 @@ export async function recordPlacementHistoryServer(params: {
   }
   return { ok: true };
 }
-

@@ -50,10 +50,15 @@ function parseGridPayload(data: unknown): GridData {
     string,
     unknown
   >;
+  const rows = (value: unknown): GravesScheduleRow[] =>
+    (Array.isArray(value) ? value : []).map((row) => ({
+      ...(row as GravesScheduleRow),
+      overlapBreak: (row as GravesScheduleRow)?.overlapBreak === true,
+    }));
   return {
-    grave: (Array.isArray(d.grave) ? d.grave : []) as GravesScheduleRow[],
-    amOverlap: (Array.isArray(d.amOverlap) ? d.amOverlap : []) as GravesScheduleRow[],
-    pmOverlap: (Array.isArray(d.pmOverlap) ? d.pmOverlap : []) as GravesScheduleRow[],
+    grave: rows(d.grave),
+    amOverlap: rows(d.amOverlap),
+    pmOverlap: rows(d.pmOverlap),
     eligible: {
       grave: (Array.isArray(elig.grave) ? elig.grave : []) as GravesEligibleTm[],
       amOverlap: (Array.isArray(elig.amOverlap) ? elig.amOverlap : []) as GravesEligibleTm[],
@@ -171,6 +176,7 @@ function ScheduleSection({
   rows,
   eligible,
   onToggle,
+  onOverlapBreakToggle,
   onAdd,
   onRemove,
   saving,
@@ -181,6 +187,7 @@ function ScheduleSection({
   rows: GravesScheduleRow[];
   eligible: GravesEligibleTm[];
   onToggle: (tmId: string, band: GravesBand, day: keyof GravesDaysMap) => void;
+  onOverlapBreakToggle: (tmId: string, band: GravesBand) => void;
   onAdd: (tmId: string, band: GravesBand) => Promise<void>;
   onRemove: (tmId: string, band: GravesBand) => void;
   saving: boolean;
@@ -218,6 +225,9 @@ function ScheduleSection({
                   {gravesDayColumnLabel(k, band)}
                 </th>
               ))}
+              <th className="w-[76px] px-2 py-2 text-center font-semibold text-neutral-600">
+                OL Break
+              </th>
               <th className="px-2 py-2 text-center font-semibold text-neutral-500 w-[72px]">
                 
               </th>
@@ -227,7 +237,7 @@ function ScheduleSection({
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={GRAVES_DAY_KEYS.length + 2}
+                  colSpan={GRAVES_DAY_KEYS.length + 3}
                   className="px-3 py-6 text-center text-neutral-400"
                 >
                   No TMs on this schedule yet. Use Add above.
@@ -269,6 +279,21 @@ function ScheduleSection({
                   );
                 })}
                 <td className="p-1 text-center">
+                  <label
+                    className="sb-interactive inline-flex min-h-[28px] min-w-[48px] cursor-pointer items-center justify-center rounded-md bg-neutral-100 hover:bg-neutral-200"
+                    title="Always place this TM on the overlap break"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={row.overlapBreak}
+                      disabled={saving || mutating}
+                      onChange={() => onOverlapBreakToggle(row.tmId, band)}
+                      className="h-4 w-4 accent-violet-600"
+                      aria-label={`${row.tmName}: always use overlap break`}
+                    />
+                  </label>
+                </td>
+                <td className="p-1 text-center">
                   <button
                     type="button"
                     disabled={saving || mutating}
@@ -301,7 +326,12 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pendingRef = useRef<
-    Map<string, { tmId: string; band: GravesBand; days: GravesDaysMap }>
+    Map<string, {
+      tmId: string;
+      band: GravesBand;
+      days: GravesDaysMap;
+      overlapBreak: boolean;
+    }>
   >(new Map());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -358,8 +388,8 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
   }, [load, queryClient]);
 
   const queueSave = useCallback(
-    (tmId: string, band: GravesBand, days: GravesDaysMap) => {
-      pendingRef.current.set(`${tmId}:${band}`, { tmId, band, days });
+    (tmId: string, band: GravesBand, days: GravesDaysMap, overlapBreak: boolean) => {
+      pendingRef.current.set(`${tmId}:${band}`, { tmId, band, days, overlapBreak });
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
         flushSave();
@@ -385,7 +415,29 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
           ),
         };
       });
-      queueSave(tmId, band, nextDays);
+      queueSave(tmId, band, nextDays, row.overlapBreak);
+    },
+    [grid, queueSave],
+  );
+
+  const handleOverlapBreakToggle = useCallback(
+    (tmId: string, band: GravesBand) => {
+      if (!grid) return;
+      const sectionKey = sectionKeyForBand(band);
+      const section = grid[sectionKey];
+      const row = section.find((candidate) => candidate.tmId === tmId);
+      if (!row) return;
+      const overlapBreak = !row.overlapBreak;
+      setGrid((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          [sectionKey]: section.map((candidate) =>
+            candidate.tmId === tmId ? { ...candidate, overlapBreak } : candidate,
+          ),
+        };
+      });
+      queueSave(tmId, band, row.days, overlapBreak);
     },
     [grid, queueSave],
   );
@@ -496,7 +548,7 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
             Graves Default Schedule
           </h1>
           <p className="text-[12px] text-neutral-500 mt-0.5">
-            Master Fri–Thu grid. Add or remove TMs per band; toggle days for who is scheduled each night.
+            Master Fri–Thu grid. Scheduled days use the fixed card break defaults; check OL Break for TMs who always use the overlap wave.
           </p>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-neutral-500">
@@ -551,6 +603,7 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
               rows={grid.grave}
               eligible={grid.eligible?.grave ?? []}
               onToggle={handleToggle}
+              onOverlapBreakToggle={handleOverlapBreakToggle}
               onAdd={handleAdd}
               onRemove={handleRemove}
               saving={saving}
@@ -562,6 +615,7 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
               rows={grid.amOverlap}
               eligible={grid.eligible?.amOverlap ?? []}
               onToggle={handleToggle}
+              onOverlapBreakToggle={handleOverlapBreakToggle}
               onAdd={handleAdd}
               onRemove={handleRemove}
               saving={saving}
@@ -573,6 +627,7 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
               rows={grid.pmOverlap}
               eligible={grid.eligible?.pmOverlap ?? []}
               onToggle={handleToggle}
+              onOverlapBreakToggle={handleOverlapBreakToggle}
               onAdd={handleAdd}
               onRemove={handleRemove}
               saving={saving}

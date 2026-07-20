@@ -3,7 +3,7 @@
 import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
-  type BreakGroup, nextBreakGroup,
+  type BreakGroup,
   cardAccentInk,
   getRRAccent,
 } from "@/lib/shiftbuilder/constants";
@@ -29,7 +29,6 @@ export interface RRCardProps {
   def: any;
   assignments: any;
   selectedTasks: Record<string, NightSlotTask[]>;
-  setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onGenderClick: (k: string, el: HTMLElement) => void;
   loading?: boolean;
   borderColor?: string;
@@ -271,7 +270,6 @@ function RRSideShell({
   isCovered = false,
   fitChip,
   breakNum,
-  onCycle,
   coverageTasks,
   slotKey,
   onRemoveTask,
@@ -286,7 +284,6 @@ function RRSideShell({
   isCovered?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
   breakNum: BreakGroup;
-  onCycle?: () => void;
   coverageTasks: NightSlotTask[];
   slotKey: string;
   onRemoveTask?: (
@@ -319,8 +316,7 @@ function RRSideShell({
           {!isCovered && !isEmpty && (
             <PlacementFitChip fit={fitChip} compact />
           )}
-          {/* Functional break group pill */}
-          <BreakBadge value={breakNum} onCycle={onCycle || (() => {})} size="sm" />
+          <BreakBadge value={breakNum} size="sm" />
         </div>
       </div>
 
@@ -348,7 +344,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   def,
   assignments,
   selectedTasks,
-  setBreakGroupForSlot,
   onGenderClick,
   loading = false,
   borderColor,
@@ -399,8 +394,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const wA = assignments[wKey] || {};
   const mBreak = (mA.breakGroup ?? 0) as BreakGroup;
   const wBreak = (wA.breakGroup ?? 0) as BreakGroup;
-  const cycleW = () => setBreakGroupForSlot(wKey, nextBreakGroup(wBreak));
-  const cycleM = () => setBreakGroupForSlot(mKey, nextBreakGroup(mBreak));
 
   const mTasks = selectedTasks[mKey] || [];
   const wTasks = selectedTasks[wKey] || [];
@@ -420,7 +413,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   );
 
   const sideProps = {
-    setBreakGroupForSlot,
     onClick: onGenderClick,
     loading,
     onRemoveTask,
@@ -462,10 +454,9 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isCovered={wIsCovered}
         fitChip={fitChipW}
         breakNum={wBreak}
-        onCycle={cycleW}
         coverageTasks={wCoverageTasks}
         slotKey={wKey}
-        onRemoveTask={onRemoveTask}
+        onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
         taskBadge={
           showTaskBadge ? (
             <CardTaskBadge tmId={wA.tmId} slotKey={rrDbSlotComposite(def.num, "womens")} />
@@ -494,10 +485,9 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isCovered={mIsCovered}
         fitChip={fitChipM}
         breakNum={mBreak}
-        onCycle={cycleM}
         coverageTasks={mCoverageTasks}
         slotKey={mKey}
-        onRemoveTask={onRemoveTask}
+        onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
         taskBadge={
           showTaskBadge ? (
             <CardTaskBadge tmId={mA.tmId} slotKey={rrDbSlotComposite(def.num, "mens")} />

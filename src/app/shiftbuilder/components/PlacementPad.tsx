@@ -22,7 +22,6 @@ import {
   getZoneColor,
   getRRAccent,
   getAuxAccent,
-  type BreakGroup,
 } from "@/lib/shiftbuilder/constants";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
@@ -428,7 +427,6 @@ export interface PlacementPadProps {
   auxDefs: AuxDef[];
   isDark: boolean;
   isCurrentNightLocked?: boolean;
-  setBreakGroupForSlot?: (k: string, g: BreakGroup) => void;
   onAddCoverage?: (sourceSlotKey: string, targetSlotKey: string) => void | Promise<void>;
   onLiveUnassign?: (slotKey: string) => void;
   onToggleLock?: (slotKey: string) => void;

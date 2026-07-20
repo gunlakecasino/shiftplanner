@@ -15,6 +15,8 @@ export interface ShiftCardProps {
   unassigned?: boolean;
   coverage?: CoverageEntry[];
   taskContent?: ReactNode;
+  /** Optional in-flow footer used by live coverage banners. */
+  footer?: ReactNode;
   noChip?: boolean;
   onClick?: () => void;
 }

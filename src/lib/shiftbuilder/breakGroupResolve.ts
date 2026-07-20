@@ -1,9 +1,10 @@
 /**
  * Per-slot break group resolution for placement cards + header counters.
  *
- * Sudo "Card Defaults" (slot_defaults) are the baseline for every night.
- * zone_assignments.break_group, when non-null, is an explicit operator override
- * (including 0 = off the break sheet). NULL in DB means inherit the default.
+ * Sudo "Card Defaults" (slot_defaults) are the effective break groups every
+ * night. Legacy per-night values may remain stored, but no longer override the
+ * defaults. A TM marked OL Break on the active default-schedule row resolves
+ * to the overlap group independently of the slot default.
  */
 
 import { dbToUi } from "./slot-keys";
@@ -58,10 +59,15 @@ export function slotDefaultBreakMapFromRecord(
   rec: Record<string, number> | undefined | null,
 ): SlotDefaultBreakMap {
   const map = new Map<string, BreakGroupValue>();
-  if (!rec) return map;
-  for (const [k, v] of Object.entries(rec)) {
+  for (const [k, v] of Object.entries(rec ?? {})) {
     if (v === 0 || v === 1 || v === 2 || v === 3 || v === BREAK_GROUP_OVERLAPS) {
       map.set(k, v);
+    }
+  }
+  for (const d of graveBreakGroupSlotDefaults()) {
+    const key = slotDefaultLookupKey(d.slotKey, d.rrSide);
+    if (!map.has(key)) {
+      map.set(key, d.defaultBreakGroup as BreakGroupValue);
     }
   }
   return map;
@@ -69,20 +75,15 @@ export function slotDefaultBreakMapFromRecord(
 
 /**
  * Pill value for a slot tonight.
- * Explicit stored break_group wins; otherwise sudo card default.
+ * Always resolve from the card default. The stored argument remains in the
+ * signature while legacy assignment payloads are phased out.
  */
 export function resolveEffectiveBreakGroup(
-  storedBreakGroup: number | null | undefined,
+  _storedBreakGroup: number | null | undefined,
   dbSlotKey: string,
   rrSide: string | null | undefined,
   defaults: SlotDefaultBreakMap,
 ): BreakGroupValue {
-  if (storedBreakGroup !== null && storedBreakGroup !== undefined) {
-    const n = Number(storedBreakGroup);
-    if (n === 0 || n === 1 || n === 2 || n === 3 || n === BREAK_GROUP_OVERLAPS) {
-      return n as BreakGroupValue;
-    }
-  }
   const def = defaults.get(slotDefaultLookupKey(dbSlotKey, rrSide));
   if (def !== undefined) return def;
   return 0;
@@ -102,6 +103,7 @@ export type RawAssignmentForBreak = {
 export function enrichAssignmentsWithBreakGroups(
   dbAssignments: RawAssignmentForBreak[] | undefined | null,
   defaults: SlotDefaultBreakMap,
+  overlapBreakTmIds: ReadonlySet<string> = new Set(),
 ): Record<
   string,
   {
@@ -125,14 +127,14 @@ export function enrichAssignmentsWithBreakGroups(
       );
       if (uiKey.startsWith("UNK:")) continue;
 
-      const explicit =
-        row.breakGroup !== null && row.breakGroup !== undefined;
-      const breakGroup = resolveEffectiveBreakGroup(
-        row.breakGroup,
-        row.slotKey,
-        row.rrSide,
-        defaults,
-      );
+      const breakGroup = overlapBreakTmIds.has(row.tmId)
+        ? BREAK_GROUP_OVERLAPS
+        : resolveEffectiveBreakGroup(
+            row.breakGroup,
+            row.slotKey,
+            row.rrSide,
+            defaults,
+          );
 
       assignments[uiKey] = {
         tmId: row.tmId,
@@ -141,7 +143,6 @@ export function enrichAssignmentsWithBreakGroups(
         additionalCoverageSlots: Array.isArray(row.additionalCoverageSlots)
           ? [...row.additionalCoverageSlots]
           : [],
-        ...(explicit ? { breakGroupExplicit: true } : {}),
       };
     } catch {
       // skip malformed rows

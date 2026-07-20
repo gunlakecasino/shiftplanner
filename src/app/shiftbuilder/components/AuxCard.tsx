@@ -7,7 +7,6 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import {
   type BreakGroup,
-  nextBreakGroup,
   getAuxAccent,
   getAuxIcon,
 } from "@/lib/shiftbuilder/constants";
@@ -43,7 +42,6 @@ export interface AuxCardProps {
   def: AuxDef;
   assignments: any;
   selectedTasks: Record<string, NightSlotTask[]>;
-  setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
   loading?: boolean;
   borderColor?: string;
@@ -92,7 +90,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   def,
   assignments,
   selectedTasks,
-  setBreakGroupForSlot,
   onCardClick,
   loading = false,
   borderColor,
@@ -130,7 +127,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const a = assignments[def.key] || {};
   const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getAuxAccent(def.key, role);
-  const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
   // Draft-aware TM identity, mirroring ZoneCard/OverlapSlot: a proposed
   // occupant must drag as an assigned slot (move/swap), not as an empty one
   // (coverage-request).
@@ -436,7 +432,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             <span className={isViewOnly ? "sb-kiosk-action" : undefined}>
               <BreakBadge
                 value={currentBreak}
-                onCycle={cycleBreak}
                 kioskSize={isTodayKiosk}
               />
             </span>

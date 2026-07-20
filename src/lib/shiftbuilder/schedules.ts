@@ -22,6 +22,7 @@ export interface ScheduledTmWithRole extends ScheduledTm {
   isFullGrave: boolean;
   isPMOverlap: boolean;
   isAMOverlap: boolean;
+  isOverlapBreak: boolean;
 }
 
 export interface ScheduledTmsForNightResult {
@@ -29,5 +30,6 @@ export interface ScheduledTmsForNightResult {
   fullGraveScheduled: ScheduledTm[];
   pmOverlapScheduled: ScheduledTm[];
   amOverlapScheduled: ScheduledTm[];
+  overlapBreakScheduled: ScheduledTm[];
   scheduledWithRoles: ScheduledTmWithRole[];
 }

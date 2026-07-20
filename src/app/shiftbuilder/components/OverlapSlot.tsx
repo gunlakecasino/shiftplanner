@@ -9,11 +9,7 @@ import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/l
 import { isCriticalRepeatFit } from "./PlacementFitChip";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick } from "./CardTaskZone";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
-import {
-  type BreakGroup,
-  cardAccentInk,
-  overlapSlotLabel,
-} from "@/lib/shiftbuilder/constants";
+import { cardAccentInk, overlapSlotLabel } from "@/lib/shiftbuilder/constants";
 import {
   CardAccentStripe,
   SlotAssignmentBody,
@@ -49,7 +45,6 @@ export interface OverlapSlotProps {
   ) => void;
   onLiveAssign?: (uiKey: string, tmId: string, tmName: string) => void;
   onLiveUnassign?: (uiKey: string) => void;
-  setBreakGroupForSlot?: (k: string, g: BreakGroup) => void;
   isLocked?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
@@ -78,7 +73,6 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   onSetTaskMarker,
   onEditTask,
   onOpenTaskTextEdit,
-  setBreakGroupForSlot,
   isLocked = false,
   fitChip,
   showDigitalAssists = false,

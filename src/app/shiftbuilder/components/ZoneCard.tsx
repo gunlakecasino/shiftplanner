@@ -3,13 +3,11 @@
 import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
-  type BreakGroup, nextBreakGroup,
   cardAccentInk,
   getZoneColor, ZONE_ICONS,
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
-import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
@@ -38,7 +36,6 @@ export interface ZoneCardProps {
   def: any;
   assignments: any;
   selectedTasks: Record<string, NightSlotTask[]>;
-  setBreakGroupForSlot: (k: string, g: BreakGroup) => void;
   onCardClick: (k: string, el: HTMLElement, event?: React.MouseEvent) => void;
   loading?: boolean;
   borderColor?: string;
@@ -158,7 +155,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   def,
   assignments,
   selectedTasks,
-  setBreakGroupForSlot,
   onCardClick,
   loading = false,
   borderColor,
@@ -193,9 +189,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     tmId: draftActive ? (draftInfo?.proposedTmId ?? a.tmId) : a.tmId,
     tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
   };
-  const currentBreak = (a.breakGroup ?? 0) as BreakGroup;
   const color = getZoneColor(def.key);
-  const cycleBreak = () => setBreakGroupForSlot(def.key, nextBreakGroup(currentBreak));
   const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     def.key, "zone", slotTm, isLocked,
   );
@@ -283,6 +277,19 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     label: entry.side ? `${String(def.key).replace(/^Z/, "")}${entry.side}` : String(index + 1),
     name: entry.tmName,
   }));
+  const packageCoverageFooter = zoneCoverageTasks.length > 0 ? (
+    <div className="sb-coverage-footer shrink-0">
+      {zoneCoverageTasks.map((task) => (
+        <CoverageBar
+          key={task.id}
+          task={task}
+          slotKey={def.key}
+          onRemoveTask={packageTaskInteractionsEnabled ? onRemoveTask : undefined}
+          builderCalm={showDigitalAssists}
+        />
+      ))}
+    </div>
+  ) : undefined;
 
   return (
     <div
@@ -314,6 +321,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         name={assignmentState.kind === "covered" ? "" : displayName || "Unassigned"}
         notes={packageNotes}
         taskContent={packageTaskContent}
+        footer={packageCoverageFooter}
         unassigned={assignmentState.kind === "unassigned" || assignmentState.kind === "covered"}
         coverage={assignmentState.kind === "covered" ? packageCoverage : undefined}
         onClick={() => {

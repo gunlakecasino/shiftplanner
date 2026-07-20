@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { X } from "lucide-react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
   COVERAGE_BAR_FONT_SIZE,
@@ -32,7 +33,6 @@ const CoverageBar = React.memo(function CoverageBar({
   const [hovered, setHovered] = React.useState(false);
   const accent = task.color || "#6B7280";
   const goldBanner = isGoldAccent(accent);
-  const isSynthetic = task.id.startsWith("coverage:");
 
   return (
     <div
@@ -69,8 +69,9 @@ const CoverageBar = React.memo(function CoverageBar({
       >
         {builderCalm ? task.taskLabel.replace(/^AND\s+/i, '+ ') : task.taskLabel}
       </span>
-      {onRemoveTask && !isSynthetic && (
+      {onRemoveTask && (
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onRemoveTask(slotKey, task.taskLabel, task.id);
@@ -92,8 +93,9 @@ const CoverageBar = React.memo(function CoverageBar({
             borderRadius: 4,
           }}
           title="Remove coverage"
+          aria-label={`Remove coverage: ${task.taskLabel}`}
         >
-          ×
+          <X size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
       )}
     </div>

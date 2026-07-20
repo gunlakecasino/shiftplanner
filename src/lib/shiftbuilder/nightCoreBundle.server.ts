@@ -181,6 +181,7 @@ export type NightCoreBundlePayload = {
   fullGraveScheduledTonight: string[];
   pmOverlapScheduledTonight: string[];
   amOverlapScheduledTonight: string[];
+  overlapBreakTmIdsTonight: string[];
   rawDbAssignments: any[];
   rawBreakRows: any[];
   slotDefaultBreaks: Record<string, number>;
@@ -240,7 +241,16 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
   ]);
 
   const defaultBreakMap = buildSlotDefaultBreakMap(slotDefaults as any);
-  const legacyAssignments = enrichAssignmentsWithBreakGroups(dbAssignments, defaultBreakMap);
+  const overlapBreakTmIds = new Set<string>();
+  for (const tm of scheduled.overlapBreakScheduled || []) {
+    if (tm.id) overlapBreakTmIds.add(tm.id);
+    if (tm.tmId) overlapBreakTmIds.add(tm.tmId);
+  }
+  const legacyAssignments = enrichAssignmentsWithBreakGroups(
+    dbAssignments,
+    defaultBreakMap,
+    overlapBreakTmIds,
+  );
 
   const storedAuxLayout = nightId ? await fetchAuxLayoutForNight(nightId) : null;
   let auxDefs = storedAuxLayout
@@ -298,6 +308,7 @@ async function buildNightCoreBundleUncached(isoDate: string): Promise<NightCoreB
     fullGraveScheduledTonight: Array.from(fullGrave),
     pmOverlapScheduledTonight: Array.from(pmOverlap),
     amOverlapScheduledTonight: Array.from(amOverlap),
+    overlapBreakTmIdsTonight: Array.from(overlapBreakTmIds),
     rawDbAssignments: dbAssignments,
     rawBreakRows: [],
     slotDefaultBreaks: slotDefaultBreakMapToRecord(defaultBreakMap),

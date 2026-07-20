@@ -3,7 +3,7 @@ import { MoreHorizontal } from "lucide-react";
 import { ZONE_COLORS, ZONE_STATUS } from "../tokens";
 import type { ShiftCardProps } from "../types";
 
-export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage, taskContent, noChip, onClick }: ShiftCardProps) {
+export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage, taskContent, footer, noChip, onClick }: ShiftCardProps) {
   const colors = ZONE_COLORS[zone] || ZONE_COLORS[1];
   const accentColor = colors.label;
   const hasTasks = Boolean(taskContent || (notes && notes.length > 0));
@@ -16,11 +16,12 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
     return (
       <div
         onClick={handleCardClick}
-        className="rounded-xl border border-gray-200 min-h-[172px] flex overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+        className="rounded-xl border border-gray-200 min-h-[172px] flex flex-col overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-shadow"
         style={{ backgroundColor: `${accentColor}08` }}
       >
-        <div className="w-[5px] shrink-0 rounded-l-xl" style={{ backgroundColor: accentColor }} />
-        <div className="flex flex-col flex-1 p-3 min-w-0">
+        <div className="flex flex-1 min-h-0">
+          <div className="w-[5px] shrink-0 rounded-l-xl" style={{ backgroundColor: accentColor }} />
+          <div className="flex flex-col flex-1 p-3 min-w-0">
           <div className="flex items-center justify-between mb-2">
             {!noChip
               ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>ZONE {zone}</span>
@@ -73,7 +74,9 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
               )}
             </div>
           )}
+          </div>
         </div>
+        {footer}
       </div>
     );
   }
@@ -81,10 +84,11 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
   return (
     <div
       onClick={handleCardClick}
-      className="rounded-xl border border-gray-200 min-h-[172px] flex overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-shadow bg-white"
+      className="rounded-xl border border-gray-200 min-h-[172px] flex flex-col overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-shadow bg-white"
     >
-      <div className="w-[5px] shrink-0 rounded-l-xl" style={{ backgroundColor: accentColor }} />
-      <div className="flex flex-col flex-1 p-3 min-w-0">
+      <div className="flex flex-1 min-h-0">
+        <div className="w-[5px] shrink-0 rounded-l-xl" style={{ backgroundColor: accentColor }} />
+        <div className="flex flex-col flex-1 p-3 min-w-0">
         <div className="flex items-center justify-between mb-2.5">
           {!noChip
             ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>ZONE {zone}</span>
@@ -110,7 +114,9 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
             ))}
           </div>
         )}
+        </div>
       </div>
+      {footer}
     </div>
   );
 }

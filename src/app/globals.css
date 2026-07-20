@@ -6034,3 +6034,78 @@ button,
     max-width: min(288px, calc(100vw - 16px));
   }
 }
+
+/* Live-board viewport resilience.
+   The desktop board is taller than some landscape browser viewports once the
+   zone and restroom minimum rows are combined. Keep one explicit scroll owner
+   and let its descendants contribute their natural height so overlap cards can
+   never be trapped below an overflow-hidden flex boundary. */
+@media (orientation: landscape) {
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live > .sb-builder-canvas {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-x: none !important;
+    overscroll-behavior-y: contain !important;
+    scrollbar-gutter: stable;
+    touch-action: pan-y;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .sb-builder-fluid-viewport,
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-height: 100% !important;
+  }
+}
+
+/* A 1080p monitor commonly leaves less than 1,000 CSS pixels after browser
+   chrome. Reduce only the empty breathing-room minimums at that height; card
+   content may still grow naturally, and the canvas above remains scrollable. */
+@media (orientation: landscape) and (min-width: 1001px) and (max-height: 1100px) {
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace {
+    padding-top: 12px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-zone-grid {
+    grid-auto-rows: minmax(148px, auto) !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-zone-grid .assignment-card {
+    min-height: 148px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid {
+    grid-auto-rows: minmax(262px, auto) !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid .assignment-card {
+    min-height: 126px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
+    margin-top: 10px;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-group {
+    margin-top: 14px;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-panel .sb-overlap-grid {
+    grid-auto-rows: minmax(108px, auto);
+    min-height: 108px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-panel .sb-overlap-card-grid .assignment-card,
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-panel .sb-overlap-card-grid .sb-assignment-card {
+    min-height: 108px !important;
+  }
+}

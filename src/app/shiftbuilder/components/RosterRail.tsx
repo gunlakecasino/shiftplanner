@@ -154,6 +154,7 @@ function rowFromLookupEntry(entry: Record<string, unknown>): GravesScheduleRoste
     isFullGrave: !!(entry.isFullGrave ?? entry.isFullGraveTonight),
     isPMOverlap: !!(entry.isPMOverlap ?? entry.isPMOverlapTonight),
     isAMOverlap: !!(entry.isAMOverlap ?? entry.isAMOverlapTonight),
+    isOverlapBreak: !!(entry.isOverlapBreak ?? entry.isOverlapBreakTonight),
   };
 }
 

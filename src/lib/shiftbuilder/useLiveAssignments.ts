@@ -54,6 +54,9 @@ import type { UpsertAssignmentParams } from "@/lib/shiftbuilder/data";
 import { formatLocalDateISO, type DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { uiToDb } from "@/lib/shiftbuilder/slot-keys";   // canonical mapping (Z9SR→z9_sr+aux, Z9→zone_9+zone, etc.)
 import {
+  BREAK_GROUP_OVERLAPS,
+} from "@/lib/shiftbuilder/constants";
+import {
   resolveEffectiveBreakGroup,
   slotDefaultBreakMapFromRecord,
 } from "@/lib/shiftbuilder/breakGroupResolve";
@@ -318,16 +321,19 @@ export function useLiveAssignments(selectedDay: DayDef) {
     (p: any) => {
       const core = queryClient.getQueryData<any>(["nightCore", dateKey]);
       const defaults = slotDefaultBreakMapFromRecord(core?.slotDefaultBreaks);
+      const overlapBreakTmIds = new Set<string>(core?.overlapBreakTmIdsTonight ?? []);
       let breakGroup = 0;
       try {
         const auxDefs = useShiftBuilderStore.getState().auxDefs;
         const { slot_key, rr_side } = uiToDb(p.uiKey, auxDefs);
-        breakGroup = resolveEffectiveBreakGroup(
-          null,
-          slot_key,
-          rr_side,
-          defaults,
-        );
+        breakGroup = overlapBreakTmIds.has(p.tmId)
+          ? BREAK_GROUP_OVERLAPS
+          : resolveEffectiveBreakGroup(
+              null,
+              slot_key,
+              rr_side,
+              defaults,
+            );
       } catch {
         breakGroup = 0;
       }

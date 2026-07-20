@@ -16,7 +16,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
-  Coffee,
   Users,
   Layers,
   Sparkles,
@@ -85,8 +84,6 @@ export interface FloatingNavProps {
   onNextWeek?: () => void;
   onCopyPriorWeekTasks?: () => void;
   onCopyYesterdayTasks?: () => void;
-  onRestoreDefaultBreaks?: () => void;
-  restoreDefaultBreaksBusy?: boolean;
   onApplyOverlapTasks?: () => void;
   applyOverlapTasksBusy?: boolean;
   onToggleWeekHealth?: () => void;
@@ -224,8 +221,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     onNextWeek,
     onCopyPriorWeekTasks,
     onCopyYesterdayTasks,
-    onRestoreDefaultBreaks,
-    restoreDefaultBreaksBusy = false,
     onApplyOverlapTasks,
     applyOverlapTasksBusy = false,
     onPrint,
@@ -1116,19 +1111,6 @@ export default function FloatingNav(props: FloatingNavProps) {
 
                 {showDraftTools && (onToggleDraftMode || onSaveAllDraft) && <div className={menuDividerClass} />}
 
-                {/* Defaults — grouped together by default breaks */}
-                {onRestoreDefaultBreaks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onRestoreDefaultBreaks();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Coffee size={14} /> Restore Default Breaks
-                  </button>
-                )}
                 {/* Apply Overlap Tasks (K13): staffed AM/PM pool from ops_work_items.
                     Zone/RR defaults materialize on night create only (applySlotDefaultsToNight). */}
                 {onApplyOverlapTasks && (
@@ -1172,7 +1154,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {(onRestoreDefaultBreaks || onApplyOverlapTasks || (showDraftTools && (onCopyPriorWeekTasks || onCopyYesterdayTasks))) && (
+                {(onApplyOverlapTasks || (showDraftTools && (onCopyPriorWeekTasks || onCopyYesterdayTasks))) && (
                   <div className={menuDividerClass} />
                 )}
 

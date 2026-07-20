@@ -162,7 +162,6 @@ export interface ShiftBuilderBoardProps {
   ) => void;
   onSetTaskTextStyle?: (slotKey: string, taskLabel: string, textStyle: import("@/lib/shiftbuilder/taskTextStyle").TaskTextStyle | null) => void;
   onEditTask?: any;
-  setBreakGroupForSlot?: any;
   onLiveAssign?: any;
   onLiveUnassign?: any;
   onClearSlot?: (slotKey: string) => void;
@@ -329,7 +328,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   onSetTaskAppearance,
   onSetTaskTextStyle,
   onEditTask,
-  setBreakGroupForSlot,
   onLiveAssign,
   onLiveUnassign,
   onAddCoverage,
@@ -1017,7 +1015,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     auxDefs,
     isDark,
     isCurrentNightLocked,
-    setBreakGroupForSlot,
     onAddCoverage,
     onLiveUnassign: onClearSlot ?? onLiveUnassign,
     onToggleLock,
@@ -1109,7 +1106,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         slotKey={slotKey}
         assignments={displayAssignments}
         selectedTasks={selectedTasks}
-        setBreakGroupForSlot={setBreakGroupForSlot}
         onCardClick={handleCardClickForPad}
         loading={loadingAssignments}
         isDraftMode={isDraftMode}
@@ -1420,7 +1416,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         def={def}
                         assignments={displayAssignments}
                         selectedTasks={selectedTasks}
-                        setBreakGroupForSlot={setBreakGroupForSlot}
                         onCardClick={handleCardClickForPad}
                         showTaskBadge={!isPrintPreview}
                         loading={loadingAssignments}
@@ -1535,7 +1530,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         def={def}
                         assignments={displayAssignments}
                         selectedTasks={selectedTasks}
-                        setBreakGroupForSlot={setBreakGroupForSlot}
                         onGenderClick={handleGenderClickForPad}
                         showTaskBadge={!isPrintPreview}
                         loading={loadingAssignments}
@@ -1720,7 +1714,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             def={def}
                             assignments={displayAssignments}
                             selectedTasks={selectedTasks}
-                            setBreakGroupForSlot={setBreakGroupForSlot}
                             onCardClick={handleCardClickForPad}
                             showTaskBadge={!isPrintPreview}
                             loading={loadingAssignments}
@@ -1794,7 +1787,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           def={def}
                           assignments={displayAssignments}
                           selectedTasks={selectedTasks}
-                          setBreakGroupForSlot={setBreakGroupForSlot}
                           onCardClick={handleCardClickForPad}
                           loading={loadingAssignments}
                           borderColor={cardBorders[key]}
@@ -1911,7 +1903,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       slotKey={slotKey}
                                       assignments={displayAssignments}
                                       selectedTasks={selectedTasks}
-                                      setBreakGroupForSlot={setBreakGroupForSlot}
                                       onCardClick={handleCardClickForPad}
                                       loading={loadingAssignments}
                                       isDraftMode={isDraftMode}
@@ -1961,12 +1952,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             >
               {([1, 2, 3, BREAK_GROUP_OVERLAPS] as const).map((wave) => {
                 // Always derive wave membership from the live Zustand assignments.
-                // This is the exact same data source the BreakBadge pills read on the
-                // deployment view. Pill taps via setBreakGroupForSlot mutate the store
-                // directly, so the break sheet columns now instantly reflect the selected
-                // break groups without waiting for realtime, worker snapshots, or day reload.
-                // (processedWaves is a day-switch perf cache only; live mutations win for
-                // the on-screen "breaks" view and for what the operator just selected.)
+                // This is the exact same data source the display-only BreakBadge pills
+                // read on the deployment view. Defaults and the schedule OL flag are
+                // resolved during night hydration, so no per-night selection is needed.
                 const waveAssignments: any[] = Object.entries(assignments)
                   .map(([slotKey, a]: [string, any]) => {
                     if (!a?.tmId || (a.breakGroup ?? 0) !== wave || slotKey.startsWith("OL-")) return null;

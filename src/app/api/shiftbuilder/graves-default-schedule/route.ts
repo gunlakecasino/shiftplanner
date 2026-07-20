@@ -48,10 +48,16 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const updates = Array.isArray(body?.updates) ? body.updates : [];
-    const parsed = updates.map((u: { tmId: string; band: GravesBand; days: unknown }) => ({
+    const parsed = updates.map((u: {
+      tmId: string;
+      band: GravesBand;
+      days: unknown;
+      overlapBreak?: unknown;
+    }) => ({
       tmId: u.tmId,
       band: u.band,
       days: normalizeDaysMap(u.days),
+      overlapBreak: u.overlapBreak === true,
     }));
     await upsertGravesDefaultScheduleRows(parsed);
     return NextResponse.json({ ok: true, count: parsed.length });
