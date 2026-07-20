@@ -199,16 +199,17 @@ export async function rasterizeGoldenArtboardElement(args: {
   pixelRatio: number;
   usePng: boolean;
 }): Promise<RasterResult> {
-  if (args.kind === "breaks") {
+  const isGravesSheet = args.artboard.classList.contains("sb-graves-sheet");
+  if (!isGravesSheet && args.kind === "breaks") {
     postProcessBreaksArtboard(args.artboard);
-  } else if (args.kind === "deploy") {
+  } else if (!isGravesSheet && args.kind === "deploy") {
     postProcessOfficialDeploymentArtboard(args.artboard);
   }
   prepareArtboardForRaster(args.artboard);
   applyArtboardContract(args.artboard);
-  if (args.kind === "breaks") {
+  if (!isGravesSheet && args.kind === "breaks") {
     postProcessBreaksArtboard(args.artboard);
-  } else if (args.kind === "deploy") {
+  } else if (!isGravesSheet && args.kind === "deploy") {
     postProcessOfficialDeploymentArtboard(args.artboard);
   }
   inlineLiveDomForRaster(args.artboard);
@@ -277,9 +278,10 @@ export async function rasterizeGoldenPageHtml(args: {
       throw new Error("Export iframe: .print-artboard not found in page HTML");
     }
 
-    if (args.kind === "breaks") {
+    const isGravesSheet = artboard.classList.contains("sb-graves-sheet");
+    if (!isGravesSheet && args.kind === "breaks") {
       postProcessBreaksArtboard(artboard);
-    } else if (args.kind === "deploy") {
+    } else if (!isGravesSheet && args.kind === "deploy") {
       postProcessOfficialDeploymentArtboard(artboard);
     }
     applyArtboardContract(artboard);

@@ -97,8 +97,6 @@ function buildWrappedPagesHtml(pages: GoldenPrintPage[]): string {
 function prepareMountedArtboards(
   container: HTMLDivElement,
   pages: GoldenPrintPage[],
-  config: PrintConfig,
-  mode: GoldenPrintSessionMode,
 ): void {
   const artboards = Array.from(
     container.querySelectorAll(":scope > .print-page-wrapper > .print-artboard"),
@@ -117,15 +115,13 @@ function prepareMountedArtboards(
       "data-print-view",
       page.kind === "breaks" ? "breaks" : "deployment",
     );
-    applyGoldenArtboardContract(el, page, config, mode);
+    applyGoldenArtboardContract(el, page);
   });
 }
 
 function applyGoldenArtboardContract(
   artboard: HTMLElement,
   page: GoldenPrintPage,
-  _config: PrintConfig,
-  _mode: GoldenPrintSessionMode,
 ): void {
   artboard.style.margin = "0";
   artboard.style.boxShadow = "none";
@@ -139,6 +135,8 @@ function applyGoldenArtboardContract(
   artboard.style.transform = "none";
   artboard.style.display = "flex";
   artboard.style.flexDirection = "column";
+
+  if (artboard.classList.contains("sb-graves-sheet")) return;
 
   if (page.kind === "breaks" && artboard.getAttribute("data-print-view") === "breaks") {
     postProcessBreaksArtboard(artboard);
@@ -356,9 +354,7 @@ export async function mountGoldenRasterPrintSession(
   const leftIn = (contentWidthIn - imageWidthIn) / 2;
   const topIn = (contentHeightIn - imageHeightIn) / 2;
 
-  const style = document.createElement("style");
-  style.id = STYLE_PRINT_ID;
-  style.textContent = `
+  const printCss = `
     @page { size: letter landscape; margin: ${marginIn}in; }
     html, body {
       margin: 0 !important;
@@ -405,32 +401,36 @@ export async function mountGoldenRasterPrintSession(
       print-color-adjust: exact !important;
     }
   `;
-
-  const container = document.createElement("div");
-  container.className = "sb-raster-print-container";
-  container.innerHTML = rasterPages
+  const pagesHtml = rasterPages
     .map(
       (page, index) =>
         `<div class="sb-raster-print-page"><img src="${escapeAttribute(page.dataUrl)}" alt="Graves zone sheet ${index + 1}" /></div>`,
     )
     .join("");
 
-  const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
-  Array.from(document.body.children).forEach((child) => {
-    const el = child as HTMLElement;
-    if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
-    hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
-    el.style.display = "none";
-  });
-  document.head.appendChild(style);
-  document.body.appendChild(container);
+  const iframe = buildPrintIframe();
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    throw new Error("Raster print iframe: no contentDocument");
+  }
+  doc.open();
+  doc.write(
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8" />' +
+    `<style id="${STYLE_PRINT_ID}">${printCss}</style>` +
+    '</head><body><div class="sb-raster-print-container">' +
+    pagesHtml +
+    '</div></body></html>',
+  );
+  doc.close();
+
+  const container = doc.querySelector(".sb-raster-print-container") as HTMLDivElement | null;
+  if (!container) {
+    iframe.remove();
+    throw new Error("Raster print iframe: container missing");
+  }
 
   const images = Array.from(container.querySelectorAll("img"));
-  const restoreBodyChildren = () => {
-    hiddenBodyChildren.forEach(({ el, prevDisplay }) => {
-      el.style.display = prevDisplay;
-    });
-  };
   try {
     await Promise.all(
       images.map(async (img) => {
@@ -451,9 +451,7 @@ export async function mountGoldenRasterPrintSession(
     );
     await waitForGoldenRenderSettled();
   } catch (error) {
-    container.remove();
-    style.remove();
-    restoreBodyChildren();
+    iframe.remove();
     throw error;
   }
 
@@ -461,12 +459,10 @@ export async function mountGoldenRasterPrintSession(
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
-    container.remove();
-    style.remove();
-    restoreBodyChildren();
+    iframe.remove();
   };
 
-  return { container, pages, cleanup, printFrame: null };
+  return { container, pages, cleanup, printFrame: iframe };
 }
 
 /**
@@ -517,7 +513,7 @@ async function mountGoldenBrowserPrintSession(
     throw new Error("Print iframe: .print-dual-container missing");
   }
 
-  prepareMountedArtboards(container, pages, config, "print");
+  prepareMountedArtboards(container, pages);
 
   let cleaned = false;
   const cleanup = () => {
@@ -541,7 +537,7 @@ function mountGoldenExportDomSession(
   container.innerHTML = buildWrappedPagesHtml(pages);
   document.body.appendChild(container);
 
-  prepareMountedArtboards(container, pages, config, "export");
+  prepareMountedArtboards(container, pages);
 
   const styleEl = injectSessionStyles(config, "export");
   container.classList.add("golden-export-raster");

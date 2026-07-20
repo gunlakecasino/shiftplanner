@@ -49,6 +49,7 @@ export function LivePrintPreviewArtboard({
       if (cancelled || !hostRef.current) return;
       const artboard = hostRef.current.querySelector(".print-artboard");
       if (!artboard) return;
+      if (artboard.classList.contains("sb-graves-sheet")) return;
       if (view === "breaks") {
         postProcessBreaksArtboard(artboard);
       } else if (printVariant === "official") {
