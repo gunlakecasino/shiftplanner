@@ -85,10 +85,20 @@ export function GoldenBreakPill({ value }: { value: number }) {
   const isOl = value === BREAK_GROUP_OVERLAPS;
   return (
     <span
-      className={`sb-golden-break-num shrink-0 select-none leading-none tabular-nums ${
+      className={`sb-golden-break-num shrink-0 select-none leading-none tabular-nums inline-flex items-center justify-center rounded-full ${
         isOff ? "sb-golden-break-num--off" : "sb-golden-break-num--on"
       } ${isOl ? "sb-golden-break-num--ol" : ""}`}
-      style={{ fontFamily: "var(--font-atkinson)" }}
+      style={{
+        fontFamily: "var(--font-atkinson)",
+        minWidth: isOl ? 25 : 19,
+        height: 16,
+        padding: isOl ? "0 5px" : "0 4px",
+        background: isOff ? "#ECECEF" : "#1C1C1E",
+        color: isOff ? "#8E8E93" : "#FFFFFF",
+        border: isOff ? "1px solid #D1D1D6" : "1px solid #1C1C1E",
+        fontSize: isOl ? 8.5 : 9.5,
+        fontWeight: 800,
+      }}
       aria-hidden={isOff}
     >
       {breakHeaderMark(value)}
@@ -177,6 +187,9 @@ export function GoldenCoverageBar({
   roundedBottom?: boolean;
 }) {
   const bg = coverageBarBg(color || "#6B7280");
+  const displayLabel = /^and\s+/i.test(label)
+    ? `Also covers ${label.replace(/^and\s+/i, "")}`
+    : label;
   return (
     <div
       className="sb-coverage-bar group flex items-center justify-between px-2 select-none"
@@ -194,7 +207,7 @@ export function GoldenCoverageBar({
         height: COVERAGE_BAR_H,
         minHeight: COVERAGE_BAR_H,
       }}
-      title={label}
+      title={displayLabel}
     >
       <span
         className="text-white font-extrabold uppercase tracking-[0.6px] leading-none truncate"
@@ -203,7 +216,7 @@ export function GoldenCoverageBar({
           fontFamily: "var(--font-atkinson)",
         }}
       >
-        {label}
+        {displayLabel}
       </span>
     </div>
   );
@@ -251,6 +264,9 @@ export function GoldenZoneCard({
   tasks,
   empty,
   coveredBy,
+  suppressBreakPill = false,
+  showEmptyLabel = true,
+  showTasksWhenEmpty = true,
   onClick,
   onMouseDown,
   onContextMenu,
@@ -262,6 +278,9 @@ export function GoldenZoneCard({
   tasks: PrintTaskLine[];
   empty?: boolean;
   coveredBy?: CoveredByEntry[];
+  suppressBreakPill?: boolean;
+  showEmptyLabel?: boolean;
+  showTasksWhenEmpty?: boolean;
 } & React.HTMLAttributes<HTMLDivElement>) {
   const def = ZONE_DEFS.find((d) => d.key === slotKey)!;
   const color = getZoneColor(slotKey);
@@ -304,7 +323,7 @@ export function GoldenZoneCard({
             {def.label}
           </span>
         </div>
-        <GoldenBreakPill value={breakGroup} />
+        {!isEmpty && !suppressBreakPill ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
         className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-3 pt-2"
@@ -313,14 +332,14 @@ export function GoldenZoneCard({
         {isEmpty ? (
           coveredBy && coveredBy.length > 0 ? (
             <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={slotKey} scale="zone" />
-          ) : (
+          ) : showEmptyLabel ? (
             <div
               className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px]"
               style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
             >
               <span className="sb-unassigned-primary">— Unassigned —</span>
             </div>
-          )
+          ) : null
         ) : (
           <>
             <span
@@ -337,7 +356,7 @@ export function GoldenZoneCard({
             <GoldenTaskList tasks={regular} hasTM />
           </>
         )}
-        {isEmpty && regular.length > 0 ? (
+        {isEmpty && showTasksWhenEmpty && regular.length > 0 ? (
           <GoldenTaskList tasks={regular} hasTM={false} />
         ) : null}
       </div>
@@ -356,6 +375,9 @@ export function GoldenRRSide({
   tasks,
   empty,
   coveredBy,
+  suppressBreakPill = false,
+  showEmptyLabel = true,
+  showTasksWhenEmpty = true,
 }: {
   slotKey: string;
   headerLabel: string;
@@ -366,6 +388,9 @@ export function GoldenRRSide({
   tasks: PrintTaskLine[];
   empty: boolean;
   coveredBy?: CoveredByEntry[];
+  suppressBreakPill?: boolean;
+  showEmptyLabel?: boolean;
+  showTasksWhenEmpty?: boolean;
 }) {
   const regular = tasks.filter((t) => !t.isCoverage);
   const coverageCount = tasks.filter((t) => t.isCoverage).length;
@@ -401,7 +426,7 @@ export function GoldenRRSide({
             {headerLabel}
           </span>
         </div>
-        <GoldenBreakPill value={breakGroup} />
+        {!isEmpty && !suppressBreakPill ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
         className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5"
@@ -410,14 +435,14 @@ export function GoldenRRSide({
         {isEmpty ? (
           coveredBy && coveredBy.length > 0 ? (
             <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={slotKey} scale="rr" />
-          ) : (
+          ) : showEmptyLabel ? (
             <div
               className="unassigned-label text-[10.5px] tracking-[0.3px] px-1 py-[1px]"
               style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
             >
               <span className="sb-unassigned-primary">— Unassigned —</span>
             </div>
-          )
+          ) : null
         ) : (
           <span
             className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
@@ -431,7 +456,9 @@ export function GoldenRRSide({
             {tmName}
           </span>
         )}
-        <GoldenTaskList tasks={regular} hasTM={!isEmpty} dense />
+        {!isEmpty || showTasksWhenEmpty ? (
+          <GoldenTaskList tasks={regular} hasTM={!isEmpty} dense />
+        ) : null}
       </div>
       <GoldenCoverageStack tasks={tasks} color={accentColor} />
     </div>
@@ -498,10 +525,16 @@ export function GoldenRRPrintGrid({
   assignments,
   tasksBySlot,
   coveredByIndex = {},
+  suppressBreakPillKeys,
+  showEmptyLabels = true,
+  showTasksWhenEmpty = true,
 }: {
   assignments: Record<string, { tmName?: string | null; breakGroup?: number }>;
   tasksBySlot: Record<string, NightSlotTask[] | PrintTaskLine[] | undefined>;
   coveredByIndex?: Record<string, CoveredByEntry[]>;
+  suppressBreakPillKeys?: Set<string>;
+  showEmptyLabels?: boolean;
+  showTasksWhenEmpty?: boolean;
 }) {
   const toLines = (key: string): PrintTaskLine[] =>
     toTaskLines(tasksBySlot[key] as NightSlotTask[] | PrintTaskLine[] | undefined);
@@ -525,6 +558,9 @@ export function GoldenRRPrintGrid({
               tasks={toLines(wKey)}
               empty={!a.tmName}
               coveredBy={coveredByIndex[wKey]}
+              suppressBreakPill={suppressBreakPillKeys?.has(wKey)}
+              showEmptyLabel={showEmptyLabels}
+              showTasksWhenEmpty={showTasksWhenEmpty}
             />
           </div>
         );
@@ -546,6 +582,9 @@ export function GoldenRRPrintGrid({
               tasks={toLines(mKey)}
               empty={!a.tmName}
               coveredBy={coveredByIndex[mKey]}
+              suppressBreakPill={suppressBreakPillKeys?.has(mKey)}
+              showEmptyLabel={showEmptyLabels}
+              showTasksWhenEmpty={showTasksWhenEmpty}
             />
           </div>
         );
@@ -561,6 +600,9 @@ export function GoldenAuxCard({
   tasks,
   empty,
   coveredBy,
+  suppressBreakPill = false,
+  emptyLabel = "— Unassigned —",
+  showTasksWhenEmpty = true,
 }: {
   def: AuxDef;
   tmName?: string | null;
@@ -568,6 +610,10 @@ export function GoldenAuxCard({
   tasks: PrintTaskLine[];
   empty?: boolean;
   coveredBy?: CoveredByEntry[];
+  suppressBreakPill?: boolean;
+  /** null leaves an unassigned card visually blank. */
+  emptyLabel?: string | null;
+  showTasksWhenEmpty?: boolean;
 }) {
   const role = def.role ?? "blank";
   const isBlank = role === "blank" && !def.label;
@@ -620,7 +666,7 @@ export function GoldenAuxCard({
             </span>
           </div>
         )}
-        {!isBlank ? <GoldenBreakPill value={breakGroup} /> : null}
+        {!isBlank && !isEmpty && !suppressBreakPill ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
         className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5 overflow-visible"
@@ -629,14 +675,14 @@ export function GoldenAuxCard({
         {isEmpty ? (
           coveredBy && coveredBy.length > 0 ? (
             <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={def.key} scale="aux" />
-          ) : (
+          ) : emptyLabel ? (
             <div
               className="unassigned-label text-[10.5px] tracking-[0.3px] px-1 py-[1px] flex items-center justify-center flex-1"
               style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
             >
-              <span className="sb-unassigned-primary">— Unassigned —</span>
+              <span className="sb-unassigned-primary">{emptyLabel}</span>
             </div>
-          )
+          ) : null
         ) : !isBlank ? (
           <>
             <span
@@ -653,7 +699,7 @@ export function GoldenAuxCard({
             <GoldenTaskList tasks={regular} hasTM dense />
           </>
         ) : null}
-        {isEmpty && regular.length > 0 ? (
+        {isEmpty && showTasksWhenEmpty && regular.length > 0 ? (
           <GoldenTaskList tasks={regular} hasTM={false} dense />
         ) : null}
       </div>

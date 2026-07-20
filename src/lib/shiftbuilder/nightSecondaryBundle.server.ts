@@ -5,6 +5,7 @@ import { getCachedNightIdForDate } from "./data.server";
 import { fetchRecentZoneHistoryServer } from "./zoneHistory.server";
 import type { ZoneHistoryRecord } from "./zoneHistory";
 import { normalizeTaskTextStyle } from "./taskTextStyle";
+import { mapPrintSideTasks, type PrintSideTaskRow } from "./printSideTasks";
 
 function getSupabase(): SupabaseClient {
   const client = createAdminClientSafe();
@@ -82,9 +83,13 @@ export type NightSecondaryBundlePayload = {
   calledOffIds: string[];
   rawBreakRows: ReturnType<typeof mapBreakAssignment>[];
   recentZoneHistory: ZoneHistoryRecord;
+  sideTasks: ReturnType<typeof mapPrintSideTasks>;
 };
 
-export async function buildNightSecondaryBundle(isoDate: string): Promise<NightSecondaryBundlePayload> {
+export async function buildNightSecondaryBundle(
+  isoDate: string,
+  options: { includeSideTasks?: boolean } = {},
+): Promise<NightSecondaryBundlePayload> {
   const supabase = getSupabase();
   const anchorDate = parseLocalDateISO(isoDate);
 
@@ -93,7 +98,7 @@ export async function buildNightSecondaryBundle(isoDate: string): Promise<NightS
     fetchRecentZoneHistoryServer(anchorDate, 7, supabase),
   ]);
 
-  const [notesRes, tasksRes, breaksRes, bordersRes, callOffsRes] = await Promise.all([
+  const [notesRes, tasksRes, breaksRes, bordersRes, callOffsRes, sideTasksRes] = await Promise.all([
     nightId
       ? supabase.from("nights").select("notes").eq("id", nightId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -121,6 +126,20 @@ export async function buildNightSecondaryBundle(isoDate: string): Promise<NightS
     // unavailable only clears board slots; the roster never learns they are
     // called off and they reappear under "On Sheet — Not Placed" after poll.
     supabase.from("call_offs").select("tm_id").eq("night_date", isoDate),
+    options.includeSideTasks
+      ? supabase
+          .from("ops_work_items")
+          .select("id, title, status, priority, assignee_tm_id, completed_at, updated_by_name, created_at")
+          .eq("work_type", "task")
+          .eq("department", "graves")
+          .eq("due_date", isoDate)
+          .eq("active", true)
+          .eq("is_slot_default", false)
+          .eq("approval_state", "approved")
+          .is("archived_at", null)
+          .neq("status", "cancelled")
+          .or("due_shift.is.null,due_shift.eq.graves,due_shift.eq.any")
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (callOffsRes.error) {
@@ -139,6 +158,31 @@ export async function buildNightSecondaryBundle(isoDate: string): Promise<NightS
   const mappedBreaks = breakRows.map(mapBreakAssignment);
   const mappedTasks = ((tasksRes.data ?? []) as NightSlotTaskRow[]).map(mapNightSlotTask);
 
+  if (sideTasksRes.error) {
+    console.warn(
+      "[nightSecondaryBundle] side task fetch failed",
+      sideTasksRes.error.message,
+    );
+  }
+  const sideTaskRows = (sideTasksRes.data ?? []) as PrintSideTaskRow[];
+  const assigneeIds = Array.from(
+    new Set(sideTaskRows.map((row) => row.assignee_tm_id).filter((id): id is string => !!id)),
+  );
+  const nameMap = new Map<string, string>();
+  if (assigneeIds.length > 0) {
+    const { data: profiles, error: profileError } = await supabase
+      .from("tm_profiles")
+      .select("tm_id, display_name, full_name")
+      .in("tm_id", assigneeIds);
+    if (profileError) {
+      console.warn("[nightSecondaryBundle] side task assignee fetch failed", profileError.message);
+    }
+    for (const profile of profiles ?? []) {
+      const row = profile as { tm_id: string; display_name?: string | null; full_name?: string | null };
+      nameMap.set(row.tm_id, row.display_name || row.full_name || row.tm_id);
+    }
+  }
+
   const calledOffIds = Array.from(
     new Set(
       ((callOffsRes.data ?? []) as Array<{ tm_id?: string | null }>)
@@ -155,5 +199,6 @@ export async function buildNightSecondaryBundle(isoDate: string): Promise<NightS
     calledOffIds,
     rawBreakRows: mappedBreaks,
     recentZoneHistory,
+    sideTasks: mapPrintSideTasks(sideTaskRows, nameMap),
   };
 }

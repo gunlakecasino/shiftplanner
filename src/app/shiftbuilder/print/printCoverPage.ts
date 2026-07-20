@@ -12,8 +12,8 @@ export function buildCoverPageArtboardHTML(
   const ovwCount = config.includeOverview && config.days.some((d) => d.inOverview) ? 1 : 0;
 
   const contents: { label: string; pages: number; color: string }[] = [];
-  if (deployCount) contents.push({ label: "Deployment Sheets", pages: deployCount, color: "#34C759" });
-  if (breaksCount) contents.push({ label: "Break Sheets", pages: breaksCount, color: "#FF9F0A" });
+  if (deployCount) contents.push({ label: "Graves Zone Sheets", pages: deployCount, color: "#34C759" });
+  if (breaksCount) contents.push({ label: "Tasks & Overlaps", pages: breaksCount, color: "#FF9F0A" });
   if (ovwCount) contents.push({ label: "Overview", pages: 1, color: "#5856D6" });
 
   const activeDefs = config.days

@@ -9,7 +9,7 @@ import { MARGIN_ZOOM } from "@/app/shiftbuilder/components/PrintCommandCenter";
 import { assembleGoldenPrintPages } from "@/app/shiftbuilder/print/assemblePages";
 import { LETTER_LANDSCAPE_PT } from "@/app/shiftbuilder/print/goldenConstants";
 import {
-  getPrintContentBoxPt,
+  getPrintImagePlacementPt,
   getPrintZoom,
 } from "@/app/shiftbuilder/print/printSession";
 import { goldenRasterScale } from "@/app/shiftbuilder/print/rasterPrep";
@@ -46,23 +46,9 @@ const dayDefs = Array.from({ length: 7 }, (_, i) => ({
   isToday: false,
 })) as DayDef[];
 
-/** Mirror of getGoldenPdfPlacement — pure so we don't load html-to-image. */
-function goldenPdfPlacement(config: PrintConfig) {
-  const zoom = getPrintZoom(config);
-  const { width: boxW, height: boxH, marginX, marginY } = getPrintContentBoxPt(config);
-  const imgW = boxW * zoom;
-  const imgH = boxH * zoom;
-  return {
-    x: marginX + (boxW - imgW) / 2,
-    y: marginY + (boxH - imgH) / 2,
-    width: imgW,
-    height: imgH,
-  };
-}
-
-describe("Golden PDF placement (matches browser print zoom)", () => {
+describe("Golden PDF placement (undistorted inside browser margins)", () => {
   it("centers narrow-margin zoomed sheet inside landscape letter", () => {
-    const p = goldenPdfPlacement(baseConfig({ margins: "narrow" }));
+    const p = getPrintImagePlacementPt(baseConfig({ margins: "narrow" }));
     expect(p.width).toBeGreaterThan(0);
     expect(p.height).toBeGreaterThan(0);
     expect(p.x + p.width).toBeLessThanOrEqual(LETTER_LANDSCAPE_PT.width + 0.01);
@@ -72,7 +58,7 @@ describe("Golden PDF placement (matches browser print zoom)", () => {
   });
 
   it("none margin fills letter edge-to-edge", () => {
-    const p = goldenPdfPlacement(baseConfig({ margins: "none" }));
+    const p = getPrintImagePlacementPt(baseConfig({ margins: "none" }));
     expect(p.x).toBeCloseTo(0, 5);
     expect(p.y).toBeCloseTo(0, 5);
     expect(p.width).toBeCloseTo(LETTER_LANDSCAPE_PT.width, 5);
@@ -80,11 +66,21 @@ describe("Golden PDF placement (matches browser print zoom)", () => {
   });
 
   it("wide margin leaves larger inset than narrow", () => {
-    const narrow = goldenPdfPlacement(baseConfig({ margins: "narrow" }));
-    const wide = goldenPdfPlacement(baseConfig({ margins: "wide" }));
+    const narrow = getPrintImagePlacementPt(baseConfig({ margins: "narrow" }));
+    const wide = getPrintImagePlacementPt(baseConfig({ margins: "wide" }));
     expect(wide.x).toBeGreaterThan(narrow.x);
     expect(wide.width).toBeLessThan(narrow.width);
     expect(getPrintZoom(baseConfig({ margins: "wide" }))).toBe(MARGIN_ZOOM.wide);
+  });
+
+  it("preserves the landscape-letter aspect ratio for every margin setting", () => {
+    for (const margins of ["none", "narrow", "normal", "wide"] as const) {
+      const p = getPrintImagePlacementPt(baseConfig({ margins }));
+      expect(p.width / p.height).toBeCloseTo(
+        LETTER_LANDSCAPE_PT.width / LETTER_LANDSCAPE_PT.height,
+        8,
+      );
+    }
   });
 });
 

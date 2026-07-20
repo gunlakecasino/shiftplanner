@@ -16,6 +16,11 @@ export type GoldenPrintSession = {
   printFrame?: HTMLIFrameElement | null;
 };
 
+export type GoldenRasterPrintPage = {
+  dataUrl: string;
+  format: "PNG" | "JPEG";
+};
+
 const STYLE_PRINT_ID = "__pcc-print-override";
 const STYLE_EXPORT_ID = "__pcc-export-override";
 const STYLE_GOLDEN_BUNDLE_ID = "__pcc-golden-print-bundle";
@@ -149,8 +154,9 @@ function applyGoldenArtboardContract(
 function buildIframePrintOverrides(config: PrintConfig): string {
   const marginValue = MARGIN_VALUES[config.margins];
   const zoomValue = MARGIN_ZOOM[config.margins];
+  const scaledHeight = GOLDEN_HEIGHT_PX * zoomValue;
   return `
-    @page { size: 11in 8.5in landscape; margin: ${marginValue} !important; }
+    @page { size: letter landscape; margin: ${marginValue} !important; }
     html, body {
       margin: 0 !important;
       padding: 0 !important;
@@ -167,10 +173,10 @@ function buildIframePrintOverrides(config: PrintConfig): string {
       background: #ffffff !important;
     }
     .print-page-wrapper {
-      display: flex !important;
-      justify-content: center !important;
-      align-items: flex-start !important;
+      display: block !important;
+      position: relative !important;
       width: 100% !important;
+      height: ${scaledHeight}px !important;
       max-width: 100% !important;
       margin: 0 !important;
       padding: 0;
@@ -180,10 +186,11 @@ function buildIframePrintOverrides(config: PrintConfig): string {
       break-inside: avoid;
     }
     .print-page-wrapper > .print-artboard {
-      flex-shrink: 0 !important;
       width: ${GOLDEN_WIDTH_PX}px !important;
-      margin: 0 !important;
+      margin: 0 auto !important;
       contain: none !important;
+      transform: scale(${zoomValue}) !important;
+      transform-origin: top center !important;
       page-break-after: auto !important;
       break-after: auto !important;
     }
@@ -202,9 +209,8 @@ function buildIframePrintOverrides(config: PrintConfig): string {
         height: auto !important;
       }
       .print-page-wrapper {
-        display: flex !important;
-        justify-content: center !important;
-        align-items: flex-start !important;
+        display: block !important;
+        position: relative !important;
         width: 100% !important;
         max-width: 100% !important;
         page-break-after: always !important;
@@ -216,10 +222,12 @@ function buildIframePrintOverrides(config: PrintConfig): string {
         break-after: auto !important;
       }
       .print-page-wrapper > .print-artboard {
-        flex-shrink: 0 !important;
         width: ${GOLDEN_WIDTH_PX}px !important;
-        margin: 0 !important;
-        zoom: ${zoomValue} !important;
+        margin: 0 auto !important;
+        zoom: 1 !important;
+        transform: scale(${zoomValue}) !important;
+        transform-origin: top center !important;
+        contain: none !important;
       }
     }
   `;
@@ -257,7 +265,7 @@ function injectSessionStyles(config: PrintConfig, mode: GoldenPrintSessionMode):
       : "";
 
   style.textContent = `
-    @page { size: 11in 8.5in landscape; margin: ${marginValue} !important; }
+    @page { size: letter landscape; margin: ${marginValue} !important; }
     ${zoomRule}
     ${exportRasterChrome}
     @media print {
@@ -304,14 +312,161 @@ function buildPrintIframe(): HTMLIFrameElement {
     "border:0",
     "margin:0",
     "padding:0",
-    "opacity:0",
-    "visibility:hidden",
+    "opacity:1",
+    "visibility:visible",
     "pointer-events:none",
     "z-index:-1",
     "background:#ffffff",
   ].join(";");
   document.body.appendChild(iframe);
   return iframe;
+}
+
+function escapeAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Mount already-rasterized sheets for browser print. The print DOM deliberately
+ * uses only physical dimensions, absolute positioning, and legacy page-break
+ * properties so Safari/iPadOS and older Microsoft print engines do not need to
+ * reproduce the application's grid/flex layout.
+ */
+export async function mountGoldenRasterPrintSession(
+  pages: GoldenPrintPage[],
+  rasterPages: GoldenRasterPrintPage[],
+  config: PrintConfig,
+): Promise<GoldenPrintSession> {
+  if (rasterPages.length !== pages.length) {
+    throw new Error(
+      `Raster print: expected ${pages.length} images, found ${rasterPages.length}`,
+    );
+  }
+
+  const marginIn = marginInches(config.margins);
+  const contentWidthIn = 11 - marginIn * 2;
+  const contentHeightIn = 8.5 - marginIn * 2;
+  const fit = Math.min(contentWidthIn / 11, contentHeightIn / 8.5);
+  const imageWidthIn = 11 * fit;
+  const imageHeightIn = 8.5 * fit;
+  const leftIn = (contentWidthIn - imageWidthIn) / 2;
+  const topIn = (contentHeightIn - imageHeightIn) / 2;
+
+  const style = document.createElement("style");
+  style.id = STYLE_PRINT_ID;
+  style.textContent = `
+    @page { size: letter landscape; margin: ${marginIn}in; }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    .sb-raster-print-container {
+      display: block !important;
+      width: ${contentWidthIn}in !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+    }
+    .sb-raster-print-page {
+      position: relative !important;
+      display: block !important;
+      width: ${contentWidthIn}in !important;
+      height: ${contentHeightIn}in !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      background: #ffffff !important;
+      page-break-inside: avoid !important;
+      page-break-after: always !important;
+      break-inside: avoid-page !important;
+      break-after: page !important;
+    }
+    .sb-raster-print-page:last-child {
+      page-break-after: auto !important;
+      break-after: auto !important;
+    }
+    .sb-raster-print-page > img {
+      position: absolute !important;
+      display: block !important;
+      left: ${leftIn}in !important;
+      top: ${topIn}in !important;
+      width: ${imageWidthIn}in !important;
+      height: ${imageHeightIn}in !important;
+      max-width: none !important;
+      border: 0 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  `;
+
+  const container = document.createElement("div");
+  container.className = "sb-raster-print-container";
+  container.innerHTML = rasterPages
+    .map(
+      (page, index) =>
+        `<div class="sb-raster-print-page"><img src="${escapeAttribute(page.dataUrl)}" alt="Graves zone sheet ${index + 1}" /></div>`,
+    )
+    .join("");
+
+  const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
+  Array.from(document.body.children).forEach((child) => {
+    const el = child as HTMLElement;
+    if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
+    hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
+    el.style.display = "none";
+  });
+  document.head.appendChild(style);
+  document.body.appendChild(container);
+
+  const images = Array.from(container.querySelectorAll("img"));
+  const restoreBodyChildren = () => {
+    hiddenBodyChildren.forEach(({ el, prevDisplay }) => {
+      el.style.display = prevDisplay;
+    });
+  };
+  try {
+    await Promise.all(
+      images.map(async (img) => {
+        if (img.complete && img.naturalWidth > 0) return;
+        if (typeof img.decode === "function") {
+          await img.decode();
+          return;
+        }
+        await new Promise<void>((resolve, reject) => {
+          img.addEventListener("load", () => resolve(), { once: true });
+          img.addEventListener(
+            "error",
+            () => reject(new Error("Raster print image failed to load")),
+            { once: true },
+          );
+        });
+      }),
+    );
+    await waitForGoldenRenderSettled();
+  } catch (error) {
+    container.remove();
+    style.remove();
+    restoreBodyChildren();
+    throw error;
+  }
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    container.remove();
+    style.remove();
+    restoreBodyChildren();
+  };
+
+  return { container, pages, cleanup, printFrame: null };
 }
 
 /**
@@ -443,7 +598,7 @@ export async function mountGoldenPrintSession(
  * Cleanup is deferred until afterprint.
  */
 export function runBrowserPrint(session: GoldenPrintSession): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let finished = false;
     const finish = () => {
       if (finished) return;
@@ -460,8 +615,14 @@ export function runBrowserPrint(session: GoldenPrintSession): Promise<void> {
 
     document.body.classList.remove("sb-print-export-busy");
 
-    printWindow.focus();
-    printWindow.print();
+    try {
+      printWindow.focus();
+      printWindow.print();
+    } catch (error) {
+      window.clearTimeout(fallbackTimer);
+      session.cleanup();
+      reject(error);
+    }
   });
 }
 
@@ -499,5 +660,26 @@ export function getPrintContentBoxPt(config: PrintConfig): {
     height: letterH - 2 * marginPt,
     marginX: marginPt,
     marginY: marginPt,
+  };
+}
+
+/** Fit an undistorted landscape-letter sheet inside the selected page margins. */
+export function getPrintImagePlacementPt(config: PrintConfig): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  const letterW = 792;
+  const letterH = 612;
+  const { width: boxW, height: boxH, marginX, marginY } = getPrintContentBoxPt(config);
+  const fit = Math.min(boxW / letterW, boxH / letterH);
+  const width = letterW * fit;
+  const height = letterH * fit;
+  return {
+    x: marginX + (boxW - width) / 2,
+    y: marginY + (boxH - height) / 2,
+    width,
+    height,
   };
 }

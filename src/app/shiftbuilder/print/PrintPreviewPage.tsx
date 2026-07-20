@@ -26,6 +26,10 @@ import {
   type OfficialDeploymentLayout,
 } from "./deploymentPrintLayout";
 import "./printPreview.css";
+import {
+  OfficialGravesDeploymentPage,
+  OfficialGravesTasksPage,
+} from "./OfficialGravesPrintPages";
 
 /** Visual row 1: Z1 | Z3 | Z4 | Z5 | Z9 — content-sized, pinned under header. */
 const ZONE_PRINT_ROW_1 = ZONE_VISUAL_ORDER.slice(0, 5);
@@ -196,6 +200,24 @@ export function PrintPreviewPage({
           : officialLayout.auxFlexGrow;
     return { flexGrow: grow, flexBasis: 0, flexShrink: 1 };
   };
+
+  if (!isPlanning) {
+    const sharedProps = {
+      snapshot,
+      weekDayDefs,
+      activeBreakGroup,
+      printVariant,
+      includeShiftNotes,
+      planningBlankSlate,
+      printedAt,
+      includeTimestamp,
+    };
+    return view === "breaks" ? (
+      <OfficialGravesTasksPage {...sharedProps} />
+    ) : (
+      <OfficialGravesDeploymentPage {...sharedProps} />
+    );
+  }
 
   if (view === "breaks") {
     const overlapRows = buildOverlapRows(snapshot);

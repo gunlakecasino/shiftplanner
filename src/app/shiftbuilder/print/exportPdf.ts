@@ -4,8 +4,7 @@ import type { GoldenPrintPage } from "./assemblePages";
 import { goldenRasterScale, prepareExportSessionForRaster } from "./rasterPrep";
 import { rasterizeGoldenArtboardElement } from "./goldenExportDocument";
 import {
-  getPrintContentBoxPt,
-  getPrintZoom,
+  getPrintImagePlacementPt,
   mountGoldenPrintSession,
   type GoldenPrintSession,
   waitForGoldenRenderSettled,
@@ -20,34 +19,40 @@ export type ExportProgress = {
 
 export type GoldenRasterPage = { dataUrl: string; format: "PNG" | "JPEG" };
 
-/** Match browser print: margin inset + uniform zoom on the full Golden page. */
+/** Match browser print: fit the full Golden page inside the selected margins. */
 export function getGoldenPdfPlacement(config: PrintConfig): {
   x: number;
   y: number;
   width: number;
   height: number;
 } {
-  const zoom = getPrintZoom(config);
-  const { width: boxW, height: boxH, marginX, marginY } = getPrintContentBoxPt(config);
-  const imgW = boxW * zoom;
-  const imgH = boxH * zoom;
-  return {
-    x: marginX + (boxW - imgW) / 2,
-    y: marginY + (boxH - imgH) / 2,
-    width: imgW,
-    height: imgH,
-  };
+  return getPrintImagePlacementPt(config);
 }
 
 export function triggerPdfDownload(blob: Blob, filename: string): void {
+  const legacyNavigator = navigator as Navigator & {
+    msSaveOrOpenBlob?: (data: Blob, defaultName?: string) => boolean;
+  };
+  if (typeof legacyNavigator.msSaveOrOpenBlob === "function") {
+    legacyNavigator.msSaveOrOpenBlob(blob, filename);
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.rel = "noopener";
+  if (typeof a.download === "string") {
+    a.download = filename;
+  } else {
+    a.setAttribute("target", "_blank");
+  }
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // WebKit resolves blob URLs after the synthetic click returns. Immediate
+  // revocation produces blank/corrupt documents in Safari and iPadOS.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function dayFilename(
@@ -68,7 +73,13 @@ export async function buildPdfBlobFromRasterPages(
 ): Promise<Blob> {
   const placement = getGoldenPdfPlacement(config);
   const { default: jsPDF } = await import("jspdf");
-  const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "pt",
+    format: "letter",
+    compress: true,
+    precision: 16,
+  });
   rasterPages.forEach((page, idx) => {
     if (idx > 0) pdf.addPage();
     pdf.addImage(

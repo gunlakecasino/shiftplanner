@@ -34,13 +34,13 @@ function sheetSuffix(printVariant: PrintVariant): string {
 }
 
 function deployLabel(short: string, printVariant: PrintVariant): string {
-  return `${short} Deploy${sheetSuffix(printVariant)}`;
+  return `${short} Assignments${sheetSuffix(printVariant)}`;
 }
 
 function breaksLabel(short: string, printVariant: PrintVariant): string {
   return printVariant === "planning"
     ? `${short} Aux + Overlaps (Planning)`
-    : `${short} Breaks`;
+    : `${short} Tasks + Overlaps`;
 }
 
 /** Paired deploy + breaks per night (only supported print order). */

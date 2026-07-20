@@ -15,7 +15,7 @@ import {
 import { generatePrintPreviewGoldenPages } from "../print/printPreviewPipeline";
 import type { LiveBoardOverlay } from "../print/mergePrintSnapshot";
 import {
-  mountGoldenPrintSession,
+  mountGoldenRasterPrintSession,
   runBrowserPrint,
 } from "../print/printSession";
 import type {
@@ -311,8 +311,8 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
 
         if (exportMode) {
           setPrintProgress({ current: 0, total: goldenPages.length, label: "Rendering Golden sheets…" });
-          // html-to-image + jsPDF are export-only and among the largest client
-          // dependencies. Keep them out of the operational board startup path.
+          // html-to-image + jsPDF are print/export-only and among the largest
+          // client dependencies. Keep them out of the board startup path.
           const { exportGoldenPdf } = await import("../print/exportPdf");
           const result = await exportGoldenPdf({
             pages: goldenPages,
@@ -329,9 +329,20 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
           );
           setIsPrintCenterOpen(false);
         } else {
+          setPrintProgress({ current: 0, total: goldenPages.length, label: "Rendering print-safe sheets…" });
+          const { rasterizeGoldenPrintPages } = await import("../print/exportPdf");
+          const rasterPages = await rasterizeGoldenPrintPages(
+            goldenPages,
+            config,
+            (p) => setPrintProgress(p),
+          );
           setPrintProgress({ current: totalPages, total: totalPages, label: "Sending to printer…" });
           saveLastPrintConfig(config);
-          const session = await mountGoldenPrintSession(goldenPages, config, "print");
+          const session = await mountGoldenRasterPrintSession(
+            goldenPages,
+            rasterPages,
+            config,
+          );
           await runBrowserPrint(session);
           setIsPrintCenterOpen(false);
         }

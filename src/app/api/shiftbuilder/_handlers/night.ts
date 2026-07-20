@@ -61,7 +61,9 @@ export async function handleNightLayerGet(
 
     // Fresh every request — tasks/notes/breaks must match the board after mutations.
     // (Previous unstable_cache(45s) could re-show pre-edit tasks after refresh/poll.)
-    const payload = await buildNightSecondaryBundle(dateParam);
+    const payload = await buildNightSecondaryBundle(dateParam, {
+      includeSideTasks: session.actor.permissions.canAccessTasks === true,
+    });
     return NextResponse.json(payload, {
       headers: { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
     });

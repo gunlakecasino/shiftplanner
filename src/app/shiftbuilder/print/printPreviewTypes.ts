@@ -1,6 +1,7 @@
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
 
 export type PrintPreviewView = "deployment" | "breaks";
 
@@ -69,6 +70,8 @@ export type PrintDaySnapshot = {
   nextDayColor: string;
   breakCounts: Record<1 | 2 | 3 | 4, number>;
   notes?: string;
+  /** Approved Graves work due for this exact shift date. */
+  sideTasks?: PrintSideTask[];
   nightStatus?: "published" | "draft";
 };
 

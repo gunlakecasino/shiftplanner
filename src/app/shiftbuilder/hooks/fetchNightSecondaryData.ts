@@ -3,6 +3,7 @@ import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { normalizeTaskTextStyle } from "@/lib/shiftbuilder/taskTextStyle";
 import { zoneHistoryMapFromRecord, type ZoneHistoryRecord } from "@/lib/shiftbuilder/zoneHistory";
+import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
 
 type NightSecondaryApiPayload = {
   notes?: string;
@@ -12,6 +13,7 @@ type NightSecondaryApiPayload = {
   calledOffIds?: string[];
   rawBreakRows?: unknown[];
   recentZoneHistory?: ZoneHistoryRecord;
+  sideTasks?: PrintSideTask[];
 };
 
 function mapNightSlotTaskRow(row: Record<string, unknown>): NightSlotTask {
@@ -57,6 +59,7 @@ function hydrateSecondaryPayload(data: NightSecondaryApiPayload) {
     recentZoneHistory: zoneHistoryMapFromRecord(data.recentZoneHistory),
     calledOffIds: new Set<string>(data.calledOffIds ?? []),
     rawBreakRows: mappedBreaks,
+    sideTasks: data.sideTasks ?? [],
   };
 }
 
@@ -73,6 +76,7 @@ function emptyNightSecondaryResult(accessBlocked = false) {
     recentZoneHistory: null,
     calledOffIds: new Set<string>(),
     rawBreakRows: [] as ReturnType<typeof mapBreakAssignmentRow>[],
+    sideTasks: [] as PrintSideTask[],
     accessBlocked,
   };
 }

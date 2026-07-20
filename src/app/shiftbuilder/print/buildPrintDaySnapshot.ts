@@ -116,6 +116,7 @@ export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Prom
     nextDayColor: SHIFT_DAY_COLORS[(dayIndex + 1) % 7],
     breakCounts: computeBreakCounts(assignments),
     notes: secondary.notes ?? "",
+    sideTasks: secondary.sideTasks ?? [],
     nightStatus,
   };
 }

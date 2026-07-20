@@ -174,8 +174,8 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
       <button
         type="button"
         onClick={toggleDeployBreaks}
-        title={bothSheetsOn ? "Clear deploy + breaks" : "Select deploy + breaks"}
-        aria-label={`${def.short} ${def.dateNum}: ${bothSheetsOn ? "clear" : "select"} deploy and breaks`}
+        title={bothSheetsOn ? "Clear assignments + tasks" : "Select assignments + tasks"}
+        aria-label={`${def.short} ${def.dateNum}: ${bothSheetsOn ? "clear" : "select"} assignments and tasks`}
         className="sb-interactive pcc-day-header"
         style={{
           width: "100%",
@@ -230,8 +230,8 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
       {/* Chips */}
       <div style={{ padding: "5px 5px", display: "flex", flexDirection: "column", gap: 3 }}>
         <Chip
-          label="Deploy"
-          title="Deployment sheet"
+          label="Assignments"
+          title="Graves zone assignments sheet"
           active={config.printDeploy}
           activeColor="rgba(52,199,89,0.9)"
           activeBg={isDark ? "rgba(52,199,89,0.15)" : "rgba(52,199,89,0.1)"}
@@ -240,8 +240,8 @@ const DayCard = React.memo(function DayCard({ def, config, onChange, isDark }: D
           onClick={() => onChange({ ...config, printDeploy: !config.printDeploy })}
         />
         <Chip
-          label="Breaks"
-          title="Break sheet"
+          label="Tasks"
+          title="Tasks and overlaps sheet"
           active={config.printBreaks}
           activeColor="rgba(255,159,10,0.9)"
           activeBg={isDark ? "rgba(255,159,10,0.15)" : "rgba(255,159,10,0.1)"}
@@ -739,13 +739,13 @@ export function PrintCommandCenter({
               {printVariant === "planning" && (
                 <SummaryPill label="Planning worksheet" color="#8E8E93" isDark={isDark} />
               )}
-              {deployCount > 0 && <SummaryPill label={`${deployCount} deploy`} color="rgba(52,199,89,0.9)" isDark={isDark} />}
+              {deployCount > 0 && <SummaryPill label={`${deployCount} assignments`} color="rgba(52,199,89,0.9)" isDark={isDark} />}
               {breaksCount > 0 && (
                 <SummaryPill
                   label={
                     printVariant === "planning"
                       ? `${breaksCount} aux + overlaps`
-                      : `${breaksCount} breaks`
+                      : `${breaksCount} tasks + overlaps`
                   }
                   color="rgba(255,159,10,0.9)"
                   isDark={isDark}
@@ -767,13 +767,13 @@ export function PrintCommandCenter({
               <SectionLabel text="NIGHTS" isDark={isDark} />
               <div style={{ flex: 1 }} />
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <BulkBtn label="All Deploy" active={allDeploy} color="rgba(52,199,89,0.85)" onClick={() => bulkToggle("printDeploy")} isDark={isDark} />
-                <BulkBtn label="All Breaks" active={allBreaks} color="rgba(255,159,10,0.85)" onClick={() => bulkToggle("printBreaks")} isDark={isDark} />
+                <BulkBtn label="All Assignments" active={allDeploy} color="rgba(52,199,89,0.85)" onClick={() => bulkToggle("printDeploy")} isDark={isDark} />
+                <BulkBtn label="All Tasks" active={allBreaks} color="rgba(255,159,10,0.85)" onClick={() => bulkToggle("printBreaks")} isDark={isDark} />
                 <BulkBtn label="Clear" active={false} color="#FF3B30" onClick={bulkClear} isDark={isDark} />
               </div>
             </div>
             <div style={{ fontSize: 10, color: ts, marginBottom: 8, opacity: 0.85 }}>
-              Header toggles deploy + breaks · chips toggle individual sheets
+              Header toggles assignments + tasks · chips toggle individual sheets
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {DAY_DEFS.map((def, i) => (
@@ -830,8 +830,8 @@ export function PrintCommandCenter({
                   <SectionLabel text="SHEET TYPE" isDark={isDark} />
                   <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                     {([
-                      { v: "planning" as const, l: "Planning Worksheet", d: "Muted review sheet · overlaps-only breaks" },
-                      { v: "official" as const, l: "Floor Sheet", d: "Deploy + break waves for the floor" },
+                      { v: "planning" as const, l: "Planning Worksheet", d: "Muted review sheet · auxiliary, overlaps, and notes" },
+                      { v: "official" as const, l: "Floor Sheet", d: "Assignments, side tasks, notes, and overlaps" },
                     ]).map(({ v, l, d }) => (
                       <button
                         key={v}
@@ -1204,8 +1204,8 @@ function PackagePrintCommandCenterShell({
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nights</span>
             <div className="flex items-center gap-1">
               {([
-                ["printDeploy", "deploy"],
-                ["printBreaks", "breaks"],
+                ["printDeploy", "assignments"],
+                ["printBreaks", "tasks"],
               ] as const).map(([key, label]) => (
                 <button
                   key={key}
@@ -1277,8 +1277,8 @@ function PackagePrintCommandCenterShell({
                   </button>
                   <div className="border-t" style={{ borderColor: (ds.printDeploy || ds.printBreaks) ? `${day.color}30` : "#f3f4f6" }}>
                     {([
-                      ["printDeploy", "deploy"],
-                      ["printBreaks", "breaks"],
+                      ["printDeploy", "assignments"],
+                      ["printBreaks", "tasks"],
                     ] as const).map(([key, label], ki) => (
                       <button
                         key={key}
@@ -1361,7 +1361,7 @@ function PackagePrintCommandCenterShell({
               <span className="text-gray-400 italic text-[11px]">No sheets selected</span>
             )}
             <span className="hidden sm:inline">
-              {deployCount} deploy · {breaksCount} breaks
+              {deployCount} assignments · {breaksCount} tasks
             </span>
             <span className="hidden md:inline">
               Print <kbd className="bg-white border border-gray-200 text-gray-500 px-1 py-px rounded text-[9px] font-mono shadow-sm">⌘↵</kbd>

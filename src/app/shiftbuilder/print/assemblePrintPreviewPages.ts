@@ -66,7 +66,7 @@ export async function capturePrintPreviewPages(args: {
     const entry: { deployHTML?: string; breaksHTML?: string } = {};
 
     if (dayConf.printDeploy) {
-      onProgress?.(`Rendering ${def.name} deploy…`);
+      onProgress?.(`Rendering ${def.name} assignments…`);
       entry.deployHTML = renderPrintPreviewHtml({
         view: "deployment",
         snapshot,
@@ -79,7 +79,7 @@ export async function capturePrintPreviewPages(args: {
       });
     }
     if (dayConf.printBreaks) {
-      onProgress?.(`Rendering ${def.name} breaks…`);
+      onProgress?.(`Rendering ${def.name} tasks + overlaps…`);
       entry.breaksHTML = renderPrintPreviewHtml({
         view: "breaks",
         snapshot,
