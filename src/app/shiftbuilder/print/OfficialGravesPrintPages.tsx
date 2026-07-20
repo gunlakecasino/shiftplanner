@@ -104,10 +104,12 @@ function GravesZoneSheetHeader({
           );
         })}
       </div>
-      <div className="sb-approved-as-of">
-        <span>AS OF</span>
-        <strong>{includeTimestamp && printedAt ? formatAsOf(printedAt).replace(/^AS OF\s+/, "") : ""}</strong>
-      </div>
+      {includeTimestamp && printedAt ? (
+        <div className="sb-approved-as-of">
+          <span>AS OF</span>
+          <strong>{formatAsOf(printedAt).replace(/^AS OF\s+/, "")}</strong>
+        </div>
+      ) : null}
     </header>
   );
 }
