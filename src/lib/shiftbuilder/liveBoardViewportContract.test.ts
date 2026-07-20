@@ -3,6 +3,18 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const globalsCss = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
+const shiftBuilderClient = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/ShiftBuilderClient.tsx"),
+  "utf8",
+);
+const shiftBuilderBoard = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/components/ShiftBuilderBoard.tsx"),
+  "utf8",
+);
+const floatingNav = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/components/FloatingNav.tsx"),
+  "utf8",
+);
 
 describe("live board short-landscape viewport contract", () => {
   const compactStart = globalsCss.indexOf("/* Short landscape boards must fit");
@@ -27,5 +39,14 @@ describe("live board short-landscape viewport contract", () => {
 
     expect(landscapeStart).toBeGreaterThan(-1);
     expect(landscapeCss).toContain("overflow-y: auto !important");
+  });
+
+  it("allows desktop wheel input to reach the board scroll owner", () => {
+    expect(shiftBuilderClient).not.toContain('addEventListener("wheel"');
+  });
+
+  it("temporarily hides the rotation floater and the header Run Day action", () => {
+    expect(shiftBuilderBoard).not.toContain("<RotationHealthFloater");
+    expect(floatingNav).not.toContain("sb-run-day-btn");
   });
 });

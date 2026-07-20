@@ -47,7 +47,6 @@ import TasksPad from "./TasksPad";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { shiftBuilderVersionLabel } from "../version";
 import { WeekHealthTracker } from "./WeekHealthTracker";
-import { RotationHealthFloater } from "./RotationHealthFloater";
 import { setOpsStatusBarVisible } from "./OpsStatusBar";
 import type { TmEntry } from "./MarkerPad";
 import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
@@ -383,22 +382,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   weekDailyHealths = {},
   weekHealthDayDefs,
   weekHealthLoading = false,
-  selectedDayDateKey: selectedDayDateKeyProp,
   onWeekHealthSelectDay,
   onWeekHealthDismiss,
-
-  canRunEngine,
-  canEditAssignments,
-  onRunXaiEngine,
-  onOptimizeNight,
-  onClearBoard,
-  engineRunning,
-  deepOptimizeRunning,
-  deepOptimizeTick,
-  onCancelDeepOptimize,
-  onApplyDraft,
-  onDiscardDraft,
-  showDraftStatusPill,
   draftGrokExplanation,
   draftBreakdownProp,
   draftGrokReasoningProp,
@@ -2176,32 +2161,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             onClose={() => onSlotClose?.()}
           />
         )}
-
-      {/* Rotation health — standalone orb above LIVE; hover for %. */}
-      {!isPrintPreview && (
-        <RotationHealthFloater
-          visible={!tabletOverlayOpen}
-          auxDefs={auxDefs}
-          assignments={displayAssignments}
-          fitBySlot={fitBySlot || {}}
-          isDraftMode={isDraftMode}
-          draftAssignments={draftAssignments}
-          placement="side-right-collapsed"
-          weekDailyHealths={weekDailyHealths}
-          selectedDayDateKey={selectedDayDateKeyProp ?? currentIso}
-          weekHealthLoading={weekHealthLoading}
-          weeklyRecentHistory={weeklyRecentHistory}
-          canRunEngine={canRunEngine}
-          canEditAssignments={canEditAssignments}
-          isCurrentNightLocked={isCurrentNightLocked}
-          onOptimizeNight={onOptimizeNight}
-          onClearBoard={onClearBoard}
-          engineRunning={engineRunning}
-          onApplyDraft={onApplyDraft}
-          onDiscardDraft={onDiscardDraft}
-          showDraftStatusPill={showDraftStatusPill}
-        />
-      )}
 
       {!hideSheetFooter ? (
         <div

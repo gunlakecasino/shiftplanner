@@ -33,7 +33,6 @@ import {
   BookOpen,
   Copy,
   Printer,
-  Zap,
   ClipboardList,
   ClipboardPlus,
   CalendarRange,
@@ -677,28 +676,6 @@ export default function FloatingNav(props: FloatingNavProps) {
 
         {/* RIGHT — actions + avatar + more */}
         <div className="sb-topbar-actions flex items-center gap-0.5 shrink-0">
-          {showEngineTools && onOptimizeNight && (
-            <button
-              type="button"
-              className="icon-btn sb-interactive sb-run-day-btn flex items-center gap-1.5 rounded-full px-3 py-1.5"
-              style={{
-                color: engineBusy ? "#888" : "#fff",
-                background: engineBusy ? "rgba(255,255,255,0.08)" : activeColor,
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.02em",
-                boxShadow: engineBusy ? undefined : hexShadow(activeColor),
-              }}
-              disabled={engineBusy}
-              onClick={onOptimizeNight}
-              title="Run day placements"
-              aria-label="Run day placements"
-            >
-              <Zap size={13} strokeWidth={2.4} fill="currentColor" />
-              <span className="hidden min-[860px]:inline">Run Day</span>
-            </button>
-          )}
-
           <button
             type="button"
             className="sb-topbar-notification-btn icon-btn sb-interactive flex items-center justify-center rounded-full"

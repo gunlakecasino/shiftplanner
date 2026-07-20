@@ -753,18 +753,8 @@ function AuthedShiftBuilder() {
       onSync: () => onViewportSyncRef.current?.(),
     });
 
-    const blockWheel = (e: WheelEvent) => {
-      e.preventDefault();
-    };
-
-    htmlEl.addEventListener("wheel", blockWheel, { passive: false });
-    bodyEl.addEventListener("wheel", blockWheel, { passive: false });
-
     return () => {
       teardownViewport();
-
-      htmlEl.removeEventListener("wheel", blockWheel as EventListener);
-      bodyEl.removeEventListener("wheel", blockWheel as EventListener);
 
       htmlEl.classList.remove("sb-shiftbuilder");
       bodyEl.classList.remove("sb-shiftbuilder");
