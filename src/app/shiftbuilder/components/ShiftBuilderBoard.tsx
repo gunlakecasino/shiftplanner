@@ -780,6 +780,63 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return () => document.body.classList.remove("sb-tablet-dock-open");
   }, [tabletOverlayOpen]);
 
+  // Keep the selected placement visible when an inspector opens or changes
+  // shape. In portrait the inspector is a bottom sheet, so centering within
+  // the remaining canvas prevents the selected card from being hidden behind
+  // it. Landscape uses the same path for short viewports and rotated devices.
+  React.useEffect(() => {
+    if (isPrintPreview || !useTabletDock || !selectedSlotKey) return;
+
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        const canvas = document.querySelector<HTMLElement>(".sb-builder-canvas");
+        if (!canvas) return;
+
+        const rrMatch = selectedSlotKey.match(/^[MW]RR(\d+)$/);
+        const boardSlotKey = rrMatch ? `RR${rrMatch[1]}` : selectedSlotKey;
+        const safeSlotKey =
+          typeof CSS !== "undefined" && typeof CSS.escape === "function"
+            ? CSS.escape(boardSlotKey)
+            : boardSlotKey.replace(/["\\]/g, "\\$&");
+        const host = canvas.querySelector<HTMLElement>(
+          `[data-slot-key="${safeSlotKey}"]`,
+        );
+        if (!host) return;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const topbarBottom =
+          document
+            .querySelector<HTMLElement>(".sb-sheetbuilder-topbar")
+            ?.getBoundingClientRect().bottom ?? canvasRect.top;
+        const dockRect = document
+          .querySelector<HTMLElement>(".placement-dock")
+          ?.getBoundingClientRect();
+        const portrait = window.matchMedia("(orientation: portrait)").matches;
+        const visibleTop = Math.max(canvasRect.top, topbarBottom) + 16;
+        const visibleBottom =
+          (portrait && dockRect
+            ? Math.min(canvasRect.bottom, dockRect.top)
+            : canvasRect.bottom) - 16;
+        const hostRect = host.getBoundingClientRect();
+
+        if (hostRect.top < visibleTop || hostRect.bottom > visibleBottom) {
+          const hostCenter = (hostRect.top + hostRect.bottom) / 2;
+          const visibleCenter = (visibleTop + visibleBottom) / 2;
+          canvas.scrollTo({
+            top: Math.max(0, canvas.scrollTop + hostCenter - visibleCenter),
+            behavior: reducedMotion ? "auto" : "smooth",
+          });
+        }
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      if (secondFrame) cancelAnimationFrame(secondFrame);
+    };
+  }, [isPrintPreview, useTabletDock, selectedSlotKey, reducedMotion]);
+
   const renderTaskTextEditPad = () => {
     if (isPrintPreview || !activeTaskEditPad) return null;
     const slotTaskList = ((selectedTasks as Record<string, NightSlotTask[]>)?.[activeTaskEditPad.slotKey] ?? []).filter(

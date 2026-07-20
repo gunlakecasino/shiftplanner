@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { WorkItem, WorkItemStatus } from "@/lib/tasks/types";
 import type { RosterMember } from "../hooks/useProjectsData";
@@ -115,26 +115,24 @@ export function TaskListView({
   canComplete: boolean;
   onSetStatus: (taskId: string, status: WorkItemStatus) => void;
 }) {
-  // Re-evaluate the grave-date boundary while a Projects tab remains open.
-  // A stable React Query array reference must not freeze Due Tonight grouping.
-  const graveDateKey = tonightDateISO();
-  const groups = useMemo(() => groupTasks(tasks), [tasks, graveDateKey]);
+  // Re-evaluate the grave-date boundary on every parent clock tick. Grouping is
+  // linear and cheap, and avoiding memoization prevents a stable query array
+  // from freezing Due Tonight across the 8:30 AM operational boundary.
+  const groups = groupTasks(tasks);
 
   // --- Bulk select (state lives here, no higher) ---------------------------
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const { data: projects = [] } = useProjects();
   const updateTask = useUpdateTask();
 
-  // Drop selections that fell out of the current task list (filter change,
-  // realtime refetch) so the bar never counts invisible rows.
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const visible = new Set(tasks.map((t) => t.id));
-      const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [tasks]);
+  // Derive visible selection instead of synchronously setting state from an
+  // effect. Filter/realtime changes immediately remove hidden ids from counts
+  // and bulk actions without causing an extra render cascade.
+  const visibleSelectedIds = useMemo(() => {
+    if (selectedIds.size === 0) return selectedIds;
+    const visible = new Set(tasks.map((task) => task.id));
+    return new Set(Array.from(selectedIds).filter((id) => visible.has(id)));
+  }, [selectedIds, tasks]);
 
   const toggleSelect = useCallback((taskId: string) => {
     setSelectedIds((prev) => {
@@ -148,12 +146,12 @@ export function TaskListView({
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const bulkComplete = () => {
-    selectedIds.forEach((id) => onSetStatus(id, "complete"));
+    visibleSelectedIds.forEach((id) => onSetStatus(id, "complete"));
     clearSelection();
   };
 
   const bulkPatch = (patch: { projectId: string | null } | { assigneeTmId: string | null }) => {
-    selectedIds.forEach((taskId) => updateTask.mutate({ taskId, patch }));
+    visibleSelectedIds.forEach((taskId) => updateTask.mutate({ taskId, patch }));
     clearSelection();
   };
 
@@ -177,7 +175,7 @@ export function TaskListView({
     canComplete,
     onSetStatus,
     selectable: canComplete,
-    selectedIds,
+    selectedIds: visibleSelectedIds,
     onToggleSelect: toggleSelect,
   };
 
@@ -191,15 +189,15 @@ export function TaskListView({
       <Section label="No due date" tasks={groups.noDue} {...sectionProps} />
       <Section label="Done" tasks={groups.done} accent="var(--sb-projects-done)" {...sectionProps} />
 
-      {canComplete && selectedIds.size > 0 && (
+      {canComplete && visibleSelectedIds.size > 0 && (
         <div className="sb-projects-bulkbar" role="toolbar" aria-label="Bulk task actions">
-          <span className="sb-projects-bulkbar-count tabular-nums">{selectedIds.size} selected</span>
-          <button type="button" className="sb-projects-bulkbar-btn" onClick={bulkComplete}>
+          <span className="sb-projects-bulkbar-count tabular-nums">{visibleSelectedIds.size} selected</span>
+          <button type="button" className="sb-projects-bulkbar-btn sb-touch-target" onClick={bulkComplete}>
             Complete
           </button>
           <select
             aria-label="Move selected tasks to project"
-            className="sb-projects-bulkbar-select"
+            className="sb-projects-bulkbar-select sb-touch-target"
             value=""
             onChange={(e) => {
               if (!e.target.value) return;
@@ -218,7 +216,7 @@ export function TaskListView({
           </select>
           <select
             aria-label="Assign selected tasks to team member"
-            className="sb-projects-bulkbar-select"
+            className="sb-projects-bulkbar-select sb-touch-target"
             value=""
             onChange={(e) => {
               if (!e.target.value) return;
@@ -235,7 +233,7 @@ export function TaskListView({
               </option>
             ))}
           </select>
-          <button type="button" className="sb-projects-bulkbar-btn" onClick={clearSelection}>
+          <button type="button" className="sb-projects-bulkbar-btn sb-touch-target" onClick={clearSelection}>
             Clear
           </button>
         </div>

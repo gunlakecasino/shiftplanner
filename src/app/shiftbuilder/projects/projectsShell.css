@@ -94,6 +94,55 @@
   border-color: var(--sb-projects-accent);
 }
 
+.sb-projects-checkbox-hit {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+}
+
+.sb-projects-checkbox-hit:focus-visible {
+  outline: 2px solid var(--sb-projects-accent);
+  outline-offset: 1px;
+}
+
+.sb-projects-nav-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--sb-settings-border-paper);
+  border-radius: 0.8rem;
+  background: var(--ios-background-secondary);
+  color: var(--ios-label);
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.sb-projects-sidebar {
+  display: none;
+  min-height: 0;
+  max-height: min(34vh, 320px);
+  padding: 0.5rem;
+  overflow: hidden auto;
+  border: 1px solid var(--sb-settings-border-paper);
+  border-radius: 0.85rem;
+  background: var(--ios-background-secondary);
+}
+
+.sb-projects-sidebar[data-open="true"] {
+  display: block;
+}
+
 /* Bulk action bar — sticks to the viewport bottom while the list card is in view. */
 .sb-projects-bulkbar {
   position: sticky;
@@ -150,6 +199,50 @@
     width: 26px;
     height: 26px;
     min-width: 26px;
+  }
+}
+
+@media (orientation: landscape) and (min-width: 1024px) {
+  .sb-projects-nav-toggle {
+    display: none;
+  }
+
+  .sb-projects-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .sb-projects-sidebar,
+  .sb-projects-sidebar[data-open="true"] {
+    position: sticky;
+    top: 1.5rem;
+    display: block;
+    height: calc(100vh - 220px);
+    max-height: none;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+}
+
+@media (pointer: coarse) {
+  .sb-projects-shell button,
+  .sb-projects-shell input,
+  .sb-projects-shell select {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .sb-projects-bulkbar-btn,
+  .sb-projects-bulkbar-select {
+    min-height: 44px;
+  }
+
+  .sb-projects-filterbar button,
+  .sb-projects-filterbar select,
+  .sb-projects-sidebar button,
+  .sb-projects-sidebar input {
+    min-height: 44px;
   }
 }
 

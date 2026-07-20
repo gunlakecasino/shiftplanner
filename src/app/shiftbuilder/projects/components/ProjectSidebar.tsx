@@ -40,7 +40,7 @@ export function ProjectSidebar({
       <button
         type="button"
         onClick={() => onSelectProject(null)}
-        className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors"
+        className="sb-touch-target flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors"
         style={{
           background: selectedProjectId === null ? "var(--sb-projects-accent-tint)" : "transparent",
           color: selectedProjectId === null ? "var(--sb-projects-accent)" : "var(--ios-label)",
@@ -58,7 +58,7 @@ export function ProjectSidebar({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="text-[var(--ios-label-tertiary)] hover:text-[var(--sb-projects-accent)]"
+            className="sb-touch-target flex items-center justify-center text-[var(--ios-label-tertiary)] hover:text-[var(--sb-projects-accent)]"
             title="New project"
           >
             <Plus size={14} strokeWidth={2.4} />
@@ -82,7 +82,7 @@ export function ProjectSidebar({
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             whileTap={premiumTap.whileTap}
-            className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors"
+            className="sb-touch-target flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors"
             style={{
               background: selectedProjectId === p.id ? "var(--sb-projects-accent-tint)" : "transparent",
               color: selectedProjectId === p.id ? "var(--sb-projects-accent)" : "var(--ios-label)",
@@ -116,7 +116,7 @@ export function ProjectSidebar({
             }}
             onBlur={submit}
             placeholder="Project name…"
-            className="h-8 flex-1 rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 text-[12.5px] outline-none focus:border-[var(--sb-projects-accent)]"
+            className="sb-touch-target h-8 flex-1 rounded-md border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-secondary)] px-2 text-[12.5px] outline-none focus:border-[var(--sb-projects-accent)]"
           />
         </div>
       )}

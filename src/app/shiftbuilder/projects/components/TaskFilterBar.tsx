@@ -58,7 +58,7 @@ export function TaskFilterBar({
   const selectedToolView = TOOL_VIEWS.some((item) => item.id === view) ? view : "";
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+    <div className="sb-projects-filterbar flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
       {isTaskView && (
         <div className="no-scrollbar flex w-full min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5 lg:w-auto">
           {PRIMARY_FILTERS.map((filter) => (
@@ -66,7 +66,7 @@ export function TaskFilterBar({
               key={filter.id}
               type="button"
               onClick={() => onSmartFilterChange(filter.id)}
-              className="relative shrink-0 rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors"
+              className="sb-touch-target relative shrink-0 rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors"
               style={{
                 background: smartFilter === filter.id ? "var(--sb-projects-accent)" : "var(--ios-gray-6)",
                 color: smartFilter === filter.id ? "white" : "var(--ios-label-secondary)",
@@ -89,7 +89,7 @@ export function TaskFilterBar({
             onChange={(event) => {
               if (event.target.value) onSmartFilterChange(event.target.value as SmartFilter);
             }}
-            className="h-[27px] shrink-0 rounded-full border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-primary)] px-2.5 text-[11.5px] font-medium text-[var(--ios-label-secondary)] outline-none"
+            className="sb-touch-target h-[27px] shrink-0 rounded-full border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-primary)] px-2.5 text-[11.5px] font-medium text-[var(--ios-label-secondary)] outline-none"
           >
             <option value="">Saved filters…</option>
             {SAVED_FILTERS.map((filter) => (
@@ -106,7 +106,7 @@ export function TaskFilterBar({
               key={id}
               type="button"
               onClick={() => onViewChange(id)}
-              className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors"
+              className="sb-touch-target flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors"
               style={{
                 background: view === id ? "var(--ios-background-primary)" : "transparent",
                 color: view === id ? "var(--ios-label)" : "var(--ios-label-tertiary)",
@@ -123,7 +123,7 @@ export function TaskFilterBar({
           onChange={(event) => {
             if (event.target.value) onViewChange(event.target.value as BoardView);
           }}
-          className="h-[29px] min-w-0 flex-1 rounded-lg border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-primary)] px-2 text-[11.5px] font-medium text-[var(--ios-label-secondary)] outline-none lg:w-[112px] lg:flex-none"
+          className="sb-touch-target h-[29px] min-w-0 flex-1 rounded-lg border border-[var(--sb-settings-border-paper)] bg-[var(--ios-background-primary)] px-2 text-[11.5px] font-medium text-[var(--ios-label-secondary)] outline-none lg:w-[112px] lg:flex-none"
         >
           <option value="">Tools…</option>
           {TOOL_VIEWS.map((item) => (

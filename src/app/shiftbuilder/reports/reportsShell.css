@@ -31,6 +31,16 @@
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
+.sb-reports-segments-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.sb-reports-segments-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .sb-reports-icon-btn:hover:not(:disabled) {
   color: var(--ios-label);
   background: var(--ios-gray-6);
@@ -51,6 +61,44 @@
 
 html.dark .sb-reports-stat-card:hover {
   box-shadow: 0 12px 32px -20px rgba(0, 0, 0, 0.55);
+}
+
+@media (orientation: portrait) {
+  .sb-reports-controlbar {
+    align-items: center;
+  }
+
+  .sb-reports-segments-scroll {
+    order: 1;
+    flex: 1 1 100%;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  .sb-reports-controlbar > span,
+  .sb-reports-control-spacer {
+    display: none !important;
+  }
+
+  .sb-reports-control-actions {
+    order: 2;
+    margin-left: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  .sb-reports-shell button,
+  .sb-reports-shell input,
+  .sb-reports-shell select {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .sb-reports-segment button,
+  .sb-reports-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

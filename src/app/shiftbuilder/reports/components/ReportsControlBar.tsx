@@ -50,44 +50,46 @@ export function ReportsControlBar({
   return (
     <div
       className={cn(
-        "flex flex-shrink-0 flex-wrap items-center gap-2.5 border-b border-[var(--sb-settings-border-paper)] px-4 py-3",
+        "sb-reports-controlbar flex flex-shrink-0 flex-wrap items-center gap-2.5 border-b border-[var(--sb-settings-border-paper)] px-4 py-3",
         compact && "px-0",
       )}
     >
-      <div className="sb-reports-segment flex overflow-hidden rounded-xl border border-[var(--sb-settings-border-paper)] text-[11px] font-semibold">
-        {VIEW_OPTS.map((v) => (
-          <button
-            key={v.value}
-            type="button"
-            onClick={() => onViewChange(v.value)}
-            className={cn(
-              "px-3 py-1.5 transition-colors",
-              reportView === v.value
-                ? "bg-[var(--ios-background-tertiary)] text-[var(--ios-label)]"
-                : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] hover:text-[var(--ios-label-secondary)]",
-            )}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
+      <div className="sb-reports-segments-scroll no-scrollbar flex min-w-0 items-center gap-2.5 overflow-x-auto">
+        <div className="sb-reports-segment flex shrink-0 overflow-hidden rounded-xl border border-[var(--sb-settings-border-paper)] text-[11px] font-semibold">
+          {VIEW_OPTS.map((v) => (
+            <button
+              key={v.value}
+              type="button"
+              onClick={() => onViewChange(v.value)}
+              className={cn(
+                "sb-touch-target px-3 py-1.5 transition-colors",
+                reportView === v.value
+                  ? "bg-[var(--ios-background-tertiary)] text-[var(--ios-label)]"
+                  : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] hover:text-[var(--ios-label-secondary)]",
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
 
-      <div className="sb-reports-segment flex overflow-hidden rounded-xl border border-[var(--sb-settings-border-paper)] text-[11px] font-semibold">
-        {WINDOW_OPTS.map((w) => (
-          <button
-            key={String(w.value)}
-            type="button"
-            onClick={() => onWindowChange(w.value)}
-            className={cn(
-              "px-3 py-1.5 transition-colors",
-              reportWindow === w.value
-                ? "bg-[var(--ios-background-tertiary)] text-[var(--ios-label)]"
-                : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] hover:text-[var(--ios-label-secondary)]",
-            )}
-          >
-            {w.label}
-          </button>
-        ))}
+        <div className="sb-reports-segment flex shrink-0 overflow-hidden rounded-xl border border-[var(--sb-settings-border-paper)] text-[11px] font-semibold">
+          {WINDOW_OPTS.map((w) => (
+            <button
+              key={String(w.value)}
+              type="button"
+              onClick={() => onWindowChange(w.value)}
+              className={cn(
+                "sb-touch-target px-3 py-1.5 transition-colors",
+                reportWindow === w.value
+                  ? "bg-[var(--ios-background-tertiary)] text-[var(--ios-label)]"
+                  : "text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] hover:text-[var(--ios-label-secondary)]",
+              )}
+            >
+              {w.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {report && !loading && (
@@ -98,29 +100,33 @@ export function ReportsControlBar({
         </span>
       )}
 
-      <div className="flex-1" />
+      <div className="sb-reports-control-spacer flex-1" />
 
-      {report && report.entries.length > 0 && (
+      <div className="sb-reports-control-actions flex shrink-0 items-center gap-2">
+        {report && report.entries.length > 0 && (
+          <button
+            type="button"
+            onClick={() => exportCsv(report.entries, report.dateRange, formatReportDate)}
+            className="sb-reports-icon-btn sb-touch-target"
+            title="Export CSV"
+            aria-label="Export report as CSV"
+          >
+            <Download size={15} />
+          </button>
+        )}
+
         <button
           type="button"
-          onClick={() => exportCsv(report.entries, report.dateRange, formatReportDate)}
-          className="sb-reports-icon-btn"
-          title="Export CSV"
+          onClick={onRefresh}
+          disabled={loading}
+          className="sb-reports-icon-btn sb-touch-target"
+          title="Refresh"
+          aria-label="Refresh reports"
+          aria-busy={loading}
         >
-          <Download size={15} />
+          <RefreshCw size={15} className={loading ? "animate-spin" : undefined} />
         </button>
-      )}
-
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={loading}
-        className="sb-reports-icon-btn"
-        title="Refresh"
-        aria-busy={loading}
-      >
-        <RefreshCw size={15} className={loading ? "animate-spin" : undefined} />
-      </button>
+      </div>
     </div>
   );
 }

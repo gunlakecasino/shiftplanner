@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Target } from "lucide-react";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
@@ -110,6 +110,7 @@ function ProjectsShell() {
   const [smartFilter, setSmartFilter] = useState<SmartFilter>(() => parseFilter(searchParams.get("filter")));
   const [view, setView] = useState<BoardView>(() => parseView(searchParams.get("view")));
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [projectNavOpen, setProjectNavOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   useProjectsRealtime();
@@ -151,16 +152,23 @@ function ProjectsShell() {
     [updateTask],
   );
 
-  const filteredTasks = useMemo(() => applySmartFilter(tasks, smartFilter), [tasks, smartFilter, now]);
+  const filteredTasks = applySmartFilter(tasks, smartFilter);
 
-  const overdueCount = useMemo(() => {
+  const overdueCount = (() => {
     const tonight = tonightDateISO();
     return tasks.filter((t) => t.dueDate && t.dueDate < tonight && t.status !== "complete" && t.status !== "cancelled")
       .length;
-  }, [tasks, now]);
+  })();
 
   const formattedDate = `${now.toLocaleString("en-US", { month: "long" })} ${now.getDate()}, ${now.getFullYear()}`;
   const timeString = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const selectedProjectTitle =
+    projects.find((project) => project.id === selectedProjectId)?.title ?? "All Tasks";
+
+  const handleProjectSelect = useCallback((projectId: string | null) => {
+    setSelectedProjectId(projectId);
+    setProjectNavOpen(false);
+  }, []);
 
   return (
     <div className="sb-settings-shell sb-projects-shell sb-content-enter">
@@ -202,13 +210,28 @@ function ProjectsShell() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]">
-          <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-220px)]">
+        <button
+          type="button"
+          className="sb-projects-nav-toggle sb-touch-target"
+          aria-expanded={projectNavOpen}
+          aria-controls="sb-projects-project-nav"
+          onClick={() => setProjectNavOpen((open) => !open)}
+        >
+          <span className="min-w-0 truncate">Project: {selectedProjectTitle}</span>
+          <span className="shrink-0" aria-hidden>{projectNavOpen ? "−" : "+"}</span>
+        </button>
+
+        <div className="sb-projects-layout grid grid-cols-1 gap-5">
+          <aside
+            id="sb-projects-project-nav"
+            className="sb-projects-sidebar"
+            data-open={projectNavOpen || undefined}
+          >
             <ProjectSidebar
               projects={projects}
               loading={projectsLoading}
               selectedProjectId={selectedProjectId}
-              onSelectProject={setSelectedProjectId}
+              onSelectProject={handleProjectSelect}
               canManage={canManage}
             />
           </aside>
@@ -259,7 +282,7 @@ function ProjectsShell() {
               <div className="space-y-4">
                 <div className="rounded-2xl border p-4" style={{ background: "var(--ios-background-secondary)" }}>
                   <h3 className="text-[13px] font-semibold mb-2 flex items-center gap-2" style={{ color: "var(--sb-projects-accent)" }}>
-                    <Target size={14} /> Brian's Personal Grave Planner (exclusive to your flow)
+                    <Target size={14} /> Brian&apos;s Personal Grave Planner (exclusive to your flow)
                   </h3>
                   <p className="text-[12px] text-muted-foreground mb-3">
                     Built exclusively for how you function: LOG real-time (voice/notes during graves → structured with your sections), COMPILE to your exact recap template + personal AAR/debrief (voice-calibrated, 3-5 prose), hybrid (hard rules first + judgment). Shift-anchored. Provenance from recaps/email/captures. Calm, power, speed.

@@ -200,7 +200,6 @@ import PlacementPad from "./components/PlacementPad";
 import {
   rosterPanelWidth,
   rosterStageLeftInset,
-  placementDockStageRightInset,
 } from "@/lib/shiftbuilder/tabletDevice";
 import { filterGravesScheduleRosterByBand } from "@/lib/shiftbuilder/gravesDefaultSchedule";
 import { isPublishedOnlyViewer } from "./lib/viewerNightPolicy";
@@ -1970,25 +1969,10 @@ function AuthedShiftBuilder() {
 
   const stageInsets = React.useMemo<StageInsets>(() => {
     const tablet = isTabletTouchDevice();
-    // Placement / Tasks dock (iPad inspector) is 380px fixed right — shift stage so cards aren't buried.
-    // selectedSlotKey covers both: Tasks dock keeps selection open on coarse pointer.
-    const coarse =
-      tablet ||
-      (typeof window !== "undefined" &&
-        (() => {
-          try {
-            return window.matchMedia("(pointer: coarse)").matches;
-          } catch {
-            return false;
-          }
-        })());
-    const dockOpen =
-      !!selectedSlotKey &&
-      isBuilderLiveCanvas &&
-      currentView === "deployment";
-    const dockInset = dockOpen
-      ? Math.max(placementDockStageRightInset(), coarse ? 388 : 316)
-      : 0;
+    // Placement / Tasks inspector geometry is owned by CSS through
+    // --sb-inspector-w + body.sb-tablet-dock-open. Keeping it out of this
+    // calculation prevents JS and later responsive CSS from reserving
+    // different widths for the same panel.
     // Floating roster is portaled over the stage — shift the live canvas left so
     // zone cards never sit under the panel (same contract as placement dock right).
     const rosterLeft = rosterOpen ? rosterStageLeftInset() : 0;
@@ -1996,18 +1980,18 @@ function AuthedShiftBuilder() {
       const hGutter = tablet ? 12 : 16;
       return {
         top: stageTopInsetPx(),
-        right: hGutter + dockInset,
+        right: hGutter,
         bottom: builderStageBottomInsetPx(),
         left: rosterOpen ? rosterLeft : hGutter,
       };
     }
     return {
       top: stageTopInsetPx(),
-      right: (tablet ? 32 : 40) + dockInset,
+      right: tablet ? 32 : 40,
       bottom: tablet ? 56 : 68,
       left: rosterOpen ? rosterStageLeftInset() : tablet ? 32 : 40,
     };
-  }, [rosterOpen, isBuilderLiveCanvas, selectedSlotKey, currentView]);
+  }, [rosterOpen, isBuilderLiveCanvas]);
 
   // Publish roster geometry to document so stage padding + floating pills can clear it.
   React.useEffect(() => {
@@ -2042,71 +2026,6 @@ function AuthedShiftBuilder() {
   useEffect(() => {
     recomputeScaleRef.current = recomputeScale;
   }, [recomputeScale]);
-
-  // Portrait scale-to-fit: this board is landscape-shaped (ZONES + RESTROOMS + a
-  // right AUX rail). In a tall/narrow portrait viewport, reflowing it crushes/clips
-  // content, so instead we render the exact landscape layout at a fixed design size
-  // and scale the whole thing down to fit the portrait width — a faithful miniature.
-  // The design box + fit factor are published as CSS vars on the scale viewport and
-  // consumed by the transform in globals.css ("Portrait scale-to-fit"). Pads/overlays
-  // are body-portaled, so the transform doesn't affect their anchoring; dnd hit-testing
-  // stays correct via MeasuringStrategy.Always (post-transform rects).
-  useEffect(() => {
-    if (!isBuilderLiveCanvas) return;
-    const DESIGN_W = 1180;
-    const DESIGN_H = 800;
-    const findViewport = () =>
-      document.querySelector<HTMLElement>(".sb-builder-scale-viewport");
-    let raf = 0;
-    const apply = () => {
-      raf = 0;
-      const sv = findViewport();
-      if (!sv) return;
-      const portrait = window.matchMedia("(orientation: portrait)").matches;
-      if (!portrait) {
-        sv.style.removeProperty("--sb-portrait-fit");
-        sv.style.removeProperty("--sb-portrait-dw");
-        sv.style.removeProperty("--sb-portrait-dh");
-        return;
-      }
-      const cw = sv.clientWidth;
-      const ch = sv.clientHeight;
-      if (cw < 80 || ch < 80) return;
-      const fit = Math.min(cw / DESIGN_W, ch / DESIGN_H, 1);
-      sv.style.setProperty("--sb-portrait-dw", `${DESIGN_W}px`);
-      sv.style.setProperty("--sb-portrait-dh", `${DESIGN_H}px`);
-      sv.style.setProperty("--sb-portrait-fit", String(Math.round(fit * 1000) / 1000));
-    };
-    const schedule = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(apply);
-    };
-    schedule();
-    const mq = window.matchMedia("(orientation: portrait)");
-    window.addEventListener("resize", schedule);
-    window.addEventListener("orientationchange", schedule);
-    mq.addEventListener?.("change", schedule);
-    const vv = window.visualViewport;
-    vv?.addEventListener("resize", schedule);
-    let ro: ResizeObserver | null = null;
-    const svEl = findViewport();
-    if (svEl && typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(schedule);
-      ro.observe(svEl);
-    }
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      window.removeEventListener("resize", schedule);
-      window.removeEventListener("orientationchange", schedule);
-      mq.removeEventListener?.("change", schedule);
-      vv?.removeEventListener("resize", schedule);
-      ro?.disconnect();
-      const sv = findViewport();
-      sv?.style.removeProperty("--sb-portrait-fit");
-      sv?.style.removeProperty("--sb-portrait-dw");
-      sv?.style.removeProperty("--sb-portrait-dh");
-    };
-  }, [isBuilderLiveCanvas]);
 
   useEffect(() => {
     onViewportSyncRef.current = () => {

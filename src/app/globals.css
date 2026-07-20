@@ -2389,31 +2389,17 @@ body.sb-roster-open .sb-stage-host {
   letter-spacing: 0.5px;
 }
 
-/* ── Portrait scale-to-fit ───────────────────────────────────────────────────
-   This board is landscape-shaped (ZONES + RESTROOMS + a right AUX rail). Rather
-   than reflow/crush it into a tall/narrow portrait viewport, we render the exact
-   landscape layout at a fixed design size and scale the whole thing down to fit
-   the portrait width — a faithful miniature, never clipped or crushed. The design
-   box (--sb-portrait-dw/dh) and fit factor (--sb-portrait-fit) are measured in JS
-   and published on .sb-builder-scale-viewport. transform-origin is top-left so the
-   scaled board aligns to the container's left edge (the fit is derived from the
-   container width, so it fills it exactly). Pads/overlays are body-portaled, so the
-   transform doesn't affect their anchoring. Live builder only. */
+/* Portrait uses a native flowing board. Interactive controls must never be
+   transform-scaled because that also shrinks their effective touch targets. */
 @media (orientation: portrait) {
   .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport {
-    align-items: flex-start;
+    align-items: stretch;
   }
+
   .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport > * {
-    flex: none !important;
-    width: var(--sb-portrait-dw, 1180px);
-    height: var(--sb-portrait-dh, 800px);
-    transform: scale(var(--sb-portrait-fit, 1));
-    transform-origin: top left;
-  }
-  /* Portrait miniature shrinks 7.5px trails to ~5px — unreadable. Full history
-     remains on Placement Pad LAST 5; name row stays primary. */
-  .sb-builder-stage.sb-builder-live .sb-tm-placement-trail {
-    display: none !important;
+    width: 100%;
+    height: auto;
+    transform: none;
   }
 }
 
@@ -6067,45 +6053,378 @@ button,
   }
 }
 
-/* A 1080p monitor commonly leaves less than 1,000 CSS pixels after browser
-   chrome. Reduce only the empty breathing-room minimums at that height; card
-   content may still grow naturally, and the canvas above remains scrollable. */
-@media (orientation: landscape) and (min-width: 1001px) and (max-height: 1100px) {
+/* Short landscape boards must fit through the overlap band. Fixed tracks are
+   intentional here: minmax(..., auto) lets task content re-expand the rows and
+   recreates the overflow this breakpoint is meant to prevent. Task lists own
+   their internal scrolling, while the canvas remains the safe fallback. */
+@media (orientation: landscape) and (min-width: 1001px) and (max-height: 1300px) {
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace {
-    padding-top: 12px !important;
+    padding: 10px 12px 16px !important;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-zone-grid {
-    grid-auto-rows: minmax(148px, auto) !important;
+    grid-auto-rows: 132px !important;
   }
 
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-zone-grid > *,
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-zone-grid .assignment-card {
-    min-height: 148px !important;
+    height: 132px !important;
+    min-height: 0 !important;
+    overflow: hidden;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid {
-    grid-auto-rows: minmax(262px, auto) !important;
+    grid-auto-rows: 252px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid > * {
+    height: 252px !important;
+    min-height: 0 !important;
+    overflow: hidden;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid .assignment-card {
-    min-height: 126px !important;
+    min-height: 0 !important;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
-    margin-top: 10px;
+    margin-top: 8px;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-group {
-    margin-top: 14px;
+    margin-top: 10px;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-panel .sb-overlap-grid {
-    grid-auto-rows: minmax(108px, auto);
-    min-height: 108px !important;
+    grid-auto-rows: 96px !important;
+    min-height: 96px !important;
   }
 
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-panel .sb-overlap-card-grid > *,
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-panel .sb-overlap-card-grid .assignment-card,
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-flow-overlap-panel .sb-overlap-card-grid .sb-assignment-card {
-    min-height: 108px !important;
+    height: 96px !important;
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+}
+
+/* ==========================================================================
+   iPad Pro 13-inch responsive contract
+
+   One geometry authority drives both the live stage and the portaled inspector.
+   Portrait is a native flowing board with a bottom inspector; landscape keeps a
+   split inspector and a single vertical scroll owner.
+   ========================================================================== */
+
+.sb-builder-shell.sb-sheetbuilder-redesign {
+  --sb-sheet-topbar-h: calc(58px + env(safe-area-inset-top, 0px));
+  --sb-inspector-w: 320px;
+}
+
+.sb-sheetbuilder-redesign .sb-sheetbuilder-topbar {
+  height: var(--sb-sheet-topbar-h) !important;
+  max-height: var(--sb-sheet-topbar-h) !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-right: calc(64px + env(safe-area-inset-right, 0px)) !important;
+  padding-left: calc(16px + env(safe-area-inset-left, 0px)) !important;
+}
+
+.sb-sheetbuilder-redesign .sb-stage-host {
+  padding-top: var(--sb-sheet-topbar-h) !important;
+  padding-right: env(safe-area-inset-right, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  padding-left: env(safe-area-inset-left, 0px) !important;
+}
+
+body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-host {
+  padding-right: calc(var(--sb-inspector-w) + env(safe-area-inset-right, 0px)) !important;
+}
+
+.placement-dock {
+  top: var(--sb-sheet-topbar-h, 58px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  width: var(--sb-inspector-w, 320px);
+  max-width: min(var(--sb-inspector-w, 320px), calc(100vw - 24px));
+}
+
+.placement-dock-tabs button {
+  min-height: 44px !important;
+  font-size: 13px !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-canvas {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.42) transparent;
+  box-shadow: inset 0 -20px 20px -26px rgba(15, 23, 42, 0.42);
+}
+
+.sb-sheetbuilder-redesign .sb-builder-canvas::-webkit-scrollbar {
+  width: 7px;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-canvas::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.42);
+  background-clip: padding-box;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace [data-slot-key] {
+  scroll-margin-block: 88px;
+}
+
+@media (pointer: coarse) {
+  .sb-touch-target {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    touch-action: manipulation;
+  }
+
+  .sb-sheetbuilder-topbar button,
+  .sb-sheetbuilder-topbar a[role="menuitem"],
+  .sb-help-fab {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    touch-action: manipulation;
+  }
+}
+
+@media (orientation: portrait) {
+  .sb-sheetbuilder-redesign .sb-sheetbuilder-topbar {
+    gap: 2px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-topbar-brand {
+    padding-right: 6px !important;
+    border-right-color: transparent !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-sheetbuilder-launch-trigger > div {
+    display: none;
+  }
+
+  .sb-sheetbuilder-redesign .sb-run-day-btn span,
+  .sb-sheetbuilder-redesign .sb-topbar-publish {
+    font-size: 0 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-topbar-publish {
+    width: 44px;
+    padding-inline: 0 !important;
+    justify-content: center;
+  }
+
+  .sb-sheetbuilder-redesign .sb-topbar-notification-btn {
+    display: none;
+  }
+
+  .sb-sheetbuilder-redesign .sb-topbar-day-strip {
+    min-width: 0;
+    gap: 0;
+    padding-inline: 0 !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live > .sb-builder-canvas {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-x: none !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .sb-builder-fluid-viewport,
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .sb-builder-scale-viewport > * {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    height: auto !important;
+    transform: none !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    padding: 14px 14px 72px !important;
+  }
+
+  body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-host {
+    padding-right: env(safe-area-inset-right, 0px) !important;
+  }
+
+  body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .builder-workspace {
+    padding-bottom: calc(min(54dvh, 640px) + 52px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-host {
+    padding-left: env(safe-area-inset-left, 0px) !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar,
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: max-content max-content max-content !important;
+    gap: 18px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(1),
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(2),
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+    position: static !important;
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    width: 100% !important;
+    margin-top: 0 !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sheet-section-header,
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-header {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    margin-inline: -4px;
+    padding: 7px 4px;
+    background: color-mix(in srgb, #e9eaef 94%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid,
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid {
+    grid-auto-rows: minmax(160px, auto) !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid .assignment-card {
+    min-height: 160px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid {
+    grid-auto-rows: minmax(248px, auto) !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .assignment-card {
+    min-height: 118px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+    padding: 12px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid,
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-group {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-panel .sb-overlap-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .placement-dock {
+    top: auto;
+    right: env(safe-area-inset-right, 0px);
+    bottom: env(safe-area-inset-bottom, 0px);
+    left: env(safe-area-inset-left, 0px);
+    width: auto;
+    max-width: none;
+    height: min(54dvh, 640px);
+    max-height: calc(100dvh - var(--sb-sheet-topbar-h, 58px) - 12px);
+    padding-top: 10px;
+    border: 1px solid #dfe4eb;
+    border-bottom: 0;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -18px 46px -28px rgba(15, 23, 42, 0.62);
+  }
+
+  .placement-dock::before {
+    content: "";
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    z-index: 3;
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: #cbd5e1;
+    transform: translateX(-50%);
+  }
+}
+
+@media (orientation: portrait) and (max-width: 820px) {
+  .sb-sheetbuilder-redesign .sb-topbar-month {
+    display: none;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid,
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid,
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-panel .sb-overlap-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 1420px) {
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
+    grid-template-columns: minmax(0, 1fr) 218px !important;
+    grid-template-rows: max-content max-content !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(1) {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+    position: sticky !important;
+    top: 12px !important;
+    grid-column: 2 !important;
+    grid-row: 1 / span 2 !important;
+    margin-top: 0 !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid,
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-panel .sb-overlap-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-group {
+    width: calc(100% - 235px) !important;
+    max-width: calc(100% - 235px) !important;
   }
 }

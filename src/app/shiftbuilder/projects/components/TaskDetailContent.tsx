@@ -325,11 +325,16 @@ export function TaskDetailContent({
                   type="button"
                   whileTap={premiumTap.whileTap}
                   onClick={() => toggleChecklistItem.mutate({ itemId: item.id, isDone: !item.isDone })}
-                  className="sb-projects-checkbox shrink-0"
-                  data-done={item.isDone}
-                  style={{ width: 16, height: 16, minWidth: 16 }}
+                  className="sb-projects-checkbox-hit sb-touch-target shrink-0"
+                  aria-label={item.isDone ? `Mark ${item.label} not done` : `Mark ${item.label} done`}
                 >
-                  {item.isDone && <Check size={10} strokeWidth={3} color="white" />}
+                  <span
+                    className="sb-projects-checkbox"
+                    data-done={item.isDone}
+                    style={{ width: 16, height: 16, minWidth: 16 }}
+                  >
+                    {item.isDone && <Check size={10} strokeWidth={3} color="white" />}
+                  </span>
                 </motion.button>
                 <span
                   className="text-[12px]"

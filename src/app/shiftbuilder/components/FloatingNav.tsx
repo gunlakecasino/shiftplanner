@@ -428,10 +428,10 @@ export default function FloatingNav(props: FloatingNavProps) {
         }}
       >
         {/* BRAND — SheetBuilder launchpad */}
-        <div className="relative flex shrink-0 items-center gap-2.5 border-r border-white/10 pr-5" ref={launchpadRef}>
+        <div className="sb-topbar-brand relative flex shrink-0 items-center gap-2.5 border-r border-white/10 pr-5" ref={launchpadRef}>
           <button
             type="button"
-            className="sb-sheetbuilder-launch-trigger flex min-w-0 items-center gap-2.5 rounded-md"
+            className="sb-sheetbuilder-launch-trigger sb-interactive flex min-w-0 items-center gap-2.5 rounded-md"
             onClick={() => {
               setLaunchpadOpen((v) => !v);
               setRosterMenuOpen(false);
@@ -512,10 +512,10 @@ export default function FloatingNav(props: FloatingNavProps) {
         <div className="shrink-0 w-4" />
 
         {/* LEFT — month picker + go to today */}
-        <div className="relative flex items-center gap-1 shrink-0" ref={calendarRef}>
+        <div className="sb-topbar-month relative flex items-center gap-1 shrink-0" ref={calendarRef}>
           <button
             type="button"
-            className="icon-btn flex items-center gap-1 rounded-full px-2.5 py-1.5"
+            className="icon-btn sb-interactive flex items-center gap-1 rounded-full px-2.5 py-1.5"
             style={{
               fontSize: 13,
               fontWeight: 850,
@@ -541,7 +541,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           </button>
           <button
             type="button"
-            className="icon-btn sb-month-status-diamond-btn flex items-center justify-center w-6 h-6 rounded-full"
+            className="icon-btn sb-interactive sb-month-status-diamond-btn flex items-center justify-center w-6 h-6 rounded-full"
             style={{
               opacity: isViewingToday ? 0.72 : 1,
             }}
@@ -574,7 +574,7 @@ export default function FloatingNav(props: FloatingNavProps) {
         <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
 
         {/* CENTER — day scroller */}
-        <div className="flex items-center flex-1 min-w-0 gap-0.5">
+        <div className="sb-topbar-days flex items-center flex-1 min-w-0 gap-0.5">
           <button
             type="button"
             onClick={onPrevWeek}
@@ -586,7 +586,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             <ChevronLeft size={13} strokeWidth={2.8} />
           </button>
 
-          <div className="flex items-center justify-around flex-1 px-1">
+          <div className="sb-topbar-day-strip flex items-center justify-around flex-1 px-1">
             {days.map((day) => {
               const isSelected = day.id === selectedDayId;
               const isToday = !!day.isToday;
@@ -676,7 +676,7 @@ export default function FloatingNav(props: FloatingNavProps) {
         <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
 
         {/* RIGHT — actions + avatar + more */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="sb-topbar-actions flex items-center gap-0.5 shrink-0">
           {showEngineTools && onOptimizeNight && (
             <button
               type="button"
@@ -701,7 +701,7 @@ export default function FloatingNav(props: FloatingNavProps) {
 
           <button
             type="button"
-            className="sb-topbar-notification-btn icon-btn flex items-center justify-center rounded-full"
+            className="sb-topbar-notification-btn icon-btn sb-interactive flex items-center justify-center rounded-full"
             style={{
               color: mutedChromeText,
               background: "rgba(255,255,255,0.04)",
@@ -726,7 +726,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           <div className="relative" ref={rosterMenuRef}>
             <button
               type="button"
-              className="sb-sheetbuilder-roster-toggle icon-btn flex items-center justify-center rounded-full"
+              className="sb-sheetbuilder-roster-toggle icon-btn sb-interactive flex items-center justify-center rounded-full"
               style={{
                 color: rosterMenuOpen || rosterOpen ? "#fff" : mutedChromeText,
                 background: rosterMenuOpen || rosterOpen
@@ -800,7 +800,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           {onViewChange && (
             <button
               type="button"
-              className="icon-btn flex items-center justify-center w-7 h-7 rounded-full"
+              className="icon-btn sb-interactive flex items-center justify-center w-7 h-7 rounded-full"
               style={{
                 color: currentView === "breaks" ? "#fff" : mutedChromeText,
                 background:
@@ -820,7 +820,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           {showPublishControls ? (
             <button
               type="button"
-              className="icon-btn flex items-center gap-1.5 rounded-full px-2.5 py-1"
+              className="sb-topbar-publish icon-btn sb-interactive flex items-center gap-1.5 rounded-full px-2.5 py-1"
               style={{ fontSize: 10, fontWeight: 700, color: chromeText, letterSpacing: "0.06em" }}
               onClick={onToggleDayPublished}
               disabled={!canPublishDay || publishDayBusy}
@@ -841,7 +841,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             </button>
           ) : (
             <span
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
+              className="sb-topbar-publish flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
               style={{ color: mutedChromeText }}
               title={
                 isDayPublished
@@ -866,7 +866,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           <div className="relative" ref={profileRef}>
             <button
               type="button"
-              className="icon-btn flex items-center justify-center w-7 h-7 rounded-full shrink-0"
+              className="sb-topbar-account icon-btn sb-interactive flex items-center justify-center w-7 h-7 rounded-full shrink-0"
               style={{
                 fontSize: 10,
                 fontWeight: 700,
@@ -963,7 +963,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           <div className="relative" ref={moreRef}>
             <button
               type="button"
-              className="icon-btn flex items-center justify-center w-6 h-6 rounded-full"
+              className="sb-topbar-more icon-btn sb-interactive flex items-center justify-center w-6 h-6 rounded-full"
               style={{ color: "#aaa" }}
             onClick={() => {
               setMoreOpen((v) => !v);

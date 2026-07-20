@@ -86,11 +86,12 @@ export function OpsTaskRow({
         onClick={toggleDone}
         whileTap={canComplete ? premiumTap.whileTap : {}}
         disabled={!canComplete}
-        className="sb-projects-checkbox shrink-0"
-        data-done={isDone}
+        className="sb-projects-checkbox-hit sb-touch-target shrink-0"
         aria-label={isDone ? "Mark not done" : "Mark done"}
       >
-        {isDone && <Check size={13} strokeWidth={3} color="white" />}
+        <span className="sb-projects-checkbox" data-done={isDone}>
+          {isDone && <Check size={13} strokeWidth={3} color="white" />}
+        </span>
       </motion.button>
 
       <div className="min-w-0 flex-1">
