@@ -1374,6 +1374,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-approved-weekday.is-active {
   color: #fff;
+  -webkit-text-fill-color: #fff;
 }
 
 .sb-approved-as-of {
@@ -1530,6 +1531,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   align-items: center;
   justify-content: center;
   color: #fff;
+  -webkit-text-fill-color: #fff;
   background: #111827;
   font-size: 9px;
   line-height: 1;
@@ -1582,6 +1584,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   padding: 4px 9px 3px;
   box-sizing: border-box;
   color: #fff;
+  -webkit-text-fill-color: #fff;
   background: var(--approved-ink);
   font-size: 9.5px;
   line-height: 1.05;
@@ -1618,6 +1621,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-approved-side-task-card {
+  grid-column: 4;
   border-color: #b9a7e8;
 }
 

@@ -123,12 +123,50 @@ const GOLDEN_RASTER_ROOT_STYLE: Partial<CSSStyleDeclaration> = {
   backgroundColor: "#ffffff",
 };
 
+function mountIsolatedGoldenCaptureHost(artboard: HTMLElement): () => void {
+  const parent = artboard.parentElement;
+  if (!parent) throw new Error("Golden raster: artboard has no parent");
+
+  const nextSibling = artboard.nextSibling;
+  const host = document.createElement("div");
+  host.className = "print-dual-container sb-golden-isolated-capture-host";
+  host.style.cssText = [
+    "position:fixed",
+    `left:${GOLDEN_RASTER_STAGING_LEFT_PX}px`,
+    "top:0",
+    `width:${GOLDEN_WIDTH_PX}px`,
+    `height:${GOLDEN_HEIGHT_PX}px`,
+    "overflow:hidden",
+    "margin:0",
+    "padding:0",
+    "border:0",
+    "background:#ffffff",
+    "opacity:1",
+    "visibility:visible",
+    "pointer-events:none",
+  ].join(";");
+
+  document.body.appendChild(host);
+  host.appendChild(artboard);
+
+  return () => {
+    if (nextSibling && nextSibling.parentNode === parent) {
+      parent.insertBefore(artboard, nextSibling);
+    } else {
+      parent.appendChild(artboard);
+    }
+    host.remove();
+  };
+}
+
 async function captureArtboardPixels(
   artboard: HTMLElement,
-  args: { pixelRatio: number; usePng: boolean },
+  args: { pixelRatio: number; usePng: boolean; center?: boolean; direct?: boolean },
 ): Promise<RasterResult> {
   stripGoldenRasterChrome(artboard);
-  const mount = mountGoldenRasterCaptureShell(artboard);
+  const mount = args.direct
+    ? { shell: artboard, restore: () => undefined }
+    : mountGoldenRasterCaptureShell(artboard);
 
   const captureOpts = {
     pixelRatio: args.pixelRatio,
@@ -156,7 +194,9 @@ async function captureArtboardPixels(
 
   const format = args.usePng ? "PNG" : "JPEG";
   dataUrl = await flattenGoldenRasterStageBleed(dataUrl, format, 0.92);
-  dataUrl = await centerGoldenRasterContent(dataUrl, format, 0.92);
+  if (args.center !== false) {
+    dataUrl = await centerGoldenRasterContent(dataUrl, format, 0.92);
+  }
 
   const dims = await measureRasterDataUrl(dataUrl);
 
@@ -212,7 +252,12 @@ export async function rasterizeGoldenArtboardElement(args: {
   } else if (!isGravesSheet && args.kind === "deploy") {
     postProcessOfficialDeploymentArtboard(args.artboard);
   }
-  inlineLiveDomForRaster(args.artboard);
+  // The approved Graves pages already use export-safe fixed CSS. Inlining their
+  // computed styles can carry stacked-page geometry into page two and override
+  // white label text with an inherited WebKit text-fill color.
+  if (!isGravesSheet) {
+    inlineLiveDomForRaster(args.artboard);
+  }
   args.artboard.getBoundingClientRect();
 
   await waitForGoldenRenderSettled();
@@ -220,12 +265,30 @@ export async function rasterizeGoldenArtboardElement(args: {
     requestAnimationFrame(() => requestAnimationFrame(() => r()));
   });
 
-  return withWhiteDocumentBackground(() =>
-    captureArtboardPixels(args.artboard, {
-      pixelRatio: args.pixelRatio,
-      usePng: args.usePng,
-    }),
-  );
+  const restoreIsolatedHost = isGravesSheet
+    ? mountIsolatedGoldenCaptureHost(args.artboard)
+    : null;
+  try {
+    if (restoreIsolatedHost) {
+      // html-to-image reads absolute descendant geometry. Let the browser commit
+      // the move from the stacked session into the zero-origin capture host.
+      args.artboard.getBoundingClientRect();
+      await waitForGoldenRenderSettled();
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+    }
+    return await withWhiteDocumentBackground(() =>
+      captureArtboardPixels(args.artboard, {
+        pixelRatio: args.pixelRatio,
+        usePng: args.usePng,
+        center: !isGravesSheet,
+        direct: isGravesSheet,
+      }),
+    );
+  } finally {
+    restoreIsolatedHost?.();
+  }
 }
 
 /**
