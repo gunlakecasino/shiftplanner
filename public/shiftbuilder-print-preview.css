@@ -1954,11 +1954,6 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   background: #fff8e1;
 }
 
-.print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-graves-overlap-card.is-available {
-  border-style: dashed;
-  background: #f3f4f6;
-}
-
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-graves-overlap-accent {
   position: absolute;
   top: 0;
@@ -1995,27 +1990,5 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   color: #111827;
   font-size: 10px;
   line-height: 1.15;
-  font-weight: 800;
-}
-
-.sb-graves-overlap-available {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  color: #6b7280;
-  text-align: center;
-}
-
-.sb-graves-overlap-available strong {
-  font-size: 12px;
-  line-height: 1;
-}
-
-.sb-graves-overlap-available span {
-  font-size: 9px;
-  line-height: 1;
   font-weight: 800;
 }

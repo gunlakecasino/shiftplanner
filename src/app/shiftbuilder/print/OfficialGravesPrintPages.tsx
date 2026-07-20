@@ -460,21 +460,16 @@ function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] 
   const regularTasks = slot.tasks.filter((task) => !task.isCoverage);
   const assigned = !!slot.tmName?.trim();
   const openWork = !assigned && regularTasks.length > 0;
-  const available = !assigned && regularTasks.length === 0;
+  const blank = !assigned && regularTasks.length === 0;
   return (
     <div
-      className={`sb-graves-overlap-card ${openWork ? "is-open-work" : ""} ${available ? "is-available" : ""}`.trim()}
+      className={`sb-graves-overlap-card ${openWork ? "is-open-work" : ""}`.trim()}
       style={{ ["--card-accent" as string]: accent }}
       data-slot-key={slot.key}
     >
       <div className="sb-graves-overlap-accent" style={{ background: openWork ? "#a16207" : accent }} />
       <div className="sb-graves-overlap-body">
-        {available ? (
-          <div className="sb-graves-overlap-available">
-            <strong>AVAILABLE</strong>
-            <span>NO WORK ASSIGNED</span>
-          </div>
-        ) : (
+        {blank ? null : (
           <>
             <div className={`sb-graves-overlap-name ${openWork ? "is-open" : ""}`}>
               {slot.tmName || "OPEN WORK"}
@@ -493,7 +488,6 @@ function OfficialOverlapsSection({ rows, snapshot }: { rows: PrintOverlapRow[]; 
   const slots = rows.flatMap((row) => row.slots);
   const assigned = slots.filter((slot) => slot.tmName?.trim()).length;
   const openWork = slots.filter((slot) => !slot.tmName?.trim() && slot.tasks.some((task) => !task.isCoverage)).length;
-  const available = slots.length - assigned - openWork;
   return (
     <section className="overlaps-section sb-graves-overlaps-section">
       <ApprovedStatusHeader
@@ -501,7 +495,6 @@ function OfficialOverlapsSection({ rows, snapshot }: { rows: PrintOverlapRow[]; 
         statuses={[
           { label: "ASSIGNED", count: assigned },
           { label: "OPEN WORK", count: openWork, tone: "open" },
-          { label: "AVAILABLE", count: available, tone: "available" },
         ]}
       />
       <div className="sb-graves-overlap-rows">
