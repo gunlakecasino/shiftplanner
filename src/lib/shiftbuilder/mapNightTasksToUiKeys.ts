@@ -32,6 +32,8 @@ function coverageTargets(row: CoverageProjectionAssignment | undefined): string[
 
 function coverageTargetLabel(targetKey: string, auxDefs: AuxDef[]): string {
   const aux = auxDefs.find((def) => def.key === targetKey);
+  if (aux?.role === "z9sr") return getSlotCoverageLabel("Z9SR");
+  if (aux?.role === "admin") return getSlotCoverageLabel("ADM");
   return aux?.locations?.[0]?.trim() || aux?.label?.trim() || getSlotCoverageLabel(targetKey);
 }
 

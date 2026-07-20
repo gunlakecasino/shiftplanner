@@ -74,6 +74,24 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
     ]);
   });
 
+  it("uses the operational Z9 Smoking Room label for a flexible AUX shell", () => {
+    const z9Layout: AuxDef[] = [
+      { key: "AUX2", role: "z9sr", label: "", locations: [] },
+    ];
+    const assignments = {
+      Z9: { tmId: "joy", tmName: "Joy", additionalCoverageSlots: ["AUX2"] },
+    };
+
+    const mapped = mapNightTasksToUiKeys([], z9Layout, assignments);
+
+    expect(mapped.Z9).toMatchObject([
+      { taskLabel: "And Zone 9 Smoking Room", isCoverage: true },
+    ]);
+    expect(buildCoveredByIndex(assignments, mapped, z9Layout).AUX2).toMatchObject([
+      { tmName: "Joy", sourceKey: "Z9", isSynthetic: true },
+    ]);
+  });
+
   it("does not duplicate a legacy banner already representing canonical coverage", () => {
     const mapped = mapNightTasksToUiKeys(
       [

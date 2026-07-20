@@ -94,6 +94,13 @@ export function buildCoverageLabelIndex(auxDefs: AuxDef[] = []): Map<string, str
   for (const aux of auxDefs) {
     register(getSlotCoverageLabel(aux.key), aux.key);
     register(slotKeyToLabel(aux.key), aux.key);
+    if (aux.role === "admin") {
+      map.set(getSlotCoverageLabel("ADM"), aux.key);
+      map.set(slotKeyToLabel("ADM"), aux.key);
+    } else if (aux.role === "z9sr") {
+      map.set(getSlotCoverageLabel("Z9SR"), aux.key);
+      map.set(slotKeyToLabel("Z9SR"), aux.key);
+    }
     if (aux.label) register(aux.label, aux.key);
     if (aux.locations?.[0]) register(aux.locations[0], aux.key);
   }

@@ -180,18 +180,30 @@ function taskLabels(snapshot: PrintDaySnapshot, slotKey: string): string[] {
     .filter((label): label is string => !!label);
 }
 
-function coverageFooterLabel(targetKey: string, entry: CoveredByEntry): string {
+function coverageFooterLabel(
+  targetKey: string,
+  entry: CoveredByEntry,
+  auxDefs: PrintDaySnapshot["auxDefs"],
+): string {
   if (targetKey.startsWith("Z") && entry.side) {
     return `ZONE ${formatCoverageSideLabel(targetKey, entry.side)}`;
   }
+  const aux = auxDefs.find((def) => def.key === targetKey);
+  if (aux?.role === "z9sr") return "ZONE 9 SMOKING ROOM";
+  if (aux?.role === "admin") return "ADMIN";
+  if (aux?.locations?.[0]?.trim()) return aux.locations[0].trim().toUpperCase();
+  if (aux?.label?.trim()) return aux.label.trim().toUpperCase();
   return getSlotCoverageLabel(targetKey).toUpperCase();
 }
 
-function buildCoverageTargetsBySource(coveredByIndex: Record<string, CoveredByEntry[]>) {
+function buildCoverageTargetsBySource(
+  coveredByIndex: Record<string, CoveredByEntry[]>,
+  auxDefs: PrintDaySnapshot["auxDefs"],
+) {
   const result: Record<string, string[]> = {};
   Object.entries(coveredByIndex).forEach(([targetKey, entries]) => {
     entries.forEach((entry) => {
-      const label = coverageFooterLabel(targetKey, entry);
+      const label = coverageFooterLabel(targetKey, entry, auxDefs);
       result[entry.sourceKey] = [...new Set([...(result[entry.sourceKey] ?? []), label])];
     });
   });
@@ -233,11 +245,16 @@ function ApprovedAssignmentCard({
   const empty = names.length === 0;
   const showOpenWork = empty && !blankWhenEmpty && tasks.length > 0;
   const footer = coverageTargets.join(" / ");
+  const footerText =
+    footer === "ZONE 9 SMOKING ROOM" ? `AND ${footer}` : `ALSO COVERS ${footer}`;
+  const dense =
+    !!footer &&
+    (tasks.length >= (compact ? 3 : 4) || (names.length > 1 && tasks.length >= 2));
   const ink = approvedAccentInk(accent);
 
   return (
     <div
-      className={`sb-approved-assignment-card ${compact ? "is-compact" : ""} ${isCovered ? "is-covered" : ""} ${showOpenWork ? "is-open-work" : ""} ${footer ? "has-footer" : ""}`.trim()}
+      className={`sb-approved-assignment-card ${compact ? "is-compact" : ""} ${dense ? "is-dense" : ""} ${isCovered ? "is-covered" : ""} ${showOpenWork ? "is-open-work" : ""} ${footer ? "has-footer" : ""}`.trim()}
       style={{ ["--approved-accent" as string]: accent, ["--approved-ink" as string]: ink }}
       data-slot-key={slotKey}
     >
@@ -259,7 +276,7 @@ function ApprovedAssignmentCard({
           </div>
         ) : null}
       </div>
-      {footer ? <div className="sb-approved-card-footer">ALSO COVERS {footer}</div> : null}
+      {footer ? <div className="sb-approved-card-footer">{footerText}</div> : null}
     </div>
   );
 }
@@ -275,7 +292,10 @@ export function OfficialGravesDeploymentPage({
     snapshot.tasksBySlot,
     snapshot.auxDefs,
   );
-  const coverageTargetsBySource = buildCoverageTargetsBySource(coveredByIndex);
+  const coverageTargetsBySource = buildCoverageTargetsBySource(
+    coveredByIndex,
+    snapshot.auxDefs,
+  );
   const zoneAssigned = ZONE_DEFS.filter(
     (def) => snapshot.assignments[def.key]?.tmName || coveredByIndex[def.key]?.length,
   ).length;

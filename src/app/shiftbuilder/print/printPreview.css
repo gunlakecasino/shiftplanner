@@ -1550,7 +1550,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-approved-assignment-card.has-footer .sb-approved-card-body {
-  bottom: 19px;
+  bottom: 20px;
 }
 
 .sb-approved-card-names {
@@ -1606,6 +1606,32 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .sb-approved-assignment-card.is-compact .sb-approved-card-tasks {
   margin-top: 8px;
   font-size: 10.5px;
+}
+
+.sb-approved-assignment-card.is-dense .sb-approved-card-body {
+  padding-bottom: 4px;
+}
+
+.sb-approved-assignment-card.is-dense .sb-approved-card-names.is-multiple {
+  font-size: 13px;
+  line-height: 1.05;
+}
+
+.sb-approved-assignment-card.is-dense .sb-approved-card-tasks {
+  margin-top: 5px;
+  font-size: 10px;
+  line-height: 1.02;
+}
+
+.sb-approved-assignment-card.is-compact.is-dense .sb-approved-card-names {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sb-approved-assignment-card.is-compact.is-dense .sb-approved-card-tasks {
+  margin-top: 4px;
+  font-size: 9.5px;
+  line-height: 1.02;
 }
 
 .sb-approved-open-work {
