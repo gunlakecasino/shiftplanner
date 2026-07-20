@@ -23,7 +23,7 @@ import {
   SlotAssignmentBody,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
-import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
 
 export interface RRCardProps {
   def: any;
@@ -206,7 +206,7 @@ const RRSide: React.FC<{
               ? () => onSwapCoverageSides(slotKey, coveredBy)
               : undefined
           }
-          onUnassignedClick={(e) => handleAssignZoneDoubleClick(e, slotKey, onClick, isLocked)}
+          onUnassignedClick={(e) => handleAssignZoneClick(e, slotKey, onClick, isLocked)}
         />
       </div>
 

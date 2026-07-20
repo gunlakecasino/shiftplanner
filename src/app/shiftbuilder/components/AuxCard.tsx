@@ -32,7 +32,7 @@ import {
   cardBodyInteriorStyle,
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
-import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
 import {
   placeFixedPopover,
   readViewportHeight,
@@ -514,7 +514,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)
                 : undefined
             }
-            onUnassignedClick={(e) => handleAssignZoneDoubleClick(e, def.key, onCardClick, isLocked)}
+            onUnassignedClick={(e) => handleAssignZoneClick(e, def.key, onCardClick, isLocked)}
           />
         </div>
 

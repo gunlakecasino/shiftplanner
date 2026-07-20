@@ -179,7 +179,7 @@ export interface ShiftBuilderBoardProps {
   /** Active anchored placement pad slot (controlled by orchestrator). */
   selectedSlotKey?: string | null;
   onSlotToggle?: (slotKey: string) => void;
-  /** Always opens the pad (no toggle-off) — keeps pad open on double-click. */
+  /** Always opens the pad (no toggle-off) when a placement is clicked. */
   onSlotOpen?: (slotKey: string) => void;
   onSlotClose?: () => void;
   /** Merged assignments for pad display (store + live). */
@@ -677,7 +677,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return { slotKey: selectedSlotKey, ...resolved };
   }, [selectedSlotKey, auxDefs]);
 
-  // === Task text/font attributes pad (tap on iPad / double-click on desktop) ===
+  // === Task text/font attributes pad (single click/tap on every device) ===
   // Local to Board (builder-only UI state). No need to lift open/close to Client.
   const [activeTaskEditPad, setActiveTaskEditPad] = React.useState<null | {
     slotKey: string;
@@ -1051,7 +1051,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   // Actions inside the pad (Lock / Coverage / Swap / Assign Sweeper) explicitly call the
   // original onCardClick / onGenderClick (which opens the full MarkerPad) + close the pad.
   // Clear is direct + fast. This prevents the "both pad + full drawer at once" clutter.
-  /** Placement Pad opens on tap (iPad) or double-click (desktop) in the assignee zone. */
+  /** Placement Pad opens on one click/tap in the assignee zone. */
   const handleCardClickForPad = React.useCallback((k: string) => {
     closeTaskTextEditPad();
     onSlotOpen?.(k);
@@ -1380,7 +1380,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
       {/* /sheet-header */}
 
       <div className={`flex flex-col w-full flex-1 min-h-0 ${isPrintPreview ? "overflow-hidden" : "min-h-0"}`}>
-        {/* Task text edit pad (double-click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
+        {/* Task text edit pad (click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
         {renderTaskTextEditPad()}
         {currentView === "deployment" ? (
           <>

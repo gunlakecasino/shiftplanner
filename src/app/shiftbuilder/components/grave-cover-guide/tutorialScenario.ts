@@ -73,8 +73,8 @@ export const GUIDE_STEPS: GuideStep[] = [
   {
     id: "dblclick-z4",
     title: "Open Z4 Placement Pad",
-    body: "Martinez is still on Z4. On desktop, double-click the upper name area. On iPad, a single tap opens the same Placement Pad flyout.",
-    hint: "Open the pad on Z4 (double-click on desktop).",
+    body: "Martinez is still on Z4. Click or tap the upper name area once to open the Placement Pad flyout.",
+    hint: "Click the name area on Z4.",
   },
   {
     id: "mark-unavailable",

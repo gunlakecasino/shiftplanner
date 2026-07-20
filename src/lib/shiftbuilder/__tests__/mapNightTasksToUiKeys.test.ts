@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { mapNightTasksToUiKeys } from "../mapNightTasksToUiKeys";
-import { buildCoveredByIndex } from "../coverageHelpers";
+import {
+  buildCoveredByIndex,
+  formatCoveragePositionLabel,
+} from "../coverageHelpers";
 import type { NightSlotTask } from "../data";
 import type { AuxDef } from "../placement";
 
@@ -25,6 +28,15 @@ const flexLayout: AuxDef[] = [
   { key: "AUX3", role: "support", label: "SUPPORT 1", locations: [] },
   { key: "AUX4", role: "step_up", label: "STEP UP", locations: [] },
 ];
+
+describe("coverage position labels", () => {
+  it("omits A/B for a solo coverer and preserves it for shared coverage", () => {
+    expect(formatCoveragePositionLabel("Z2", "A", 1)).toBe("2");
+    expect(formatCoveragePositionLabel("MRR7", "B", 1)).toBe("7");
+    expect(formatCoveragePositionLabel("Z2", "A", 2)).toBe("2A");
+    expect(formatCoveragePositionLabel("WRR7", "B", 2)).toBe("7B");
+  });
+});
 
 describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
   it("remaps admin / support_1 / step_up DB keys onto AUXn shells", () => {
@@ -71,6 +83,29 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
     expect(buildCoveredByIndex(assignments, mapped).Z7).toMatchObject([
       { tmName: "Amanda", side: "A", sourceKey: "WRR7", isSynthetic: true },
       { tmName: "Gary", side: "B", sourceKey: "MRR7", isSynthetic: true },
+    ]);
+  });
+
+  it("shows restroom-to-restroom coverage on both halves of the target restroom", () => {
+    const assignments = {
+      WRR1: {
+        tmId: "darlene",
+        tmName: "Darlene",
+        additionalCoverageSlots: ["WRR7"],
+      },
+    };
+
+    const mapped = mapNightTasksToUiKeys([], [], assignments);
+    const coveredBy = buildCoveredByIndex(assignments, mapped);
+
+    expect(mapped.WRR1).toMatchObject([
+      { taskLabel: "And Restroom 7", isCoverage: true },
+    ]);
+    expect(coveredBy.WRR7).toMatchObject([
+      { tmName: "Darlene", sourceKey: "WRR1", isSynthetic: true },
+    ]);
+    expect(coveredBy.MRR7).toMatchObject([
+      { tmName: "Darlene", sourceKey: "WRR1", isSynthetic: true },
     ]);
   });
 

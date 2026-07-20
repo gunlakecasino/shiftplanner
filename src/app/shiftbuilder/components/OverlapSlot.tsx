@@ -7,7 +7,7 @@ import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 
 import { isCriticalRepeatFit } from "./PlacementFitChip";
-import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick } from "./CardTaskZone";
+import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { cardAccentInk, overlapSlotLabel } from "@/lib/shiftbuilder/constants";
 import {
@@ -162,7 +162,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           nameSizeOverride={showDigitalAssists ? 16 : 14}
           onUnassignedClick={(e) => {
             if (!isLocked && onCardClick) {
-              handleAssignZoneDoubleClick(e, slotKey, onCardClick, isLocked);
+              handleAssignZoneClick(e, slotKey, onCardClick, isLocked);
             }
           }}
         />

@@ -134,7 +134,7 @@ export default function XDStyleComponentLibrary() {
 
   // Real editing handlers wired to the live demo state
   // These are passed to the actual card components so that interactions
-  // (remove ×, double-click to edit, etc.) directly mutate the preview data.
+  // (remove ×, click to edit, etc.) directly mutate the preview data.
   const handleRemoveTask = (slotKey: string, taskLabel: string) => {
     if (taskLabel.includes('AND') || taskLabel.includes('LOBBY') || taskLabel.includes('ZONE')) {
       // Coverage bar

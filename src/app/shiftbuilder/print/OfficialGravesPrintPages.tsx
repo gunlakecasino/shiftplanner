@@ -11,6 +11,7 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import {
   buildCoveredByIndex,
+  formatCoveragePositionLabel,
   formatCoverageSideLabel,
   getSlotCoverageLabel,
   type CoveredByEntry,
@@ -183,10 +184,11 @@ function taskLabels(snapshot: PrintDaySnapshot, slotKey: string): string[] {
 function coverageFooterLabel(
   targetKey: string,
   entry: CoveredByEntry,
+  covererCount: number,
   auxDefs: PrintDaySnapshot["auxDefs"],
 ): string {
-  if (targetKey.startsWith("Z") && entry.side) {
-    return `ZONE ${formatCoverageSideLabel(targetKey, entry.side)}`;
+  if (targetKey.startsWith("Z")) {
+    return `ZONE ${formatCoveragePositionLabel(targetKey, entry.side, covererCount)}`;
   }
   const aux = auxDefs.find((def) => def.key === targetKey);
   if (aux?.role === "z9sr") return "ZONE 9 SMOKING ROOM";
@@ -203,7 +205,7 @@ function buildCoverageTargetsBySource(
   const result: Record<string, string[]> = {};
   Object.entries(coveredByIndex).forEach(([targetKey, entries]) => {
     entries.forEach((entry) => {
-      const label = coverageFooterLabel(targetKey, entry, auxDefs);
+      const label = coverageFooterLabel(targetKey, entry, entries.length, auxDefs);
       result[entry.sourceKey] = [...new Set([...(result[entry.sourceKey] ?? []), label])];
     });
   });
@@ -234,7 +236,9 @@ function ApprovedAssignmentCard({
   const names = assignment.tmName?.trim()
     ? [assignment.tmName.trim()]
     : coveredBy.map((entry) =>
-        entry.side ? `${formatCoverageSideLabel(slotKey, entry.side)} ${entry.tmName}` : entry.tmName,
+        coveredBy.length > 1 && entry.side
+          ? `${formatCoverageSideLabel(slotKey, entry.side)} ${entry.tmName}`
+          : entry.tmName,
       );
   const breakGroup = assignment.tmName?.trim()
     ? assignment.breakGroup

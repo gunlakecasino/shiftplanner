@@ -26,8 +26,8 @@ type TutorialZoneCardProps = {
   highlighted?: boolean;
   pulse?: boolean;
   highlightTaskZone?: boolean;
-  onAssignZoneDoubleClick?: (slotKey: TutorialSlotKey) => void;
-  onTaskZoneDoubleClick?: (slotKey: TutorialSlotKey) => void;
+  onAssignZoneClick?: (slotKey: TutorialSlotKey) => void;
+  onTaskZoneClick?: (slotKey: TutorialSlotKey) => void;
 };
 
 export function TutorialZoneCard({
@@ -38,8 +38,8 @@ export function TutorialZoneCard({
   highlighted = false,
   pulse = false,
   highlightTaskZone = false,
-  onAssignZoneDoubleClick,
-  onTaskZoneDoubleClick,
+  onAssignZoneClick,
+  onTaskZoneClick,
 }: TutorialZoneCardProps) {
   const def = ZONE_DEFS.find((z) => z.key === slotKey)!;
   const color = getZoneColor(slotKey);
@@ -80,9 +80,9 @@ export function TutorialZoneCard({
 
       <div
         className="sb-card-assign-zone px-3.5 pt-1 pb-1.5 shrink-0"
-        onDoubleClick={(e) => {
+        onClick={(e) => {
           e.stopPropagation();
-          onAssignZoneDoubleClick?.(slotKey);
+          onAssignZoneClick?.(slotKey);
         }}
       >
         {isCovered ? (
@@ -112,9 +112,9 @@ export function TutorialZoneCard({
               size="zone"
               onClick={(e) => {
                 e.stopPropagation();
-                onAssignZoneDoubleClick?.(slotKey);
+                onAssignZoneClick?.(slotKey);
               }}
-              title="Double-click upper area to open placement pad"
+              title="Click upper area to open placement pad"
             />
           </div>
         </>
@@ -126,9 +126,9 @@ export function TutorialZoneCard({
         className={`sb-card-task-scroll px-3 py-1.5 space-y-0.5 flex-1 min-h-[32px] overflow-y-auto ${
           highlightTaskZone ? "sb-guide-target sb-guide-target--pulse" : ""
         }`}
-        onDoubleClick={(e) => {
+        onClick={(e) => {
           e.stopPropagation();
-          onTaskZoneDoubleClick?.(slotKey);
+          onTaskZoneClick?.(slotKey);
         }}
       >
         {regularTasks.map((t) => (
@@ -141,7 +141,7 @@ export function TutorialZoneCard({
           </div>
         ))}
         {regularTasks.length === 0 && !isEmpty && (
-          <span className="text-[9px] text-[#9CA3AF] opacity-60">Double-click to add tasks</span>
+          <span className="text-[9px] text-[#9CA3AF] opacity-60">Click to add tasks</span>
         )}
       </div>
 

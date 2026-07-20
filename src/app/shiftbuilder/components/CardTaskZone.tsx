@@ -2,7 +2,6 @@
 
 import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
-import { padUsesSingleTap as padUsesSingleTapDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 export type OpenTasksPadHandler = (
   slotKey: string,
@@ -16,13 +15,8 @@ export type OpenPlacementPadHandler = (
   event?: React.MouseEvent,
 ) => void;
 
-/** Re-export — single-tap pads on any coarse pointer (Split View safe). */
-export function padUsesSingleTap(): boolean {
-  return padUsesSingleTapDevice();
-}
-
-/** Upper assignee band — tap (iPad) or double-click (desktop) opens Placement Pad. */
-export function handleAssignZoneDoubleClick(
+/** Upper assignee band — one click/tap opens Placement Pad. */
+export function handleAssignZoneClick(
   e: React.MouseEvent,
   slotKey: string,
   onOpenPlacementPad: OpenPlacementPadHandler,
@@ -39,13 +33,12 @@ export function assignZoneOpenHandlers(
   isLocked?: boolean,
 ): {
   onClick?: (e: React.MouseEvent) => void;
-  onDoubleClick?: (e: React.MouseEvent) => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
   role: "button";
   tabIndex: number;
 } {
   const open = (e: React.MouseEvent) =>
-    handleAssignZoneDoubleClick(e, slotKey, onOpenPlacementPad, isLocked);
+    handleAssignZoneClick(e, slotKey, onOpenPlacementPad, isLocked);
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (isLocked || (e.key !== "Enter" && e.key !== " ")) return;
     e.preventDefault();
@@ -57,13 +50,10 @@ export function assignZoneOpenHandlers(
     tabIndex: isLocked ? -1 : 0,
     onKeyDown,
   };
-  if (padUsesSingleTap()) {
-    return { ...accessibility, onClick: open };
-  }
-  return { ...accessibility, onDoubleClick: open };
+  return { ...accessibility, onClick: open };
 }
 
-/** Lower card band — tap (iPad) or double-click (desktop) opens Tasks Pad. */
+/** Lower card band — one click/tap opens Tasks Pad. */
 export const CardTaskZone: React.FC<{
   slotKey: string;
   children?: React.ReactNode;
@@ -88,23 +78,13 @@ export const CardTaskZone: React.FC<{
     onOpenTasksPad(slotKey, undefined, { addMode: true });
   };
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (!enabled) return;
-    if (padUsesSingleTap()) {
-      openTasksPad(e);
-      return;
-    }
-    e.stopPropagation();
-  };
-
   return (
     <div
       data-card-task-zone
       data-slot-key={slotKey}
       className={`sb-card-task-zone ${className}`.trim()}
       style={style}
-      onDoubleClick={enabled && !padUsesSingleTap() ? openTasksPad : undefined}
-      onClick={enabled ? handleClick : undefined}
+      onClick={enabled ? openTasksPad : undefined}
     >
       {children}
     </div>

@@ -1941,7 +1941,7 @@ function AuthedShiftBuilder() {
     setSelectedSlotKey((prev) => (prev === resolved ? null : resolved));
   }, [isCurrentNightLocked, showToast, resolvePlacementSlotKey]);
 
-  /** Always open (never toggle closed) — used so double-click keeps the pad visible. */
+  /** Always open (never toggle closed) so a placement click keeps the pad visible. */
   const handleSlotOpen = React.useCallback((slotKey: string) => {
     if (isCurrentNightLocked) {
       showToast("This day is locked — editing disabled", "error");

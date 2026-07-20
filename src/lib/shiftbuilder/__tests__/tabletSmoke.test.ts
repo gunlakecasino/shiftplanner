@@ -109,10 +109,11 @@ describe("tablet smoke — long press vs drag thresholds", () => {
 });
 
 describe("tablet smoke — pad presentation contract", () => {
-  it("padUsesSingleTap follows coarse pointer, not min-width", async () => {
+  it("padUsesSingleTap is also true on a fine-pointer desktop", async () => {
     stubMatchMedia({
-      "(pointer: coarse)": true,
+      "(pointer: coarse)": false,
       "(pointer: coarse) and (min-width: 768px)": false,
+      "(hover: none)": false,
     });
     const { padUsesSingleTap, isTabletTouchDevice } = await import("../tabletDevice");
     expect(padUsesSingleTap()).toBe(true);

@@ -52,6 +52,19 @@ export function formatCoverageSideLabel(
   return `${coveragePositionSuffix(targetSlotKey)}${side}`;
 }
 
+/**
+ * Display position for a covered target. A/B is meaningful only when more
+ * than one TM shares the target; a solo coverer simply shows the slot number.
+ */
+export function formatCoveragePositionLabel(
+  targetSlotKey: string,
+  side: CoverageSide | null | undefined,
+  covererCount: number,
+): string {
+  const suffix = coveragePositionSuffix(targetSlotKey);
+  return covererCount > 1 && side ? `${suffix}${side}` : suffix;
+}
+
 /** For an RR key (MRR7, WRR7) return both sides. For others return [key]. */
 export function expandCoverageToKeys(uiKey: string): string[] {
   if (uiKey.startsWith("MRR")) return [uiKey, `WRR${uiKey.slice(3)}`];
@@ -185,16 +198,21 @@ export function buildCoveredByIndex(
       const targetKey = parseCoverageTargetFromTaskLabel(t.taskLabel, labelToKey);
       if (!targetKey) continue;
 
-      if (!index[targetKey]) index[targetKey] = [];
-      index[targetKey].push({
-        tmName,
-        tmId: row?.tmId,
-        side: t.coverageSide ?? null,
-        sourceKey,
-        taskLabel: t.taskLabel,
-        taskId: t.id,
-        isSynthetic: t.id?.startsWith("coverage:") === true,
-      });
+      // Restroom coverage is expressed with one human-facing label
+      // ("Restroom 7"), but the board renders separate women's and men's
+      // slots. Mirror the same covered state onto both halves.
+      for (const expandedTargetKey of expandCoverageToKeys(targetKey)) {
+        if (!index[expandedTargetKey]) index[expandedTargetKey] = [];
+        index[expandedTargetKey].push({
+          tmName,
+          tmId: row?.tmId,
+          side: t.coverageSide ?? null,
+          sourceKey,
+          taskLabel: t.taskLabel,
+          taskId: t.id,
+          isSynthetic: t.id?.startsWith("coverage:") === true,
+        });
+      }
     }
   }
 

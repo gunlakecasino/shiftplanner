@@ -15,7 +15,10 @@ import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import { TmNameBlock } from "./assignmentCardChrome";
 import { UnassignedDropHint } from "./builderPrimitives";
 import { UnassignedInvite } from "./assignmentCardChrome";
-import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
+import {
+  formatCoveragePositionLabel,
+  type CoveredByEntry,
+} from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import {
   CardAccentStripe,
@@ -28,7 +31,7 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
-import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneDoubleClick, padUsesSingleTap } from "./CardTaskZone";
+import { CardTaskZone } from "./CardTaskZone";
 import { CardTaskBadge } from "./CardTaskBadge";
 import { ShiftCard as PackageShiftCard } from "../redesign/components/ShiftCard";
 
@@ -273,8 +276,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       ))}
     </CardTaskZone>
   ) : undefined;
-  const packageCoverage = coveredBy.map((entry, index) => ({
-    label: entry.side ? `${String(def.key).replace(/^Z/, "")}${entry.side}` : String(index + 1),
+  const packageCoverage = coveredBy.map((entry) => ({
+    label: formatCoveragePositionLabel(def.key, entry.side, coveredBy.length),
     name: entry.tmName,
   }));
   const packageCoverageFooter = zoneCoverageTasks.length > 0 ? (

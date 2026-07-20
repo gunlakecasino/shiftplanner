@@ -117,7 +117,7 @@ export function GraveCoverGuideTutorial({
     setTaskPadSlot(null);
   };
 
-  const handleZoneDoubleClick = (slotKey: TutorialSlotKey) => {
+  const handleZoneClick = (slotKey: TutorialSlotKey) => {
     if (stepId === "dblclick-z4" && slotKey === "Z4" && board.Z4) {
       openPad("Z4");
       setStepId("mark-unavailable");
@@ -134,7 +134,7 @@ export function GraveCoverGuideTutorial({
     }
   };
 
-  const handleTaskZoneDoubleClick = (slotKey: TutorialSlotKey) => {
+  const handleTaskZoneClick = (slotKey: TutorialSlotKey) => {
     if (stepId !== "add-task" || slotKey !== "Z4") return;
     setTaskPadSlot(slotKey);
     setPad(null);
@@ -287,7 +287,7 @@ export function GraveCoverGuideTutorial({
               <li><strong>Mark unavailable</strong> — whole night (pad header)</li>
               <li><strong>Clear</strong> — one slot (pad footer)</li>
               <li><strong>Coverage</strong> — footer → <em>And Zone X</em> bar at card bottom</li>
-              <li><strong>Tasks</strong> — tap/double-click lower task area (not coverage)</li>
+              <li><strong>Tasks</strong> — click/tap the lower task area once (not coverage)</li>
               <li><strong>Covered by</strong> — shows on empty slots someone is covering</li>
             </ul>
           </div>
@@ -348,8 +348,8 @@ export function GraveCoverGuideTutorial({
                         (stepId === "add-task" && key === "Z4")
                       }
                       highlightTaskZone={stepId === "add-task" && key === "Z4"}
-                      onAssignZoneDoubleClick={handleZoneDoubleClick}
-                      onTaskZoneDoubleClick={handleTaskZoneDoubleClick}
+                      onAssignZoneClick={handleZoneClick}
+                      onTaskZoneClick={handleTaskZoneClick}
                     />
                   ))}
                 </div>

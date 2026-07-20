@@ -13,9 +13,6 @@ import {
   taskLabelSizeClass,
   TASK_LABEL_SIZE_PX,
 } from "@/lib/shiftbuilder/taskTextStyle";
-import { padUsesSingleTap } from "./CardTaskZone";
-
-
 // Shared color palette for tasks (used by TaskRow accent + TaskTextEditPad)
 // Using iOS 26 system colors for accents/highlights
 export const TASK_COLOR_SPHERES = [
@@ -31,7 +28,7 @@ export const TASK_COLOR_SPHERES = [
 
 // ============================================================================
 // TaskRow — static per-task line (color accent border for text attr).
-// Double-click anywhere on the row to open the dedicated TaskTextEditPad (pops like PlacementPad).
+// Click anywhere on the row to open the dedicated TaskTextEditPad (pops like PlacementPad).
 // No more hover quick-edit toolbar (color / pencil / delete). Used by Zone/RR/Aux/Overlap cards.
 // ============================================================================
 
@@ -46,7 +43,7 @@ export interface TaskRowProps {
   onSetTaskColor?: (slotKey: string, taskLabel: string, color: string | null) => void;
   onSetTaskMarker?: (slotKey: string, taskLabel: string, markerType: 'highlight' | 'underline' | 'circle' | 'none' | null) => void;
   onEditTask?: (slotKey: string, oldLabel: string, newLabel: string) => void;
-  /** Double-click opens Tasks Pad (task optional when opening from card). Builder only. */
+  /** Single-click opens Tasks Pad (task optional when opening from card). Builder only. */
   onOpenTaskTextEdit?: (
     slotKey: string,
     task?: NightSlotTask,
@@ -224,26 +221,14 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-1 -mx-0.5 ${isPrintPreview ? 'py-0' : 'py-[2px]'} hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[var(--sb-gold-border)]' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
       {...(canDrag ? dragListeners : {})}
       {...(canDrag ? taskDragAttributes : {})}
-      onClick={
-        padUsesSingleTap()
-          ? (e) => {
-              if ((e.target as HTMLElement).closest("button")) return;
-              e.stopPropagation();
-              onOpenTaskTextEdit?.(slotKey, task);
-            }
-          : undefined
-      }
-      onDoubleClick={
-        padUsesSingleTap()
-          ? undefined
-          : (e) => {
-              e.stopPropagation();
-              onOpenTaskTextEdit?.(slotKey, task);
-            }
-      }
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        e.stopPropagation();
+        onOpenTaskTextEdit?.(slotKey, task);
+      }}
     >
       {/* Label — static; color accent (left border + subtle tint) is the persistent visual for the text attribute.
-          Double-click the row anywhere to open the full text/font edit pad (label + color). Hover toolbar removed per spec. */}
+          Click the row anywhere to open the full text/font edit pad (label + color). Hover toolbar removed per spec. */}
       <div data-task-label className={`min-w-0 flex-1 ${isPrintPreview ? 'leading-[1.05]' : 'leading-snug'}`}>
         <span ref={labelRef} className="block min-w-0 max-w-full">
           <TaskMarkerLabel

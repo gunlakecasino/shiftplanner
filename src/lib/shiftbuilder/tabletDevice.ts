@@ -41,13 +41,9 @@ export function isTabletTouchDevice(): boolean {
   }
 }
 
-/**
- * iPad / finger: single tap opens placement & tasks pads.
- * Desktop mouse: double-click (see CardTaskZone.padUsesSingleTap).
- * Uses coarse pointer (not min-width 768) so Split View still single-taps.
- */
+/** Placement and task pads use one click/tap on every input device. */
 export function padUsesSingleTap(): boolean {
-  return isCoarsePointerDevice();
+  return true;
 }
 
 /**
