@@ -14,17 +14,56 @@ export type LiveBoardOverlay = {
   notes?: string;
 };
 
+function isDisplayName(value: string | undefined): value is string {
+  const name = value?.trim();
+  return Boolean(name && name !== "-");
+}
+
+/**
+ * Live board state is allowed to be partial while an optimistic assignment is
+ * settling. Keep the persisted name when it belongs to the same TM so the
+ * print sheet never turns a valid assignment into an unassigned dash.
+ */
+function mergeLiveAssignments(
+  persisted: PrintDaySnapshot["assignments"],
+  live: LiveBoardOverlay["assignments"],
+): PrintDaySnapshot["assignments"] {
+  const merged = { ...persisted };
+
+  for (const [slotKey, liveAssignment] of Object.entries(live)) {
+    const savedAssignment = persisted[slotKey];
+    const sameTm = Boolean(
+      liveAssignment.tmId && savedAssignment?.tmId === liveAssignment.tmId,
+    );
+    const tmName = isDisplayName(liveAssignment.tmName)
+      ? liveAssignment.tmName
+      : sameTm && isDisplayName(savedAssignment?.tmName)
+        ? savedAssignment.tmName
+        : liveAssignment.tmName;
+
+    merged[slotKey] = {
+      ...savedAssignment,
+      ...liveAssignment,
+      tmName,
+    };
+  }
+
+  return merged;
+}
+
 /** Overlay live builder board state onto a fetched snapshot (current night preview). */
 export function applyLiveBoardToPrintSnapshot(
   snapshot: PrintDaySnapshot,
   live: LiveBoardOverlay,
 ): PrintDaySnapshot {
+  const assignments = mergeLiveAssignments(snapshot.assignments, live.assignments);
+
   return {
     ...snapshot,
-    assignments: live.assignments,
+    assignments,
     auxDefs: live.auxDefs,
     tasksBySlot: live.tasksBySlot,
-    breakCounts: computeBreakCounts(live.assignments),
+    breakCounts: computeBreakCounts(assignments),
     ...(live.notes !== undefined ? { notes: live.notes } : {}),
   };
 }
