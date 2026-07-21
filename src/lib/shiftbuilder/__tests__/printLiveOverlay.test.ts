@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildOverlapRows } from "@/app/shiftbuilder/print/buildPrintDaySnapshot";
 import { applyLiveBoardToPrintSnapshot } from "@/app/shiftbuilder/print/mergePrintSnapshot";
 import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
 
@@ -31,6 +32,23 @@ describe("applyLiveBoardToPrintSnapshot", () => {
     expect(result.assignments["OL-PM-2"]).toMatchObject({
       tmId: "tm_gage",
       tmName: "Gage",
+    });
+  });
+
+  it("repairs dash names in the overlap print model when a TM is assigned", () => {
+    const snapshot = snapshotWithGage();
+    snapshot.assignments["OL-PM-2"] = {
+      tmId: "tm_gage",
+      tmName: "-",
+      breakGroup: 4,
+    };
+
+    const pmRow = buildOverlapRows(snapshot).find((row) => row.key === "PM");
+    const gageSlot = pmRow?.slots.find((slot) => slot.key === "OL-PM-2");
+
+    expect(gageSlot).toMatchObject({
+      tmName: "Gage",
+      empty: false,
     });
   });
 });

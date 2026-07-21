@@ -33,6 +33,40 @@ import {
   defaultAuxDefsForNewNight,
 } from "./auxLayout";
 
+type AssignmentDbRow = {
+  night_id: string;
+  slot_key: string;
+  slot_type: string | null;
+  tm_id: string | null;
+  rr_side: string | null;
+  is_locked: boolean | null;
+  is_filled: boolean | null;
+  updated_at: string | null;
+  sort_order: number | null;
+  break_group: number | null;
+  additional_coverage_slots: unknown;
+};
+
+type AssignmentProfileNameRow = {
+  id?: string | null;
+  tm_id?: string | null;
+  display_name?: string | null;
+  full_name?: string | null;
+};
+
+type AssignmentBundleRow = {
+  slotKey: string;
+  tmId: string | null;
+  tmName?: string;
+  slotType: string;
+  rrSide: string | null;
+  isLocked: boolean;
+  isFilled: boolean;
+  updatedAt: string | null;
+  breakGroup: number | null;
+  additionalCoverageSlots: string[];
+};
+
 function getBundleSupabase(): SupabaseClient {
   const client = createAdminClientSafe();
   if (!client) {
@@ -46,7 +80,7 @@ function getBundleSupabase(): SupabaseClient {
 async function fetchAssignmentsForNight(
   nightId: string,
   nameById: Map<string, string>,
-): Promise<any[]> {
+): Promise<AssignmentBundleRow[]> {
   const supabase = getBundleSupabase();
   const { data: rows, error } = await supabase
     .from("zone_assignments")
@@ -67,7 +101,50 @@ async function fetchAssignmentsForNight(
   }
   if (!rows?.length) return [];
 
-  return rows.map((row: any) => ({
+  const assignmentRows = rows as AssignmentDbRow[];
+  const missingTmIds = Array.from(
+    new Set(
+      assignmentRows
+        .map((row) => (typeof row.tm_id === "string" ? row.tm_id.trim() : ""))
+        .filter((tmId) => tmId && !nameById.has(tmId)),
+    ),
+  );
+  if (missingTmIds.length > 0) {
+    const uuidIds = missingTmIds.filter((tmId) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tmId),
+    );
+    const [byTmId, byUuid] = await Promise.all([
+      supabase
+        .from("tm_profiles")
+        .select("id, tm_id, display_name, full_name")
+        .in("tm_id", missingTmIds),
+      uuidIds.length > 0
+        ? supabase
+            .from("tm_profiles")
+            .select("id, tm_id, display_name, full_name")
+            .in("id", uuidIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (byTmId.error) {
+      console.warn("[nightCoreBundle] missing assignment names tm_id lookup failed", byTmId.error.message);
+    }
+    if (byUuid.error) {
+      console.warn("[nightCoreBundle] missing assignment names uuid lookup failed", byUuid.error.message);
+    }
+
+    const missingProfiles = [
+      ...((byTmId.data ?? []) as AssignmentProfileNameRow[]),
+      ...((byUuid.data ?? []) as AssignmentProfileNameRow[]),
+    ];
+    for (const profile of missingProfiles) {
+      const name = profile.display_name || profile.full_name || profile.tm_id || profile.id;
+      if (profile.tm_id && name) nameById.set(profile.tm_id, name);
+      if (profile.id && name) nameById.set(profile.id, name);
+    }
+  }
+
+  return assignmentRows.map((row) => ({
     slotKey: row.slot_key,
     tmId: row.tm_id || null,
     tmName: row.tm_id ? nameById.get(row.tm_id) : undefined,

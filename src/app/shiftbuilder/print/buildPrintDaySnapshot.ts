@@ -19,6 +19,7 @@ import {
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { fetchNightCoreData } from "@/app/shiftbuilder/hooks/fetchNightCoreData";
 import { fetchNightSecondaryData } from "@/app/shiftbuilder/hooks/fetchNightSecondaryData";
+import { hasPrintAssigneeName, printAssigneeName } from "./printAssigneeName";
 import type {
   PrintDaySnapshot,
   PrintPlanningCardModel,
@@ -44,7 +45,7 @@ export function slotShowsFilled(
   assignments: Record<string, { tmName?: string; tmId?: string }>,
 ): boolean {
   const row = assignments[slotKey];
-  return !!(row?.tmName?.trim() || row?.tmId);
+  return hasPrintAssigneeName(row?.tmName, row?.tmId);
 }
 
 import { computeBreakCounts } from "@/lib/shiftbuilder/processNightData";
@@ -120,6 +121,7 @@ export function buildZoneCardModels(snapshot: PrintDaySnapshot): PrintPlanningCa
   return ZONE_VISUAL_ORDER.map((zKey) => {
     const def = ZONE_DEFS.find((d) => d.key === zKey)!;
     const a = snapshot.assignments[def.key] || {};
+    const tmName = printAssigneeName(a.tmName, a.tmId);
     const taskLines = toTaskLines(snapshot.tasksBySlot[def.key]);
     const cov = coverageFromTasks(taskLines);
     const regular = taskLines.filter((t) => !t.isCoverage);
@@ -129,13 +131,13 @@ export function buildZoneCardModels(snapshot: PrintDaySnapshot): PrintPlanningCa
       headerLabel: def.label,
       headerIcon: ZONE_ICONS[def.key] ?? "●",
       accentColor: getZoneColor(def.key),
-      tmName: a.tmName ?? null,
+      tmName,
       locationLines: [],
       tasks: regular,
       coverageLabel: cov.label,
       coverageColor: cov.color,
       breakGroup: (a.breakGroup ?? 0) as 0 | 1 | 2 | 3,
-      empty: !a.tmName,
+      empty: !tmName,
       minHeightPx: 124,
     };
   });
@@ -150,6 +152,7 @@ export function buildRRCardModels(snapshot: PrintDaySnapshot): PrintPlanningCard
 
     const side = (slotKey: string, sideLabel: string): PrintPlanningCardModel => {
       const a = snapshot.assignments[slotKey] || {};
+      const tmName = printAssigneeName(a.tmName, a.tmId);
       const taskLines = toTaskLines(snapshot.tasksBySlot[slotKey]);
       const cov = coverageFromTasks(taskLines);
       const regular = taskLines.filter((t) => !t.isCoverage);
@@ -159,13 +162,13 @@ export function buildRRCardModels(snapshot: PrintDaySnapshot): PrintPlanningCard
         headerLabel: def.label,
         headerIcon: icon,
         accentColor: color,
-        tmName: a.tmName ?? null,
+        tmName,
         locationLines: [],
         tasks: regular,
         coverageLabel: cov.label,
         coverageColor: cov.color,
         breakGroup: (a.breakGroup ?? 0) as 0 | 1 | 2 | 3,
-        empty: !a.tmName,
+        empty: !tmName,
         sideLabel,
         minHeightPx: 56,
       };
@@ -178,6 +181,7 @@ export function buildRRCardModels(snapshot: PrintDaySnapshot): PrintPlanningCard
 export function buildAuxCardModels(snapshot: PrintDaySnapshot): PrintPlanningCardModel[] {
   return snapshot.auxDefs.map((def) => {
     const a = snapshot.assignments[def.key] || {};
+    const tmName = printAssigneeName(a.tmName, a.tmId);
     const taskLines = toTaskLines(snapshot.tasksBySlot[def.key]);
     const regular = taskLines.filter((t) => !t.isCoverage);
     const isBlank = def.role === "blank" && !def.label;
@@ -188,13 +192,13 @@ export function buildAuxCardModels(snapshot: PrintDaySnapshot): PrintPlanningCar
       headerLabel: def.label || (isBlank ? "SET ROLE" : def.key),
       headerIcon: getAuxIcon(def.key, def.role),
       accentColor: getAuxAccent(def.key, def.role),
-      tmName: a.tmName ?? null,
+      tmName,
       locationLines: locs.length ? locs : [],
       tasks: regular,
       coverageLabel: null,
       coverageColor: null,
       breakGroup: (a.breakGroup ?? 0) as 0 | 1 | 2 | 3,
-      empty: !a.tmName && !isBlank,
+      empty: !tmName && !isBlank,
       blankAux: isBlank,
       minHeightPx: 76,
     };
@@ -209,7 +213,7 @@ export function buildBreaksWaves(snapshot: PrintDaySnapshot): PrintBreaksWave[] 
       if (!a?.tmId || (a.breakGroup ?? 0) !== wave || slotKey.startsWith("OL-")) return;
       people.push({
         slotKey,
-        tmName: a.tmName || a.tmId,
+        tmName: printAssigneeName(a.tmName, a.tmId) ?? a.tmId,
         chipLabel: chipLabel(slotKey, snapshot.auxDefs),
         accentColor: accentForSlot(slotKey, snapshot.auxDefs),
         sideLetter: slotKey.startsWith("MRR") ? "M" : slotKey.startsWith("WRR") ? "W" : "",
@@ -226,17 +230,18 @@ export function buildOverlapRows(snapshot: PrintDaySnapshot): PrintOverlapRow[] 
     Array.from({ length: 6 }, (_, i) => {
       const slotKey = `OL-${half}-${i}`;
       const a = snapshot.assignments[slotKey] || {};
+      const tmName = printAssigneeName(a.tmName, a.tmId);
       const taskLines = toTaskLines(snapshot.tasksBySlot[slotKey]);
       return {
         key: slotKey,
         kind: "overlap",
         headerLabel: overlapSlotLabel(slotKey),
         accentColor: getOverlapAccent(slotKey),
-        tmName: a.tmName ?? null,
+        tmName,
         locationLines: [],
         tasks: taskLines,
         breakGroup: (a.breakGroup ?? 0) as 0 | 1 | 2 | 3 | 4,
-        empty: !a.tmName,
+        empty: !tmName,
         minHeightPx: 54,
       };
     });
