@@ -35,4 +35,25 @@ describe("fixed break group resolution", () => {
     expect(assignments.Z4?.breakGroup).toBe(BREAK_GROUP_OVERLAPS);
     expect(assignments.Z4?.breakGroupExplicit).toBeUndefined();
   });
+
+  it("normalizes legacy overlap rows stored with aux slot_type", () => {
+    const assignments = enrichAssignmentsWithBreakGroups(
+      [
+        {
+          slotKey: "overlap_pm_2",
+          slotType: "aux",
+          tmId: "tm_gage",
+          tmName: "Gage",
+          breakGroup: 4,
+        },
+      ],
+      new Map(),
+    );
+
+    expect(assignments["OL-PM-2"]).toMatchObject({
+      tmId: "tm_gage",
+      tmName: "Gage",
+    });
+    expect(assignments["UNK:overlap_pm_2"]).toBeUndefined();
+  });
 });

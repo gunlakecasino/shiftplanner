@@ -67,6 +67,10 @@ type AssignmentBundleRow = {
   additionalCoverageSlots: string[];
 };
 
+function isOverlapDbSlotKey(slotKey: string | null | undefined): boolean {
+  return /^overlap_(pm|am)_\d+$/i.test(slotKey ?? "");
+}
+
 function getBundleSupabase(): SupabaseClient {
   const client = createAdminClientSafe();
   if (!client) {
@@ -101,7 +105,23 @@ async function fetchAssignmentsForNight(
   }
   if (!rows?.length) return [];
 
-  const assignmentRows = rows as AssignmentDbRow[];
+  const rawAssignmentRows = rows as AssignmentDbRow[];
+  const canonicalOverlapKeys = new Set(
+    rawAssignmentRows
+      .filter((row) => row.slot_type === "overlap" && isOverlapDbSlotKey(row.slot_key))
+      .map((row) => row.slot_key),
+  );
+  const assignmentRows = rawAssignmentRows
+    .filter((row) => {
+      if (!isOverlapDbSlotKey(row.slot_key)) return true;
+      if (row.slot_type === "overlap") return true;
+      return !canonicalOverlapKeys.has(row.slot_key);
+    })
+    .map((row) =>
+      isOverlapDbSlotKey(row.slot_key) && row.slot_type !== "overlap"
+        ? { ...row, slot_type: "overlap" }
+        : row,
+    );
   const missingTmIds = Array.from(
     new Set(
       assignmentRows

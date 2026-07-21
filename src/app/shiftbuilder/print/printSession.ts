@@ -187,7 +187,8 @@ function buildIframePrintOverrides(config: PrintConfig): string {
       width: ${GOLDEN_WIDTH_PX}px !important;
       margin: 0 auto !important;
       contain: none !important;
-      transform: scale(${zoomValue}) !important;
+      zoom: ${zoomValue} !important;
+      transform: none !important;
       transform-origin: top center !important;
       page-break-after: auto !important;
       break-after: auto !important;
@@ -222,8 +223,8 @@ function buildIframePrintOverrides(config: PrintConfig): string {
       .print-page-wrapper > .print-artboard {
         width: ${GOLDEN_WIDTH_PX}px !important;
         margin: 0 auto !important;
-        zoom: 1 !important;
-        transform: scale(${zoomValue}) !important;
+        zoom: ${zoomValue} !important;
+        transform: none !important;
         transform-origin: top center !important;
         contain: none !important;
       }

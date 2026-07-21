@@ -47,6 +47,7 @@ describe("applyLiveBoardToPrintSnapshot", () => {
     const gageSlot = pmRow?.slots.find((slot) => slot.key === "OL-PM-2");
 
     expect(gageSlot).toMatchObject({
+      tmId: "tm_gage",
       tmName: "Gage",
       empty: false,
     });

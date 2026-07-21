@@ -99,22 +99,21 @@ export type RawAssignmentForBreak = {
   additionalCoverageSlots?: string[] | null;
 };
 
+type EnrichedAssignment = {
+  tmId: string;
+  tmName: string;
+  breakGroup: BreakGroupValue;
+  breakGroupExplicit?: boolean;
+  additionalCoverageSlots: string[];
+};
+
 /** Map DB assignment rows → UI keys with resolved break pills. */
 export function enrichAssignmentsWithBreakGroups(
   dbAssignments: RawAssignmentForBreak[] | undefined | null,
   defaults: SlotDefaultBreakMap,
   overlapBreakTmIds: ReadonlySet<string> = new Set(),
-): Record<
-  string,
-  {
-    tmId: string;
-    tmName: string;
-    breakGroup: BreakGroupValue;
-    breakGroupExplicit?: boolean;
-    additionalCoverageSlots: string[];
-  }
-> {
-  const assignments: Record<string, any> = {};
+): Record<string, EnrichedAssignment> {
+  const assignments: Record<string, EnrichedAssignment> = {};
   if (!Array.isArray(dbAssignments)) return assignments;
 
   for (const row of dbAssignments) {
@@ -122,7 +121,9 @@ export function enrichAssignmentsWithBreakGroups(
     try {
       const uiKey = dbToUi(
         row.slotKey,
-        row.slotType ?? "zone",
+        /^overlap_(pm|am)_\d+$/i.test(row.slotKey)
+          ? "overlap"
+          : row.slotType ?? "zone",
         row.rrSide ?? null,
       );
       if (uiKey.startsWith("UNK:")) continue;

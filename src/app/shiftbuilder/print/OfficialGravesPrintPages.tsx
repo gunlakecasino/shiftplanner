@@ -19,6 +19,7 @@ import {
 } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
 import { buildOverlapRows } from "./buildPrintDaySnapshot";
+import { hasPrintAssigneeName, printAssigneeName } from "./printAssigneeName";
 import type { PrintDaySnapshot, PrintOverlapRow, PrintPreviewPageProps } from "./printPreviewTypes";
 
 const PAGE_TASK_ROWS = 8;
@@ -235,15 +236,16 @@ function ApprovedAssignmentCard({
   blankWhenEmpty?: boolean;
 }) {
   const assignment = snapshot.assignments[slotKey] ?? {};
-  const isCovered = !assignment.tmName?.trim() && coveredBy.length > 0;
-  const names = assignment.tmName?.trim()
-    ? [assignment.tmName.trim()]
+  const assignedName = printAssigneeName(assignment.tmName, assignment.tmId);
+  const isCovered = !assignedName && coveredBy.length > 0;
+  const names = assignedName
+    ? [assignedName]
     : coveredBy.map((entry) =>
         coveredBy.length > 1 && entry.side
           ? `${formatCoverageSideLabel(slotKey, entry.side)} ${entry.tmName}`
           : entry.tmName,
       );
-  const breakGroup = assignment.tmName?.trim()
+  const breakGroup = assignedName
     ? assignment.breakGroup
     : coveredBy.length === 1
       ? snapshot.assignments[coveredBy[0].sourceKey]?.breakGroup
@@ -308,20 +310,34 @@ export function OfficialGravesDeploymentPage({
     snapshot.auxDefs,
   );
   const zoneAssigned = ZONE_DEFS.filter(
-    (def) => snapshot.assignments[def.key]?.tmName || coveredByIndex[def.key]?.length,
+    (def) =>
+      hasPrintAssigneeName(
+        snapshot.assignments[def.key]?.tmName,
+        snapshot.assignments[def.key]?.tmId,
+      ) || coveredByIndex[def.key]?.length,
   ).length;
   const restroomAssigned = RR_DEFS.reduce(
     (count, def) =>
       count +
-      (snapshot.assignments[`WRR${def.num}`]?.tmName || coveredByIndex[`WRR${def.num}`]?.length ? 1 : 0) +
-      (snapshot.assignments[`MRR${def.num}`]?.tmName || coveredByIndex[`MRR${def.num}`]?.length ? 1 : 0),
+      (hasPrintAssigneeName(
+        snapshot.assignments[`WRR${def.num}`]?.tmName,
+        snapshot.assignments[`WRR${def.num}`]?.tmId,
+      ) || coveredByIndex[`WRR${def.num}`]?.length ? 1 : 0) +
+      (hasPrintAssigneeName(
+        snapshot.assignments[`MRR${def.num}`]?.tmName,
+        snapshot.assignments[`MRR${def.num}`]?.tmId,
+      ) || coveredByIndex[`MRR${def.num}`]?.length ? 1 : 0),
     0,
   );
   const auxDefs = snapshot.auxDefs
     .filter((def) => def.role !== "blank" || !!def.label?.trim())
     .slice(0, 3);
   const auxAssigned = auxDefs.filter(
-    (def) => snapshot.assignments[def.key]?.tmName || coveredByIndex[def.key]?.length,
+    (def) =>
+      hasPrintAssigneeName(
+        snapshot.assignments[def.key]?.tmName,
+        snapshot.assignments[def.key]?.tmId,
+      ) || coveredByIndex[def.key]?.length,
   ).length;
 
   return (
@@ -392,10 +408,6 @@ export function OfficialGravesDeploymentPage({
           </div>
         </section>
       </div>
-      <div className="sb-approved-footer">
-        <span>SHEETBUILDER - GLCR GRAVE SHIFT</span>
-        <span>PAGE 1 OF 2</span>
-      </div>
     </div>
   );
 }
@@ -465,7 +477,8 @@ function NotesChangesBand({ notes }: { notes?: string }) {
 function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] }) {
   const accent = getOverlapAccent(slot.key);
   const regularTasks = slot.tasks.filter((task) => !task.isCoverage);
-  const assigned = !!slot.tmName?.trim();
+  const tmName = printAssigneeName(slot.tmName, slot.tmId);
+  const assigned = !!tmName;
   const openWork = !assigned && regularTasks.length > 0;
   const blank = !assigned && regularTasks.length === 0;
   return (
@@ -479,7 +492,7 @@ function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] 
         {blank ? null : (
           <>
             <div className={`sb-graves-overlap-name ${openWork ? "is-open" : ""}`}>
-              {slot.tmName || "OPEN WORK"}
+              {tmName || "OPEN WORK"}
             </div>
             <div className="sb-approved-overlap-tasks">
               {regularTasks.map((task) => <div key={task.id}>- {task.label}</div>)}
@@ -493,8 +506,10 @@ function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] 
 
 function OfficialOverlapsSection({ rows, snapshot }: { rows: PrintOverlapRow[]; snapshot: PrintDaySnapshot }) {
   const slots = rows.flatMap((row) => row.slots);
-  const assigned = slots.filter((slot) => slot.tmName?.trim()).length;
-  const openWork = slots.filter((slot) => !slot.tmName?.trim() && slot.tasks.some((task) => !task.isCoverage)).length;
+  const assigned = slots.filter((slot) => printAssigneeName(slot.tmName, slot.tmId)).length;
+  const openWork = slots.filter(
+    (slot) => !printAssigneeName(slot.tmName, slot.tmId) && slot.tasks.some((task) => !task.isCoverage),
+  ).length;
   return (
     <section className="overlaps-section sb-graves-overlaps-section">
       <ApprovedStatusHeader
@@ -549,10 +564,6 @@ export function OfficialGravesTasksPage({
         <SideTaskRegister tasks={snapshot.sideTasks ?? []} />
         {includeShiftNotes ? <NotesChangesBand notes={snapshot.notes} /> : null}
         <OfficialOverlapsSection rows={buildOverlapRows(snapshot)} snapshot={snapshot} />
-      </div>
-      <div className="sb-approved-footer">
-        <span>SHEETBUILDER - GLCR GRAVE SHIFT</span>
-        <span>PAGE 2 OF 2</span>
       </div>
     </div>
   );

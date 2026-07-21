@@ -24,6 +24,7 @@ export type PrintPlanningCardModel = {
   headerLabel: string;
   headerIcon?: string;
   accentColor: string;
+  tmId?: string | null;
   tmName?: string | null;
   locationLines: string[];
   tasks: PrintTaskLine[];

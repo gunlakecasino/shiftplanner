@@ -1734,19 +1734,6 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   background: #ffe7a3;
 }
 
-.sb-approved-footer {
-  position: absolute;
-  right: 32px;
-  bottom: 11px;
-  left: 32px;
-  display: flex;
-  justify-content: space-between;
-  color: #6b7280;
-  font-size: 8.5px;
-  line-height: 1;
-  font-weight: 800;
-}
-
 /* Page two keeps the same approved header but uses the remaining page naturally. */
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-graves-tasks-body {
   flex: 0 0 690px;
