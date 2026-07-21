@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { buildOverlapRows } from "@/app/shiftbuilder/print/buildPrintDaySnapshot";
 import { applyLiveBoardToPrintSnapshot } from "@/app/shiftbuilder/print/mergePrintSnapshot";
 import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
+import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+
+function task(id: string, label: string, isCoverage = false): NightSlotTask {
+  return {
+    id,
+    nightId: "night",
+    slotKey: "overlap_pm_2",
+    slotType: "overlap",
+    rrSide: null,
+    taskLabel: label,
+    catalogTaskId: null,
+    sortOrder: Number(id.replace(/\D/g, "")) || 0,
+    color: null,
+    markerType: null,
+    textStyle: null,
+    isCoverage,
+  };
+}
 
 function snapshotWithGage(): PrintDaySnapshot {
   return {
@@ -51,5 +69,27 @@ describe("applyLiveBoardToPrintSnapshot", () => {
       tmName: "Gage",
       empty: false,
     });
+  });
+
+  it("keeps the overlap assignee visible by trimming excess regular task lines", () => {
+    const snapshot = snapshotWithGage();
+    snapshot.tasksBySlot["OL-PM-2"] = [
+      task("task-1", "Vacuuming"),
+      task("task-2", "Glass & Countertops"),
+      task("task-3", "Tables & Restrooms"),
+      task("task-4", "Extra project line"),
+      task("task-5", "And Zone 9", true),
+    ];
+
+    const pmRow = buildOverlapRows(snapshot).find((row) => row.key === "PM");
+    const gageSlot = pmRow?.slots.find((slot) => slot.key === "OL-PM-2");
+
+    expect(gageSlot?.tmName).toBe("Gage");
+    expect(gageSlot?.tasks.filter((line) => !line.isCoverage).map((line) => line.label)).toEqual([
+      "Vacuuming",
+      "Glass & Countertops",
+      "Tables & Restrooms",
+    ]);
+    expect(gageSlot?.tasks.some((line) => line.isCoverage && line.label === "And Zone 9")).toBe(true);
   });
 });
