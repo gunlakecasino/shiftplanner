@@ -15,7 +15,7 @@ import {
 import { generatePrintPreviewGoldenPages } from "../print/printPreviewPipeline";
 import type { LiveBoardOverlay } from "../print/mergePrintSnapshot";
 import {
-  mountGoldenRasterPrintSession,
+  mountGoldenPrintSession,
   runBrowserPrint,
 } from "../print/printSession";
 import type {
@@ -329,19 +329,16 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
           );
           setIsPrintCenterOpen(false);
         } else {
-          setPrintProgress({ current: 0, total: goldenPages.length, label: "Rendering print-safe sheets…" });
-          const { rasterizeGoldenPrintPages } = await import("../print/exportPdf");
-          const rasterPages = await rasterizeGoldenPrintPages(
-            goldenPages,
-            config,
-            (p) => setPrintProgress(p),
-          );
+          // Native browser print preserves the already-verified Golden DOM.
+          // The prior html-to-image raster hop could corrupt individual overlap
+          // cards in the PDF (for example, rendering a valid name as a dash).
+          setPrintProgress({ current: 0, total: goldenPages.length, label: "Preparing browser print sheets…" });
           setPrintProgress({ current: totalPages, total: totalPages, label: "Sending to printer…" });
           saveLastPrintConfig(config);
-          const session = await mountGoldenRasterPrintSession(
+          const session = await mountGoldenPrintSession(
             goldenPages,
-            rasterPages,
             config,
+            "print",
           );
           await runBrowserPrint(session);
           setIsPrintCenterOpen(false);
