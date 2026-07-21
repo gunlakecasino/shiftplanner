@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildOverlapRows } from "@/app/shiftbuilder/print/buildPrintDaySnapshot";
 import { applyLiveBoardToPrintSnapshot } from "@/app/shiftbuilder/print/mergePrintSnapshot";
+import { pageTaskRowsForOverlapRows } from "@/app/shiftbuilder/print/OfficialGravesPrintPages";
 import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 
@@ -71,7 +72,7 @@ describe("applyLiveBoardToPrintSnapshot", () => {
     });
   });
 
-  it("keeps the overlap assignee visible by trimming excess regular task lines", () => {
+  it("keeps all overlap task lines and trims the projects/tasks register instead", () => {
     const snapshot = snapshotWithGage();
     snapshot.tasksBySlot["OL-PM-2"] = [
       task("task-1", "Vacuuming"),
@@ -89,7 +90,9 @@ describe("applyLiveBoardToPrintSnapshot", () => {
       "Vacuuming",
       "Glass & Countertops",
       "Tables & Restrooms",
+      "Extra project line",
     ]);
     expect(gageSlot?.tasks.some((line) => line.isCoverage && line.label === "And Zone 9")).toBe(true);
+    expect(pageTaskRowsForOverlapRows(buildOverlapRows(snapshot))).toBe(7);
   });
 });

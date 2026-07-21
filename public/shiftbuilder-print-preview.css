@@ -1770,11 +1770,19 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   overflow: hidden;
 }
 
+.print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-side-task-register {
+  height: 293px;
+}
+
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-side-task-table {
   height: calc(100% - 37px);
   grid-template-rows: 29px repeat(8, minmax(0, 1fr));
   border-color: #d1d5db;
   border-radius: 5px;
+}
+
+.print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-side-task-table {
+  grid-template-rows: 29px repeat(7, minmax(0, 1fr));
 }
 
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-side-task-register > .sb-approved-section-header {
@@ -1843,6 +1851,10 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   background: #fff;
 }
 
+.print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-graves-notes-band {
+  top: 309px;
+}
+
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-graves-notes-label {
   height: 27px;
   padding: 10px 12px 0;
@@ -1873,6 +1885,11 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   overflow: hidden;
 }
 
+.print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-graves-overlaps-section {
+  top: 379px;
+  height: 311px;
+}
+
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-graves-overlaps-section > .sb-approved-section-header {
   height: 30px;
 }
@@ -1880,6 +1897,11 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-graves-tasks-body--no-notes .sb-graves-overlaps-section {
   top: 338px;
   height: 352px;
+}
+
+.print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-graves-tasks-body--no-notes .sb-graves-overlaps-section {
+  top: 306px;
+  height: 384px;
 }
 
 .print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-graves-overlap-rows {

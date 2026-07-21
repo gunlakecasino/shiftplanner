@@ -40,25 +40,6 @@ function toTaskLines(tasks: NightSlotTask[] | undefined): PrintTaskLine[] {
   }));
 }
 
-const MAX_PRINT_OVERLAP_REGULAR_TASK_LINES = 3;
-
-function fitOverlapTasksForPrint(tasks: PrintTaskLine[]): PrintTaskLine[] {
-  const regular: PrintTaskLine[] = [];
-  const fitted: PrintTaskLine[] = [];
-
-  for (const task of tasks) {
-    if (task.isCoverage) {
-      fitted.push(task);
-      continue;
-    }
-    if (regular.length >= MAX_PRINT_OVERLAP_REGULAR_TASK_LINES) continue;
-    regular.push(task);
-    fitted.push(task);
-  }
-
-  return fitted;
-}
-
 export function slotShowsFilled(
   slotKey: string,
   assignments: Record<string, { tmName?: string; tmId?: string }>,
@@ -253,7 +234,7 @@ export function buildOverlapRows(snapshot: PrintDaySnapshot): PrintOverlapRow[] 
       const slotKey = `OL-${half}-${i}`;
       const a = snapshot.assignments[slotKey] || {};
       const tmName = printAssigneeName(a.tmName, a.tmId);
-      const taskLines = fitOverlapTasksForPrint(toTaskLines(snapshot.tasksBySlot[slotKey]));
+      const taskLines = toTaskLines(snapshot.tasksBySlot[slotKey]);
       return {
         key: slotKey,
         kind: "overlap",

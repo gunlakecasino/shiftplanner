@@ -23,7 +23,17 @@ import { hasPrintAssigneeName, printAssigneeName } from "./printAssigneeName";
 import type { PrintDaySnapshot, PrintOverlapRow, PrintPreviewPageProps } from "./printPreviewTypes";
 
 const PAGE_TASK_ROWS = 8;
+const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
+const TALL_OVERLAP_TASK_LINE_THRESHOLD = 4;
 const PAGE_ONE_TASK_PREVIEW = 3;
+
+export function pageTaskRowsForOverlapRows(rows: PrintOverlapRow[]): number {
+  return rows
+    .flatMap((row) => row.slots)
+    .some((slot) => slot.tasks.filter((task) => !task.isCoverage).length >= TALL_OVERLAP_TASK_LINE_THRESHOLD)
+    ? PAGE_TASK_ROWS_FOR_TALL_OVERLAPS
+    : PAGE_TASK_ROWS;
+}
 
 function formatAsOf(iso?: string): string {
   if (!iso) return "";
@@ -416,11 +426,11 @@ function CompletedCheckbox({ completed }: { completed: boolean }) {
   return <span className={`sb-side-task-checkbox ${completed ? "is-complete" : ""}`}>{completed ? "✓" : ""}</span>;
 }
 
-function SideTaskRegister({ tasks }: { tasks: PrintSideTask[] }) {
-  const visible = tasks.slice(0, PAGE_TASK_ROWS);
+function SideTaskRegister({ tasks, rowCount = PAGE_TASK_ROWS }: { tasks: PrintSideTask[]; rowCount?: number }) {
+  const visible = tasks.slice(0, rowCount);
   const rows: Array<PrintSideTask | null> = [
     ...visible,
-    ...Array.from({ length: Math.max(0, PAGE_TASK_ROWS - visible.length) }, () => null),
+    ...Array.from({ length: Math.max(0, rowCount - visible.length) }, () => null),
   ];
 
   return (
@@ -428,7 +438,7 @@ function SideTaskRegister({ tasks }: { tasks: PrintSideTask[] }) {
       <ApprovedStatusHeader
         label="SIDE TASKS / PROJECTS"
         statuses={[
-          { label: "CAPACITY", count: PAGE_TASK_ROWS },
+          { label: "CAPACITY", count: rowCount },
           { label: "ENTRIES", count: visible.length },
           { label: "OPEN WORK", count: visible.filter((task) => !task.assigneeName && !task.completed).length, tone: "open" },
         ]}
@@ -551,8 +561,17 @@ export function OfficialGravesTasksPage({
   includeTimestamp,
   includeShiftNotes = true,
 }: Omit<PrintPreviewPageProps, "view">) {
+  const overlapRows = buildOverlapRows(snapshot);
+  const sideTaskRows = pageTaskRowsForOverlapRows(overlapRows);
+  const overlapDensity = sideTaskRows < PAGE_TASK_ROWS ? "tall" : "normal";
+
   return (
-    <div className="print-artboard sb-graves-sheet" data-print-view="breaks" data-print-variant="official">
+    <div
+      className="print-artboard sb-graves-sheet"
+      data-print-view="breaks"
+      data-print-variant="official"
+      data-overlap-density={overlapDensity}
+    >
       <GravesZoneSheetHeader
         snapshot={snapshot}
         weekDayDefs={weekDayDefs}
@@ -561,9 +580,9 @@ export function OfficialGravesTasksPage({
         includeTimestamp={includeTimestamp}
       />
       <div className={`sb-graves-tasks-body ${includeShiftNotes ? "" : "sb-graves-tasks-body--no-notes"}`.trim()}>
-        <SideTaskRegister tasks={snapshot.sideTasks ?? []} />
+        <SideTaskRegister tasks={snapshot.sideTasks ?? []} rowCount={sideTaskRows} />
         {includeShiftNotes ? <NotesChangesBand notes={snapshot.notes} /> : null}
-        <OfficialOverlapsSection rows={buildOverlapRows(snapshot)} snapshot={snapshot} />
+        <OfficialOverlapsSection rows={overlapRows} snapshot={snapshot} />
       </div>
     </div>
   );
