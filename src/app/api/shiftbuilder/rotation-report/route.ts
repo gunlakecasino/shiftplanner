@@ -3,11 +3,13 @@ import { unstable_noStore } from "next/cache";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { requireOpsAnyPermission } from "@/lib/auth/requireOpsSession.server";
 import type { ReportWindow } from "@/lib/shiftbuilder/data";
-import { getRotationReport } from "@/lib/shiftbuilder/rotationReport.server";
+import { getOpsReportsSnapshot } from "@/lib/shiftbuilder/opsReports.server";
+import type { ReportsStatusFilter } from "@/lib/shiftbuilder/opsReportsTypes";
 
 export const dynamic = "force-dynamic";
 
 const VALID_WINDOWS: ReportWindow[] = [14, 30, 60, "this-week", "last-4-weeks"];
+const VALID_STATUS_FILTERS: ReportsStatusFilter[] = ["history", "published", "built", "all"];
 
 function parseWindow(raw: unknown): ReportWindow {
   if (raw === 14 || raw === 30 || raw === 60) return raw;
@@ -15,9 +17,15 @@ function parseWindow(raw: unknown): ReportWindow {
   return 30;
 }
 
+function parseStatusFilter(raw: unknown): ReportsStatusFilter {
+  return VALID_STATUS_FILTERS.includes(raw as ReportsStatusFilter)
+    ? (raw as ReportsStatusFilter)
+    : "history";
+}
+
 /**
  * POST /api/shiftbuilder/rotation-report
- * Body: { window?: ReportWindow }
+ * Body: { window?: ReportWindow, statusFilter?: ReportsStatusFilter }
  */
 export async function POST(req: NextRequest) {
   unstable_noStore();
@@ -37,12 +45,13 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const window = parseWindow(body?.window);
+    const statusFilter = parseStatusFilter(body?.statusFilter);
     if (body?.window != null && !VALID_WINDOWS.includes(window)) {
       return NextResponse.json({ error: "Invalid window" }, { status: 400 });
     }
 
-    const report = await getRotationReport(window);
-    return NextResponse.json({ report });
+    const snapshot = await getOpsReportsSnapshot(window, statusFilter);
+    return NextResponse.json({ snapshot });
   } catch (err) {
     console.error("[api/rotation-report]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

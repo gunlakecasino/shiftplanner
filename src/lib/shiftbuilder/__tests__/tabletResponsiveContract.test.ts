@@ -11,8 +11,8 @@ const shiftBuilderBoard = source("src/app/shiftbuilder/components/ShiftBuilderBo
 const projectsCss = source("src/app/shiftbuilder/projects/projectsShell.css");
 const projectsClient = source("src/app/shiftbuilder/projects/ProjectsClient.tsx");
 const reportsCss = source("src/app/shiftbuilder/reports/reportsShell.css");
-const reportsControlBar = source(
-  "src/app/shiftbuilder/reports/components/ReportsControlBar.tsx",
+const reportsDashboard = source(
+  "src/app/shiftbuilder/reports/components/ReportsDashboard.tsx",
 );
 
 describe("iPad Pro responsive layout contract", () => {
@@ -59,9 +59,10 @@ describe("iPad Pro responsive layout contract", () => {
     expect(projectsCss).toContain(
       "@media (orientation: landscape) and (min-width: 1024px)",
     );
-    expect(reportsControlBar).toContain("sb-reports-segments-scroll");
-    expect(reportsControlBar).toContain("sb-reports-icon-btn sb-touch-target");
+    expect(reportsDashboard).toContain("sb-reports-segment");
+    expect(reportsDashboard).toContain("sb-reports-refresh");
     expect(reportsCss).toContain("@media (orientation: portrait)");
+    expect(reportsCss).toContain("@media (pointer: coarse)");
     expect(globalsCss).toMatch(/\.sb-touch-target\s*\{[\s\S]*?min-height: 44px !important/);
   });
 });

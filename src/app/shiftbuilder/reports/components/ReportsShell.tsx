@@ -2,173 +2,98 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeft, LogOut, Moon, Sun, Settings2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, LogOut, Moon, Settings2, Sun } from "lucide-react";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
+import { currentShiftDate } from "@/lib/shiftbuilder/dateUtils";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useTheme } from "../../hooks/useTheme";
 import { shiftBuilderVersionLabel } from "../../version";
-import { GoldHairline } from "../../sudo/SudoGlass";
 import { ReportsDashboard } from "./ReportsDashboard";
-import { currentShiftDate } from "@/lib/shiftbuilder/dateUtils";
-import "../../settings/settingsShell.css";
-import "../../settings/settingsTheme.css";
 import "../reportsShell.css";
 
 export function ReportsShell() {
   const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
-  const reduceMotion = useReducedMotion();
   const { user: currentOperator, logout: logoutOperator, permissions } = useOpsAuth();
   const confirmDialog = useConfirm();
   const canAccessSudo = permissions?.canAccessSudo ?? false;
-  const canAccessReports = permissions?.canAccessReports ?? false;
-  const showShiftBuilderLink = canAccessSudo || canAccessReports;
   const [now, setNow] = React.useState(() => new Date());
 
   React.useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(t);
+    const t = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(t);
   }, []);
 
   const shiftDate = currentShiftDate(now);
-  const formattedDate = `${shiftDate.toLocaleString("en-US", { month: "long" })} ${shiftDate.getDate()}, ${shiftDate.getFullYear()}`;
+  const formattedDate = shiftDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
   const timeString = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const tabMotion = reduceMotion
-    ? { initial: false, animate: { opacity: 1 }, exit: { opacity: 1 } }
-    : {
-        initial: { opacity: 0, y: 8 },
-        animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, y: -6 },
-        transition: { duration: 0.22, ease: [0.23, 1, 0.32, 1] as const },
-      };
-
   return (
-    <div className="sb-settings-shell sb-reports-shell sb-content-enter">
-      <div className="sb-settings-grid" aria-hidden />
-
-      <header className="sb-settings-status">
-        <div className="flex items-center gap-3">
-          <span className="sb-settings-status-brand">GLCR</span>
-          <span className="sb-settings-status-divider" aria-hidden />
-          <span>PLACEMENT ANALYTICS</span>
-        </div>
-        <div className="flex items-center gap-4 tabular-nums">
-          <span>{formattedDate}</span>
-          <span>{timeString}</span>
-        </div>
-      </header>
-
-      <div className="relative z-10 mx-auto w-full max-w-[1200px] px-6 pb-14 pt-10">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="sb-settings-eyebrow">OMS INSIGHTS</p>
-            <h1 className="sb-settings-hero-title">Reports</h1>
-            <p className="sb-settings-hero-sub">
-              Zone frequency, rotation fairness, and placement history — distilled into actionable charts.
-            </p>
-          </div>
-
-          {showShiftBuilderLink ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {canAccessSudo ? (
-                <button
-                  type="button"
-                  onClick={() => router.push("/sheetbuilder/settings?tab=reports")}
-                  className="sb-settings-back-btn sb-interactive"
-                >
-                  <Settings2 size={15} strokeWidth={2.1} />
-                  Settings
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => router.push("/sheetbuilder")}
-                className="sb-settings-back-btn sb-interactive"
-              >
-                <ArrowLeft size={15} strokeWidth={2.25} />
-                SheetBuilder
-              </button>
-            </div>
-          ) : null}
+    <div className="sb-reports-page" data-theme={isDark ? "dark" : "light"}>
+      <header className="sb-reports-topbar">
+        <div className="sb-reports-brand">
+          <span>GLCR</span>
+          <strong>Reports</strong>
+          <em>{formattedDate} · {timeString}</em>
         </div>
 
-        <nav className="sb-settings-glass-pill mb-5" aria-label="Reports chrome">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className="rounded-full px-3 py-1.5 text-[12px] font-semibold"
-              style={{
-                background: "color-mix(in srgb, #4D1A8A 14%, transparent)",
-                color: "#4D1A8A",
-                boxShadow: "inset 0 0 0 1px color-mix(in srgb, #4D1A8A 28%, transparent)",
-              }}
-            >
-              Placement Analytics
-            </span>
-
-            <div className="sb-settings-glass-divider" aria-hidden />
-
+        <nav aria-label="Reports actions">
+          {canAccessSudo ? (
             <button
               type="button"
-              onClick={toggleTheme}
-              className="sb-settings-theme-btn icon-btn sb-interactive"
-              title={isDark ? "Light mode" : "Dark mode"}
-              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={() => router.push("/sheetbuilder/settings?tab=reports")}
+              title="Settings"
             >
-              {isDark ? <Sun size={15} /> : <Moon size={15} />}
+              <Settings2 size={16} />
+              Settings
             </button>
-
-            {currentOperator && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (await confirmDialog(`Sign out ${currentOperator.full_name}?`, { confirmLabel: "Sign out" })) {
-                    logoutOperator();
-                    router.push(
-                      showShiftBuilderLink ? "/shiftbuilder" : "/shiftbuilder/reports",
-                    );
-                  }
-                }}
-                className="sb-settings-user-btn sb-interactive"
-              >
-                <span className="max-w-[120px] truncate">{currentOperator.username}</span>
-                <LogOut size={13} />
-              </button>
-            )}
-          </div>
+          ) : null}
+          <button type="button" onClick={() => router.push("/sheetbuilder")} title="SheetBuilder">
+            <ArrowLeft size={16} />
+            Builder
+          </button>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isDark ? "Light mode" : "Dark mode"}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          {currentOperator ? (
+            <button
+              type="button"
+              onClick={async () => {
+                if (
+                  await confirmDialog(`Sign out ${currentOperator.full_name}?`, {
+                    confirmLabel: "Sign out",
+                  })
+                ) {
+                  logoutOperator();
+                  router.push("/shiftbuilder/reports");
+                }
+              }}
+              title="Sign out"
+            >
+              <span>{currentOperator.username}</span>
+              <LogOut size={14} />
+            </button>
+          ) : null}
         </nav>
+      </header>
 
-        <motion.div layout className="sb-settings-paper">
-          <GoldHairline isDark={isDark} />
+      <main className="sb-reports-page-body">
+        <ReportsDashboard />
+      </main>
 
-          <header className="sb-settings-panel-header">
-            <h2 className="sb-settings-panel-title">Rotation & Placement Dashboard</h2>
-          </header>
-
-          <div className="sb-settings-body p-0" data-tall="true" role="main">
-            <AnimatePresence mode="wait">
-              <motion.div key="reports-dashboard" className="sb-settings-tab-motion" {...tabMotion}>
-                <div className={cn("sb-settings-panel", isDark ? "dark" : "light")} data-theme={isDark ? "dark" : "light"}>
-                  <ReportsDashboard />
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-
-          <footer className="sb-settings-footer">
-            <div className="min-w-0 truncate">
-              <strong>SBS</strong>
-              <span className="mx-1 opacity-60">©</span>
-              <span>OMS Reports</span>
-              <span className="mx-1 opacity-40">·</span>
-              <strong>{currentOperator?.full_name ?? "operator"}</strong>
-            </div>
-            <div className="shrink-0 tabular-nums">{shiftBuilderVersionLabel()}</div>
-          </footer>
-        </motion.div>
-      </div>
+      <footer className="sb-reports-footer">
+        <span>{currentOperator?.full_name ?? "operator"}</span>
+        <span>{shiftBuilderVersionLabel()}</span>
+      </footer>
     </div>
   );
 }
