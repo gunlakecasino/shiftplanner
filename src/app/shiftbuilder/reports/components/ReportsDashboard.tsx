@@ -4,11 +4,13 @@ import React from "react";
 import {
   AlertTriangle,
   BarChart3,
+  CalendarDays,
   CheckCircle2,
   Download,
   FileText,
   Layers3,
   Loader2,
+  MapPin,
   Printer,
   RefreshCw,
   Search,
@@ -19,7 +21,10 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   OpsReportsSnapshot,
+  ReportAreaIntel,
   ReportDefinitionId,
+  ReportFinding,
+  ReportNightIntel,
   ReportPackageSnapshot,
   ReportWindow,
   ReportsStatusFilter,
@@ -28,6 +33,13 @@ import { SudoTabLoading } from "../../sudo/SudoGlass";
 import { useOpsReportsSnapshot } from "../hooks/useOpsReportsSnapshot";
 
 type ExploreView = "nights" | "team" | "areas" | "findings";
+
+type WorkbenchSelection = {
+  nightDate: string | null;
+  tmId: string | null;
+  areaKey: string | null;
+  findingId: string | null;
+};
 
 const WINDOW_OPTIONS: Array<{ value: ReportWindow; label: string }> = [
   { value: 14, label: "14d" },
@@ -200,141 +212,365 @@ function ReportCatalog({
   );
 }
 
-function NightTable({ snapshot }: { snapshot: OpsReportsSnapshot }) {
+function nightIssueCount(night: ReportNightIntel): number {
   return (
-    <div className="sb-reports-table-wrap">
-      <table className="sb-reports-table">
-        <thead>
-          <tr>
-            <th>Night</th>
-            <th>Status</th>
-            <th>Zones</th>
-            <th>RR</th>
-            <th>AUX</th>
-            <th>Coverage</th>
-            <th>Calls</th>
-            <th>Changes</th>
-            <th>Risks</th>
-          </tr>
-        </thead>
-        <tbody>
-          {snapshot.nights.map((night) => (
-            <tr key={night.nightDate}>
-              <td>{formatDate(night.nightDate)}</td>
-              <td><span className="sb-reports-status-chip">{night.status ?? "unknown"}</span></td>
-              <td>{night.coveredZones}/10</td>
-              <td>{night.restroomAssignments}</td>
-              <td>{night.auxAssignments}</td>
-              <td>{night.assignmentCoveragePairs}/{night.coverageBannerRows}</td>
-              <td>{night.callOffs}</td>
-              <td>{night.boardChanges}</td>
-              <td>{night.repeatRisks + night.invalidLocks + night.historyConflicts}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    Math.max(0, 10 - night.coveredZones) +
+    Math.abs(night.assignmentCoveragePairs - night.coverageBannerRows) +
+    night.repeatRisks +
+    night.invalidLocks +
+    night.historyConflicts
+  );
+}
+
+function pct(value: number, max: number): string {
+  if (max <= 0) return "0%";
+  return `${Math.max(4, Math.min(100, Math.round((value / max) * 100)))}%`;
+}
+
+function WorkbenchMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+}) {
+  return (
+    <div className="sb-reports-workbench-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
     </div>
   );
 }
 
-function TeamTable({ snapshot, query }: { snapshot: OpsReportsSnapshot; query: string }) {
+function NightWorkbench({
+  snapshot,
+  selectedNightDate,
+  onSelectNight,
+}: {
+  snapshot: OpsReportsSnapshot;
+  selectedNightDate: string | null;
+  onSelectNight: (nightDate: string) => void;
+}) {
+  const selectedNight =
+    snapshot.nights.find((night) => night.nightDate === selectedNightDate) ??
+    snapshot.nights.find((night) => nightIssueCount(night) > 0) ??
+    snapshot.nights[0] ??
+    null;
+  const highestIssueCount = Math.max(1, ...snapshot.nights.map(nightIssueCount));
+  const exceptionNights = snapshot.nights
+    .filter((night) => nightIssueCount(night) > 0)
+    .sort((a, b) => nightIssueCount(b) - nightIssueCount(a))
+    .slice(0, 4);
+
+  if (!selectedNight) {
+    return (
+      <div className="sb-reports-empty">
+        <CalendarDays size={20} />
+        <span>No nights in this report window.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sb-reports-workbench">
+      <section className="sb-reports-focus-card">
+        <header>
+          <div>
+            <p>Night Focus</p>
+            <h3>{formatDate(selectedNight.nightDate)}</h3>
+          </div>
+          <span className="sb-reports-status-chip">{selectedNight.status ?? "unknown"}</span>
+        </header>
+        <div className="sb-reports-focus-metrics">
+          <WorkbenchMetric label="Zones" value={`${selectedNight.coveredZones}/10`} detail={`${selectedNight.directZones} direct`} />
+          <WorkbenchMetric label="Coverage" value={`${selectedNight.assignmentCoveragePairs}/${selectedNight.coverageBannerRows}`} detail="assignment pairs / banner rows" />
+          <WorkbenchMetric label="Board Changes" value={selectedNight.boardChanges} detail={`${selectedNight.callOffs} call-offs`} />
+          <WorkbenchMetric label="Review Load" value={nightIssueCount(selectedNight)} detail="risk + integrity flags" />
+        </div>
+      </section>
+
+      <section className="sb-reports-night-timeline" aria-label="Night timeline">
+        {snapshot.nights.map((night) => {
+          const selected = night.nightDate === selectedNight.nightDate;
+          const issues = nightIssueCount(night);
+          return (
+            <button
+              key={night.nightDate}
+              type="button"
+              className={cn("sb-reports-night-card", selected && "is-active", issues > 0 && "has-issues")}
+              onClick={() => onSelectNight(night.nightDate)}
+            >
+              <span>{formatDate(night.nightDate)}</span>
+              <strong>{night.coveredZones}/10</strong>
+              <div className="sb-reports-mini-bar">
+                <i style={{ width: pct(night.coveredZones, 10) }} />
+              </div>
+              <small>{issues ? `${issues} review` : "clear"}</small>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="sb-reports-center-grid">
+        <div className="sb-reports-signal-card">
+          <header>
+            <AlertTriangle size={15} />
+            <strong>Review Queue</strong>
+          </header>
+          {exceptionNights.length ? (
+            exceptionNights.map((night) => (
+              <button key={night.nightDate} type="button" onClick={() => onSelectNight(night.nightDate)}>
+                <span>{formatDate(night.nightDate)}</span>
+                <div className="sb-reports-mini-bar">
+                  <i style={{ width: pct(nightIssueCount(night), highestIssueCount) }} />
+                </div>
+                <strong>{nightIssueCount(night)}</strong>
+              </button>
+            ))
+          ) : (
+            <p>No night-level review items in this run.</p>
+          )}
+        </div>
+
+        <div className="sb-reports-signal-card">
+          <header>
+            <ShieldCheck size={15} />
+            <strong>Coverage Read</strong>
+          </header>
+          <div className="sb-reports-zone-dots" aria-label="Zone coverage dots">
+            {Array.from({ length: 10 }, (_, index) => {
+              const zoneNumber = index + 1;
+              return (
+                <span
+                  key={zoneNumber}
+                  className={cn(zoneNumber <= selectedNight.coveredZones && "is-filled")}
+                >
+                  Z{zoneNumber}
+                </span>
+              );
+            })}
+          </div>
+          <p>
+            Direct zone rows and assignment-carried coverage are separated from
+            printable banner rows so drift stays visible.
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TeamWorkbench({
+  snapshot,
+  query,
+  selectedTmId,
+  onSelectTm,
+}: {
+  snapshot: OpsReportsSnapshot;
+  query: string;
+  selectedTmId: string | null;
+  onSelectTm: (tmId: string) => void;
+}) {
   const q = query.trim().toLowerCase();
   const rows = snapshot.teamMembers.filter((tm) => !q || tm.tmName.toLowerCase().includes(q));
-  return (
-    <div className="sb-reports-table-wrap">
-      <table className="sb-reports-table">
-        <thead>
-          <tr>
-            <th>TM</th>
-            <th>Pool</th>
-            <th>Nights</th>
-            <th>Zones</th>
-            <th>RR</th>
-            <th>Composite</th>
-            <th>Gaps</th>
-            <th>Risks</th>
-            <th>Last</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((tm) => (
-            <tr key={tm.tmId}>
-              <td>{tm.tmName}</td>
-              <td>{tm.gravePool ?? "-"}</td>
-              <td>{tm.assignedNights}</td>
-              <td>{tm.zoneNights}</td>
-              <td>{tm.restroomNights}</td>
-              <td>{tm.compositeDutyNights}</td>
-              <td>{tm.zoneGaps}</td>
-              <td>{tm.repeatRisks}</td>
-              <td>{formatDate(tm.lastWorkedNight)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+  const selectedTm =
+    rows.find((tm) => tm.tmId === selectedTmId) ??
+    rows.find((tm) => tm.repeatRisks > 0 || tm.compositeDutyNights > 0) ??
+    rows[0] ??
+    null;
+  const maxAssigned = Math.max(1, ...rows.map((tm) => tm.assignedNights));
+  const maxComposite = Math.max(1, ...rows.map((tm) => tm.compositeDutyNights));
 
-function AreaTable({ snapshot }: { snapshot: OpsReportsSnapshot }) {
-  return (
-    <div className="sb-reports-table-wrap">
-      <table className="sb-reports-table">
-        <thead>
-          <tr>
-            <th>Area</th>
-            <th>Type</th>
-            <th>Direct</th>
-            <th>Carried</th>
-            <th>Rate</th>
-            <th>Carriers</th>
-            <th>Top TM</th>
-            <th>Last</th>
-          </tr>
-        </thead>
-        <tbody>
-          {snapshot.areas.map((area) => (
-            <tr key={area.areaKey}>
-              <td>{area.areaLabel}</td>
-              <td>{area.areaType}</td>
-              <td>{area.directNights}</td>
-              <td>{area.coverageNights}</td>
-              <td>{area.coverageRatePct}%</td>
-              <td>{area.carrierCount}</td>
-              <td>{area.topTms[0]?.tmName ?? "-"}</td>
-              <td>{formatDate(area.lastCoveredNight)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+  if (!selectedTm) {
+    return (
+      <div className="sb-reports-empty">
+        <Users size={20} />
+        <span>No matching TMs in this report window.</span>
+      </div>
+    );
+  }
 
-function FindingsPanel({ snapshot }: { snapshot: OpsReportsSnapshot }) {
   return (
-    <div className="sb-reports-findings">
-      {snapshot.findings.length === 0 ? (
-        <div className="sb-reports-empty">
-          <CheckCircle2 size={20} />
-          <span>No deterministic findings in this run.</span>
+    <div className="sb-reports-workbench">
+      <section className="sb-reports-focus-card">
+        <header>
+          <div>
+            <p>TM Focus</p>
+            <h3>{selectedTm.tmName}</h3>
+          </div>
+          <span className="sb-reports-status-chip">{selectedTm.gravePool ?? "pool unknown"}</span>
+        </header>
+        <div className="sb-reports-focus-metrics">
+          <WorkbenchMetric label="Assigned" value={selectedTm.assignedNights} detail="distinct nights" />
+          <WorkbenchMetric label="Zones" value={selectedTm.zoneNights} detail={`${selectedTm.zoneGaps} zone gaps`} />
+          <WorkbenchMetric label="Composite" value={selectedTm.compositeDutyNights} detail="heavier restroom duty" />
+          <WorkbenchMetric label="Review Risks" value={selectedTm.repeatRisks} detail={`last ${formatDate(selectedTm.lastWorkedNight)}`} />
         </div>
-      ) : (
-        snapshot.findings.map((finding) => (
-          <article key={finding.id} className={cn("sb-reports-finding", `is-${finding.severity}`)}>
-            <header>
-              {finding.severity === "critical" ? <AlertTriangle size={16} /> : <Sparkles size={16} />}
-              <strong>{finding.title}</strong>
-              <span>{finding.confidence}</span>
-            </header>
-            <p>{finding.detail}</p>
-            <div className="sb-reports-evidence">
-              {finding.evidence.map((line) => <span key={line}>{line}</span>)}
+        <div className="sb-reports-chip-row">
+          {selectedTm.topAreas.map((area) => (
+            <span key={area.areaKey}>{area.areaKey} · {area.count}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="sb-reports-heat-list" aria-label="TM placement heat">
+        {rows.slice(0, 28).map((tm) => (
+          <button
+            key={tm.tmId}
+            type="button"
+            className={cn("sb-reports-heat-row", tm.tmId === selectedTm.tmId && "is-active")}
+            onClick={() => onSelectTm(tm.tmId)}
+          >
+            <span>{tm.tmName}</span>
+            <div className="sb-reports-heat-bars">
+              <i style={{ width: pct(tm.assignedNights, maxAssigned) }} />
+              <b style={{ width: pct(tm.compositeDutyNights, maxComposite) }} />
             </div>
-            <small>{finding.action}</small>
-          </article>
-        ))
-      )}
+            <small>{tm.repeatRisks ? `${tm.repeatRisks} risks` : `${tm.uniquePhysicalAreas} areas`}</small>
+          </button>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function AreaWorkbench({
+  snapshot,
+  selectedAreaKey,
+  onSelectArea,
+}: {
+  snapshot: OpsReportsSnapshot;
+  selectedAreaKey: string | null;
+  onSelectArea: (areaKey: string) => void;
+}) {
+  const selectedArea =
+    snapshot.areas.find((area) => area.areaKey === selectedAreaKey) ??
+    snapshot.areas.find((area) => area.repeatRisks > 0) ??
+    snapshot.areas[0] ??
+    null;
+  const maxExposure = Math.max(1, ...snapshot.areas.map((area) => area.totalExposureNights));
+  const groups: Array<{ label: string; areas: ReportAreaIntel[] }> = [
+    { label: "Zones", areas: snapshot.areas.filter((area) => area.areaType === "zone") },
+    { label: "Restrooms", areas: snapshot.areas.filter((area) => area.areaType === "restroom") },
+    { label: "Other", areas: snapshot.areas.filter((area) => !["zone", "restroom"].includes(area.areaType)) },
+  ];
+
+  if (!selectedArea) {
+    return (
+      <div className="sb-reports-empty">
+        <MapPin size={20} />
+        <span>No area coverage in this report window.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sb-reports-workbench">
+      <section className="sb-reports-focus-card">
+        <header>
+          <div>
+            <p>Area Focus</p>
+            <h3>{selectedArea.areaLabel}</h3>
+          </div>
+          <span className="sb-reports-status-chip">{selectedArea.areaType}</span>
+        </header>
+        <div className="sb-reports-focus-metrics">
+          <WorkbenchMetric label="Exposure" value={selectedArea.totalExposureNights} detail={`${selectedArea.coverageRatePct}% of nights`} />
+          <WorkbenchMetric label="Direct" value={selectedArea.directNights} detail="primary ownership" />
+          <WorkbenchMetric label="Carried" value={selectedArea.coverageNights} detail="fallback/additional" />
+          <WorkbenchMetric label="Carriers" value={selectedArea.carrierCount} detail={`last ${formatDate(selectedArea.lastCoveredNight)}`} />
+        </div>
+        <div className="sb-reports-chip-row">
+          {selectedArea.topTms.map((tm) => (
+            <span key={tm.tmId}>{tm.tmName} · {tm.count}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="sb-reports-area-board" aria-label="Area coverage board">
+        {groups.map((group) => (
+          <div key={group.label} className="sb-reports-area-group">
+            <h4>{group.label}</h4>
+            <div>
+              {group.areas.map((area) => (
+                <button
+                  key={area.areaKey}
+                  type="button"
+                  className={cn("sb-reports-area-tile", area.areaKey === selectedArea.areaKey && "is-active")}
+                  onClick={() => onSelectArea(area.areaKey)}
+                >
+                  <span>{area.areaLabel}</span>
+                  <strong>{area.coverageRatePct}%</strong>
+                  <div className="sb-reports-mini-bar">
+                    <i style={{ width: pct(area.totalExposureNights, maxExposure) }} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function FindingsWorkbench({
+  snapshot,
+  selectedFindingId,
+  onSelectFinding,
+}: {
+  snapshot: OpsReportsSnapshot;
+  selectedFindingId: string | null;
+  onSelectFinding: (findingId: string) => void;
+}) {
+  const selectedFinding =
+    snapshot.findings.find((finding) => finding.id === selectedFindingId) ??
+    snapshot.findings[0] ??
+    null;
+
+  if (!selectedFinding) {
+    return (
+      <div className="sb-reports-empty">
+        <CheckCircle2 size={20} />
+        <span>No deterministic findings in this run.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sb-reports-workbench">
+      <section className={cn("sb-reports-focus-card", `is-${selectedFinding.severity}`)}>
+        <header>
+          <div>
+            <p>Intel Focus</p>
+            <h3>{selectedFinding.title}</h3>
+          </div>
+          <span className="sb-reports-status-chip">{selectedFinding.confidence}</span>
+        </header>
+        <p className="sb-reports-focus-copy">{selectedFinding.detail}</p>
+        <div className="sb-reports-evidence">
+          {selectedFinding.evidence.map((line) => <span key={line}>{line}</span>)}
+        </div>
+        <small>{selectedFinding.action}</small>
+      </section>
+
+      <section className="sb-reports-triage-stack" aria-label="Finding triage">
+        {snapshot.findings.map((finding: ReportFinding) => (
+          <button
+            key={finding.id}
+            type="button"
+            className={cn("sb-reports-triage-card", `is-${finding.severity}`, finding.id === selectedFinding.id && "is-active")}
+            onClick={() => onSelectFinding(finding.id)}
+          >
+            <span>{finding.severity}</span>
+            <strong>{finding.title}</strong>
+            <small>{finding.evidence.length} evidence points · {finding.confidence}</small>
+          </button>
+        ))}
+      </section>
     </div>
   );
 }
@@ -343,15 +579,50 @@ function Workbench({
   snapshot,
   activeView,
   query,
+  selection,
+  onSelectionChange,
 }: {
   snapshot: OpsReportsSnapshot;
   activeView: ExploreView;
   query: string;
+  selection: WorkbenchSelection;
+  onSelectionChange: (next: WorkbenchSelection) => void;
 }) {
-  if (activeView === "team") return <TeamTable snapshot={snapshot} query={query} />;
-  if (activeView === "areas") return <AreaTable snapshot={snapshot} />;
-  if (activeView === "findings") return <FindingsPanel snapshot={snapshot} />;
-  return <NightTable snapshot={snapshot} />;
+  if (activeView === "team") {
+    return (
+      <TeamWorkbench
+        snapshot={snapshot}
+        query={query}
+        selectedTmId={selection.tmId}
+        onSelectTm={(tmId) => onSelectionChange({ ...selection, tmId })}
+      />
+    );
+  }
+  if (activeView === "areas") {
+    return (
+      <AreaWorkbench
+        snapshot={snapshot}
+        selectedAreaKey={selection.areaKey}
+        onSelectArea={(areaKey) => onSelectionChange({ ...selection, areaKey })}
+      />
+    );
+  }
+  if (activeView === "findings") {
+    return (
+      <FindingsWorkbench
+        snapshot={snapshot}
+        selectedFindingId={selection.findingId}
+        onSelectFinding={(findingId) => onSelectionChange({ ...selection, findingId })}
+      />
+    );
+  }
+  return (
+    <NightWorkbench
+      snapshot={snapshot}
+      selectedNightDate={selection.nightDate}
+      onSelectNight={(nightDate) => onSelectionChange({ ...selection, nightDate })}
+    />
+  );
 }
 
 function Inspector({
@@ -463,6 +734,12 @@ export function ReportsDashboard({
     React.useState<ReportDefinitionId>("weekly-placement-review");
   const [query, setQuery] = React.useState("");
   const [printPackage, setPrintPackage] = React.useState<ReportPackageSnapshot | null>(null);
+  const [selection, setSelection] = React.useState<WorkbenchSelection>({
+    nightDate: null,
+    tmId: null,
+    areaKey: null,
+    findingId: null,
+  });
 
   const selectedPackage = snapshot?.packages[selectedReportId] ?? null;
 
@@ -568,7 +845,13 @@ export function ReportsDashboard({
               );
             })}
           </div>
-          <Workbench snapshot={snapshot} activeView={activeView} query={query} />
+          <Workbench
+            snapshot={snapshot}
+            activeView={activeView}
+            query={query}
+            selection={selection}
+            onSelectionChange={setSelection}
+          />
         </main>
 
         <Inspector
