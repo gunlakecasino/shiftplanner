@@ -60,13 +60,19 @@ const VIEW_OPTIONS: Array<{ id: ExploreView; label: string; icon: React.ElementT
   { id: "nights", label: "Nights", icon: BarChart3 },
   { id: "team", label: "TMs", icon: Users },
   { id: "areas", label: "Areas", icon: Layers3 },
-  { id: "findings", label: "Intel", icon: Sparkles },
+  { id: "findings", label: "Flags", icon: Sparkles },
 ];
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "-";
   const [year, month, day] = iso.split("-");
   return `${month}/${day}/${year?.slice(-2)}`;
+}
+
+function flagActionLabel(severity: ReportFinding["severity"]): string {
+  if (severity === "critical") return "Fix";
+  if (severity === "warning") return "Check";
+  return "Note";
 }
 
 function csvEscape(value: string | number): string {
@@ -100,7 +106,7 @@ function KpiStrip({ snapshot }: { snapshot: OpsReportsSnapshot }) {
     { label: "Nights", value: snapshot.totals.nights, detail: `${snapshot.dateRange.from} to ${snapshot.dateRange.to}` },
     { label: "Covered zones", value: snapshot.totals.coveredZoneNights, detail: "direct + carried" },
     { label: "Deployed TMs", value: snapshot.totals.deployedTms, detail: "assigned in window" },
-    { label: "Findings", value: snapshot.findings.length, detail: `${snapshot.totals.repeatRisks} repeat risks` },
+    { label: "Report flags", value: snapshot.findings.length, detail: `${snapshot.totals.repeatRisks} repeat flags` },
   ];
 
   return (
@@ -166,7 +172,7 @@ function ReportPrintSheet({
       ) : null}
 
       <footer>
-        <span>{snapshot.method.denominator}</span>
+        <span>Counts reflect assignment records and visible coverage. Call-offs are recorded events only.</span>
         <span>Page 1</span>
       </footer>
     </section>
@@ -212,13 +218,24 @@ function ReportCatalog({
   );
 }
 
-function nightIssueCount(night: ReportNightIntel): number {
+function nightZoneShortfall(night: ReportNightIntel): number {
+  return Math.max(0, 10 - night.coveredZones);
+}
+
+function nightBannerMismatch(night: ReportNightIntel): number {
+  return Math.abs(night.assignmentCoveragePairs - night.coverageBannerRows);
+}
+
+function nightIntegrityFlags(night: ReportNightIntel): number {
+  return night.invalidLocks + night.historyConflicts;
+}
+
+function nightFlagCount(night: ReportNightIntel): number {
   return (
-    Math.max(0, 10 - night.coveredZones) +
-    Math.abs(night.assignmentCoveragePairs - night.coverageBannerRows) +
+    nightZoneShortfall(night) +
+    nightBannerMismatch(night) +
     night.repeatRisks +
-    night.invalidLocks +
-    night.historyConflicts
+    nightIntegrityFlags(night)
   );
 }
 
@@ -256,13 +273,13 @@ function NightWorkbench({
 }) {
   const selectedNight =
     snapshot.nights.find((night) => night.nightDate === selectedNightDate) ??
-    snapshot.nights.find((night) => nightIssueCount(night) > 0) ??
+    snapshot.nights.find((night) => nightFlagCount(night) > 0) ??
     snapshot.nights[0] ??
     null;
-  const highestIssueCount = Math.max(1, ...snapshot.nights.map(nightIssueCount));
+  const highestFlagCount = Math.max(1, ...snapshot.nights.map(nightFlagCount));
   const exceptionNights = snapshot.nights
-    .filter((night) => nightIssueCount(night) > 0)
-    .sort((a, b) => nightIssueCount(b) - nightIssueCount(a))
+    .filter((night) => nightFlagCount(night) > 0)
+    .sort((a, b) => nightFlagCount(b) - nightFlagCount(a))
     .slice(0, 4);
 
   if (!selectedNight) {
@@ -286,21 +303,21 @@ function NightWorkbench({
         </header>
         <div className="sb-reports-focus-metrics">
           <WorkbenchMetric label="Zones" value={`${selectedNight.coveredZones}/10`} detail={`${selectedNight.directZones} direct`} />
-          <WorkbenchMetric label="Coverage" value={`${selectedNight.assignmentCoveragePairs}/${selectedNight.coverageBannerRows}`} detail="assignment pairs / banner rows" />
+          <WorkbenchMetric label="Banner Match" value={`${selectedNight.assignmentCoveragePairs}/${selectedNight.coverageBannerRows}`} detail="assigned coverage / print banners" />
           <WorkbenchMetric label="Board Changes" value={selectedNight.boardChanges} detail={`${selectedNight.callOffs} call-offs`} />
-          <WorkbenchMetric label="Review Load" value={nightIssueCount(selectedNight)} detail="risk + integrity flags" />
+          <WorkbenchMetric label="Open Flags" value={nightFlagCount(selectedNight)} detail="coverage, banner, repeat, integrity" />
         </div>
       </section>
 
       <section className="sb-reports-night-timeline" aria-label="Night timeline">
         {snapshot.nights.map((night) => {
           const selected = night.nightDate === selectedNight.nightDate;
-          const issues = nightIssueCount(night);
+          const flags = nightFlagCount(night);
           return (
             <button
               key={night.nightDate}
               type="button"
-              className={cn("sb-reports-night-card", selected && "is-active", issues > 0 && "has-issues")}
+              className={cn("sb-reports-night-card", selected && "is-active", flags > 0 && "has-issues")}
               onClick={() => onSelectNight(night.nightDate)}
             >
               <span>{formatDate(night.nightDate)}</span>
@@ -308,7 +325,7 @@ function NightWorkbench({
               <div className="sb-reports-mini-bar">
                 <i style={{ width: pct(night.coveredZones, 10) }} />
               </div>
-              <small>{issues ? `${issues} review` : "clear"}</small>
+              <small>{flags ? `${flags} flags` : "no flags"}</small>
             </button>
           );
         })}
@@ -318,27 +335,27 @@ function NightWorkbench({
         <div className="sb-reports-signal-card">
           <header>
             <AlertTriangle size={15} />
-            <strong>Review Queue</strong>
+            <strong>Exception Queue</strong>
           </header>
           {exceptionNights.length ? (
             exceptionNights.map((night) => (
               <button key={night.nightDate} type="button" onClick={() => onSelectNight(night.nightDate)}>
                 <span>{formatDate(night.nightDate)}</span>
                 <div className="sb-reports-mini-bar">
-                  <i style={{ width: pct(nightIssueCount(night), highestIssueCount) }} />
+                  <i style={{ width: pct(nightFlagCount(night), highestFlagCount) }} />
                 </div>
-                <strong>{nightIssueCount(night)}</strong>
+                <strong>{nightFlagCount(night)}</strong>
               </button>
             ))
           ) : (
-            <p>No night-level review items in this run.</p>
+            <p>No night exceptions in this run.</p>
           )}
         </div>
 
         <div className="sb-reports-signal-card">
           <header>
             <ShieldCheck size={15} />
-            <strong>Coverage Read</strong>
+            <strong>Zone Coverage</strong>
           </header>
           <div className="sb-reports-zone-dots" aria-label="Zone coverage dots">
             {Array.from({ length: 10 }, (_, index) => {
@@ -357,6 +374,11 @@ function NightWorkbench({
             Direct zone rows and assignment-carried coverage are separated from
             printable banner rows so drift stays visible.
           </p>
+          <div className="sb-reports-chip-row">
+            <span>Shortfall {nightZoneShortfall(selectedNight)}</span>
+            <span>Banner mismatch {nightBannerMismatch(selectedNight)}</span>
+            <span>Integrity {nightIntegrityFlags(selectedNight)}</span>
+          </div>
         </div>
       </section>
     </div>
@@ -406,8 +428,8 @@ function TeamWorkbench({
         <div className="sb-reports-focus-metrics">
           <WorkbenchMetric label="Assigned" value={selectedTm.assignedNights} detail="distinct nights" />
           <WorkbenchMetric label="Zones" value={selectedTm.zoneNights} detail={`${selectedTm.zoneGaps} zone gaps`} />
-          <WorkbenchMetric label="Composite" value={selectedTm.compositeDutyNights} detail="heavier restroom duty" />
-          <WorkbenchMetric label="Review Risks" value={selectedTm.repeatRisks} detail={`last ${formatDate(selectedTm.lastWorkedNight)}`} />
+          <WorkbenchMetric label="Doubled RR" value={selectedTm.compositeDutyNights} detail="composite restroom nights" />
+          <WorkbenchMetric label="Repeat Flags" value={selectedTm.repeatRisks} detail={`last worked ${formatDate(selectedTm.lastWorkedNight)}`} />
         </div>
         <div className="sb-reports-chip-row">
           {selectedTm.topAreas.map((area) => (
@@ -429,7 +451,7 @@ function TeamWorkbench({
               <i style={{ width: pct(tm.assignedNights, maxAssigned) }} />
               <b style={{ width: pct(tm.compositeDutyNights, maxComposite) }} />
             </div>
-            <small>{tm.repeatRisks ? `${tm.repeatRisks} risks` : `${tm.uniquePhysicalAreas} areas`}</small>
+            <small>{tm.repeatRisks ? `${tm.repeatRisks} repeat flags` : `${tm.uniquePhysicalAreas} areas`}</small>
           </button>
         ))}
       </section>
@@ -535,7 +557,7 @@ function FindingsWorkbench({
     return (
       <div className="sb-reports-empty">
         <CheckCircle2 size={20} />
-        <span>No deterministic findings in this run.</span>
+        <span>No report flags in this run.</span>
       </div>
     );
   }
@@ -545,10 +567,10 @@ function FindingsWorkbench({
       <section className={cn("sb-reports-focus-card", `is-${selectedFinding.severity}`)}>
         <header>
           <div>
-            <p>Intel Focus</p>
+            <p>Flag Detail</p>
             <h3>{selectedFinding.title}</h3>
           </div>
-          <span className="sb-reports-status-chip">{selectedFinding.confidence}</span>
+          <span className="sb-reports-status-chip">{flagActionLabel(selectedFinding.severity)}</span>
         </header>
         <p className="sb-reports-focus-copy">{selectedFinding.detail}</p>
         <div className="sb-reports-evidence">
@@ -565,9 +587,9 @@ function FindingsWorkbench({
             className={cn("sb-reports-triage-card", `is-${finding.severity}`, finding.id === selectedFinding.id && "is-active")}
             onClick={() => onSelectFinding(finding.id)}
           >
-            <span>{finding.severity}</span>
+            <span>{flagActionLabel(finding.severity)}</span>
             <strong>{finding.title}</strong>
-            <small>{finding.evidence.length} evidence points · {finding.confidence}</small>
+            <small>{finding.evidence.length} evidence lines</small>
           </button>
         ))}
       </section>
@@ -640,20 +662,43 @@ function Inspector({
   loading: boolean;
   onRefresh: () => void;
 }) {
+  const coverageShortfallNights = snapshot.nights.filter((night) => nightZoneShortfall(night) > 0 && !night.isFuture).length;
+  const bannerMismatchNights = snapshot.nights.filter((night) => nightBannerMismatch(night) > 0).length;
+  const repeatFlagTms = snapshot.teamMembers.filter((tm) => tm.repeatRisks > 0).length;
+  const doubledRestroomTms = snapshot.teamMembers.filter((tm) => tm.compositeDutyNights > 0).length;
+  const integrityNights = snapshot.nights.filter((night) => nightIntegrityFlags(night) > 0).length;
+  const packetItems = [
+    { label: "Coverage gaps", value: coverageShortfallNights, detail: "nights below 10 covered zones" },
+    { label: "Print check", value: bannerMismatchNights, detail: "nights where coverage banners do not match" },
+    { label: "Repeat flags", value: repeatFlagTms, detail: "TMs with same-area repeat flags" },
+    { label: "Doubled RR", value: doubledRestroomTms, detail: "TMs with composite restroom nights" },
+    { label: "Lock/history", value: integrityNights, detail: "nights with integrity flags" },
+  ].filter((item) => item.value > 0);
+  const openFlagTotal = packetItems.reduce((sum, item) => sum + item.value, 0);
+
   return (
     <aside className="sb-reports-inspector" aria-label="Report command center">
       <div className="sb-reports-panel-label">
         <ShieldCheck size={14} />
-        <span>Command Center</span>
+        <span>Report Packet</span>
       </div>
 
       <section className="sb-reports-command-card">
-        <p>{selectedPackage.title}</p>
-        <h3>{selectedPackage.summary}</h3>
-        <div className="sb-reports-section-list">
-          {selectedPackage.sections.map((section) => (
-            <span key={section}>{section}</span>
-          ))}
+        <p>{snapshot.dateRange.from} to {snapshot.dateRange.to}</p>
+        <h3>{selectedPackage.title}</h3>
+        <div className="sb-reports-packet-facts">
+          <div>
+            <strong>{snapshot.totals.nights}</strong>
+            <span>nights</span>
+          </div>
+          <div>
+            <strong>{selectedPackage.pageEstimate}</strong>
+            <span>pages</span>
+          </div>
+          <div>
+            <strong>{openFlagTotal}</strong>
+            <span>flags</span>
+          </div>
         </div>
         <div className="sb-reports-command-actions">
           <button type="button" onClick={onRefresh} disabled={loading} title="Run report">
@@ -672,37 +717,34 @@ function Inspector({
       </section>
 
       <section className="sb-reports-inspector-section">
-        <h4>Intel</h4>
-        {snapshot.findings.slice(0, 3).map((finding) => (
-          <div key={finding.id} className="sb-reports-mini-finding">
-            <span>{finding.severity}</span>
-            <p>{finding.title}</p>
-          </div>
-        ))}
-        {snapshot.findings.length === 0 ? <p className="sb-reports-muted">Clean run.</p> : null}
+        <h4>Pull For</h4>
+        {packetItems.length ? (
+          packetItems.map((item) => (
+            <div key={item.label} className="sb-reports-packet-row">
+              <div>
+                <strong>{item.label}</strong>
+                <span>{item.detail}</span>
+              </div>
+              <em>{item.value}</em>
+            </div>
+          ))
+        ) : (
+          <p className="sb-reports-muted">No open flags in this packet.</p>
+        )}
       </section>
 
       <section className="sb-reports-inspector-section">
-        <h4>Method</h4>
-        <p>{snapshot.method.denominator}</p>
-        <div className="sb-reports-confidence-list">
-          {snapshot.confidence.map((flag) => (
-            <div key={flag.id}>
-              <strong>{flag.label}</strong>
-              <span>{flag.detail}</span>
-            </div>
+        <h4>Included</h4>
+        <div className="sb-reports-section-list">
+          {selectedPackage.sections.map((section) => (
+            <span key={section}>{section}</span>
           ))}
         </div>
       </section>
 
       <section className="sb-reports-inspector-section">
-        <h4>Sources</h4>
-        {snapshot.sourceCounts.map((source) => (
-          <div key={source.label} className="sb-reports-source-row">
-            <span>{source.label}</span>
-            <strong>{source.rows}</strong>
-          </div>
-        ))}
+        <h4>Print Note</h4>
+        <p>Counts are assignment records and visible coverage. Call-offs are recorded events only.</p>
       </section>
     </aside>
   );

@@ -23,8 +23,8 @@ const REPORT_DEFINITIONS: ReportRunDefinition[] = [
     id: "weekly-placement-review",
     title: "Weekly Placement Review",
     category: "weekly",
-    description: "Night-by-night coverage, rotation pressure, exceptions, and source confidence.",
-    sections: ["Executive summary", "Night coverage", "Rotation pressure", "Exceptions"],
+    description: "A clean weekly handoff: nights, coverage, rotation flags, and exceptions.",
+    sections: ["Summary", "Night list", "Rotation flags", "Exceptions"],
     recommended: true,
     estimatedPages: 4,
   },
@@ -33,7 +33,7 @@ const REPORT_DEFINITIONS: ReportRunDefinition[] = [
     title: "Night Coverage & Exceptions",
     category: "night",
     description: "Coverage gaps, fallback coverage, call-offs, board changes, invalid locks, and banner drift.",
-    sections: ["Coverage table", "Exception log", "Method notes"],
+    sections: ["Night list", "Coverage gaps", "Print checks"],
     recommended: true,
     estimatedPages: 3,
   },
@@ -41,8 +41,8 @@ const REPORT_DEFINITIONS: ReportRunDefinition[] = [
     id: "tm-placement-history",
     title: "TM Placement History",
     category: "team",
-    description: "Per-TM area history with composite-duty burden, repeats, call-offs, and caveats.",
-    sections: ["TM summary", "Top areas", "Rotation cautions"],
+    description: "Per-TM area history with doubled-restroom nights, repeat flags, call-offs, and caveats.",
+    sections: ["TM summary", "Top areas", "Rotation flags"],
     recommended: true,
     estimatedPages: 5,
   },
@@ -51,7 +51,7 @@ const REPORT_DEFINITIONS: ReportRunDefinition[] = [
     title: "Area Coverage History",
     category: "area",
     description: "Direct and fallback area coverage, frequent carriers, and exposure concentration.",
-    sections: ["Area coverage", "Top carriers", "Confidence flags"],
+    sections: ["Area list", "Top carriers", "Coverage notes"],
     recommended: false,
     estimatedPages: 4,
   },
@@ -212,7 +212,7 @@ function buildPackages(args: {
   const commonKpis = [
     { label: "Nights", value: String(totals.nights), detail: `${dateRange.from} to ${dateRange.to}` },
     { label: "Covered zone-nights", value: String(totals.coveredZoneNights), detail: "Direct zone rows plus assignment-carried coverage" },
-    { label: "Repeat risks", value: String(totals.repeatRisks), detail: "Same physical area inside prior three worked nights" },
+    { label: "Repeat flags", value: String(totals.repeatRisks), detail: "Same physical area inside prior three worked nights" },
     { label: "Call-offs", value: String(totals.callOffs), detail: "Recorded call-off rows only" },
   ];
 
@@ -221,7 +221,7 @@ function buildPackages(args: {
       id: "weekly-placement-review",
       title: "Weekly Placement Review",
       sections: REPORT_DEFINITIONS[0].sections,
-      summary: `${totals.nights} nights reviewed with ${totals.coveredZoneNights} covered zone-nights and ${findings.length} deterministic findings.`,
+      summary: `${totals.nights} nights reviewed with ${totals.coveredZoneNights} covered zone-nights and ${findings.length} report flags.`,
       pageEstimate: REPORT_DEFINITIONS[0].estimatedPages,
       kpis: commonKpis,
       rows: nights.slice(0, 14).map((n) => ({
@@ -230,7 +230,7 @@ function buildPackages(args: {
         "Zones covered": n.coveredZones,
         "Call-offs": n.callOffs,
         "Board changes": n.boardChanges,
-        "Repeat risks": n.repeatRisks,
+        "Repeat flags": n.repeatRisks,
       })),
     },
     "night-coverage-exceptions": {
@@ -264,8 +264,8 @@ function buildPackages(args: {
         "Assigned nights": tm.assignedNights,
         Zones: tm.zoneNights,
         Restrooms: tm.restroomNights,
-        "Composite nights": tm.compositeDutyNights,
-        "Repeat risks": tm.repeatRisks,
+        "Doubled RR nights": tm.compositeDutyNights,
+        "Repeat flags": tm.repeatRisks,
       })),
     },
     "area-coverage-history": {
@@ -707,7 +707,7 @@ export async function getOpsReportsSnapshot(
       title: `${underfilled.length} historical nights show fewer than 10 covered zones`,
       detail: "Covered zones count direct Z1-Z10 rows plus assignment-carried fallback coverage. This is coverage visibility, not staffing misconduct.",
       evidence: underfilled.slice(0, 5).map((n) => `${n.nightDate}: ${n.coveredZones}/10 covered zones`),
-      action: "Review the affected nights in Builder before using this as a final operating summary.",
+      action: "Open the affected nights in Builder before using this as a final operating summary.",
       confidence: "medium",
     });
   }
@@ -727,10 +727,10 @@ export async function getOpsReportsSnapshot(
     findings.push({
       id: "repeat-risk-window",
       severity: "info",
-      title: `${totals.repeatRisks} same-area repeat risks found inside the loaded window`,
-      detail: "This compares physical area exposure against the prior three worked nights available in this report run. Admin and overlap continuity are excluded from the risk count.",
-      evidence: teamMembers.filter((tm) => tm.repeatRisks > 0).slice(0, 5).map((tm) => `${tm.tmName}: ${tm.repeatRisks} risks`),
-      action: "Use as a review queue, not as proof of a solver violation without eligibility and rescue provenance.",
+      title: `${totals.repeatRisks} same-area repeat flags found inside the loaded window`,
+      detail: "This compares physical area exposure against the prior three worked nights available in this report run. Admin and overlap continuity are excluded.",
+      evidence: teamMembers.filter((tm) => tm.repeatRisks > 0).slice(0, 5).map((tm) => `${tm.tmName}: ${tm.repeatRisks} repeat flags`),
+      action: "Use as a rotation check queue, not as proof of a solver violation without eligibility and rescue provenance.",
       confidence: "medium",
     });
   }
@@ -738,7 +738,7 @@ export async function getOpsReportsSnapshot(
     findings.push({
       id: "integrity-review",
       severity: "critical",
-      title: "Placement integrity views report review items",
+      title: "Placement integrity views returned flags",
       detail: "Invalid locks and history conflicts can distort reporting and rotation analysis.",
       evidence: [`Invalid locks: ${totals.invalidLocks}`, `History conflicts: ${totals.historyConflicts}`],
       action: "Have a sudo operator audit these before treating the report as final.",
@@ -750,9 +750,9 @@ export async function getOpsReportsSnapshot(
     findings.push({
       id: "composite-duty-burden",
       severity: "info",
-      title: `${heavyComposite.length} TMs carry repeated composite-duty burden`,
-      detail: "Composite restroom duty is tracked separately because it is a heavier assignment than a single area.",
-      evidence: heavyComposite.map((tm) => `${tm.tmName}: ${tm.compositeDutyNights} composite-duty nights`),
+      title: `${heavyComposite.length} TMs have repeated doubled-restroom nights`,
+      detail: "Doubled restroom duty is tracked separately because it covers more physical restroom areas than a single-restroom assignment.",
+      evidence: heavyComposite.map((tm) => `${tm.tmName}: ${tm.compositeDutyNights} doubled-restroom nights`),
       action: "Check eligibility and staffing levels before rebalancing; short-staffed restroom nights may justify the pattern.",
       confidence: "medium",
     });
@@ -796,7 +796,7 @@ export async function getOpsReportsSnapshot(
       denominator: "Distinct loaded nights and distinct assigned TM/night rows. Fairness opportunity denominators are disclosed as limited.",
       caveats: [
         "Counts distinguish direct zones, assignment-carried coverage, and printable banner rows.",
-        "Composite duty is one assignment carrying multiple physical areas, not double-booking.",
+        "Doubled restroom duty is one assignment carrying multiple physical areas, not double-booking.",
         "Call-offs are recorded events and are not treated as attendance or performance rates.",
       ],
     },
