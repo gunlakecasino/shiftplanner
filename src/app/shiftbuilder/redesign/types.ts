@@ -7,6 +7,7 @@ export interface CoverageEntry {
 
 export interface ShiftCardProps {
   zone: number;
+  label?: string;
   subZones?: string[];
   name: string;
   secondName?: string;

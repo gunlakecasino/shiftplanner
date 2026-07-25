@@ -321,6 +321,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     >
       <PackageShiftCard
         zone={zoneNumber}
+        label={def.label}
         name={assignmentState.kind === "covered" ? "" : displayName || "Unassigned"}
         notes={packageNotes}
         taskContent={packageTaskContent}

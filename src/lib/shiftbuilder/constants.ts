@@ -7,15 +7,15 @@ import type { AuxDef, AuxRole } from "./placement";
 // Zone identities — labels are rendered uppercase in the card per the Golden
 export const ZONE_DEFS = [
   { key: "Z1",  label: "ZONE 1" },
-  { key: "Z2",  label: "ZONE 2" },
+  { key: "Z2",  label: "ZONE 2 + LOBBY" },
   { key: "Z3",  label: "ZONE 3" },
   { key: "Z4",  label: "ZONE 4" },
-  { key: "Z5",  label: "ZONE 5" },
+  { key: "Z5",  label: "ZONE 5 + HIGH LIMITS" },
   { key: "Z6",  label: "ZONE 6" },
-  { key: "Z7",  label: "ZONE 7" },
+  { key: "Z7",  label: "ZONE 7 + SMOKING ROOM" },
   { key: "Z8",  label: "ZONE 8" },
   { key: "Z9",  label: "ZONE 9" },
-  { key: "Z10", label: "ZONE 10" },
+  { key: "Z10", label: "ZONE 10 + HIGH LIMITS" },
 ];
 
 /** Preferred visual layout order for the ZONES grid in the builder canvas (and mirrored in print book/overview for consistency).

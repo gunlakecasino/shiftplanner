@@ -363,17 +363,20 @@ export function OfficialGravesDeploymentPage({
         <section className="sb-approved-zones-section">
           <ApprovedSectionHeader label="ZONES" count={zoneAssigned} />
           <div className="sb-approved-zones-grid">
-            {ZONE_VISUAL_ORDER.map((slotKey) => (
-              <ApprovedAssignmentCard
-                key={slotKey}
-                slotKey={slotKey}
-                label={`ZONE ${slotKey.slice(1)}`}
-                accent={getZoneColor(slotKey)}
-                snapshot={snapshot}
-                coveredBy={coveredByIndex[slotKey]}
-                coverageTargets={coverageTargetsBySource[slotKey]}
-              />
-            ))}
+            {ZONE_VISUAL_ORDER.map((slotKey) => {
+              const def = ZONE_DEFS.find((zone) => zone.key === slotKey)!;
+              return (
+                <ApprovedAssignmentCard
+                  key={slotKey}
+                  slotKey={slotKey}
+                  label={def.label}
+                  accent={getZoneColor(slotKey)}
+                  snapshot={snapshot}
+                  coveredBy={coveredByIndex[slotKey]}
+                  coverageTargets={coverageTargetsBySource[slotKey]}
+                />
+              );
+            })}
           </div>
         </section>
 

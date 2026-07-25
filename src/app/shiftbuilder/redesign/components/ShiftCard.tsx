@@ -3,9 +3,10 @@ import { MoreHorizontal } from "lucide-react";
 import { ZONE_COLORS, ZONE_STATUS } from "../tokens";
 import type { ShiftCardProps } from "../types";
 
-export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage, taskContent, footer, noChip, onClick }: ShiftCardProps) {
+export function ShiftCard({ zone, label, name, secondName, notes, unassigned, coverage, taskContent, footer, noChip, onClick }: ShiftCardProps) {
   const colors = ZONE_COLORS[zone] || ZONE_COLORS[1];
   const accentColor = colors.label;
+  const cardLabel = label ?? `ZONE ${zone}`;
   const hasTasks = Boolean(taskContent || (notes && notes.length > 0));
   const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest("[data-card-task-zone], [data-task-host]")) return;
@@ -24,7 +25,7 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
           <div className="flex flex-col flex-1 p-3 min-w-0">
           <div className="flex items-center justify-between mb-2">
             {!noChip
-              ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>ZONE {zone}</span>
+              ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>{cardLabel}</span>
               : <div />}
             <MoreHorizontal size={12} className="text-gray-300 ml-auto" />
           </div>
@@ -91,7 +92,7 @@ export function ShiftCard({ zone, name, secondName, notes, unassigned, coverage,
         <div className="flex flex-col flex-1 p-3 min-w-0">
         <div className="flex items-center justify-between mb-2.5">
           {!noChip
-            ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>ZONE {zone}</span>
+            ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>{cardLabel}</span>
             : <div />}
           <div className="flex items-center gap-1.5">
             <div className={`w-2 h-2 rounded-full ${ZONE_STATUS[zone] ?? "bg-green-400"}`} />
