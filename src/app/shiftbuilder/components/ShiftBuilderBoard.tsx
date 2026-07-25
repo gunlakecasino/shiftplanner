@@ -1388,20 +1388,19 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     }
               }
             >
-              <div className={isPrintPreview ? "contents" : "sb-primary-deployment-sections"}>
-                <section
-                  className={`sb-builder-section sb-zones-section ${isPrintPreview ? "mb-1" : "mb-0"}`}
-                  style={
-                    isPrintPreview
-                      ? undefined
-                      : {
-                          flex: "0 0 auto",
-                          height: "auto",
-                          minHeight: 0,
-                          overflow: "visible",
-                        }
-                  }
-                >
+            <section
+              className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}
+              style={
+                isPrintPreview
+                  ? undefined
+                  : {
+                      flex: "0 0 auto",
+                      height: "auto",
+                      minHeight: 0,
+                      overflow: "visible",
+                    }
+              }
+            >
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
                 <span className="sb-section-live-meta">5 zones</span>
@@ -1509,7 +1508,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
             {/* RESTROOMS — Golden: 1 row × 5 cols */}
             <section
-              className={`sb-builder-section sb-restrooms-section ${isPrintPreview ? "mb-1" : "mb-0"}`}
+              className={`sb-builder-section ${isPrintPreview ? "mb-1" : "mb-0"}`}
               style={
                 isPrintPreview
                   ? undefined
@@ -1648,17 +1647,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   );
                 })}
               </div>
-                </section>
-              </div>
-
-            {/* Keeps the auxiliary section as the third element for the existing
-                print and card-chrome selectors while the live main sections share
-                an isolated sizing wrapper. */}
-            <span className="sb-aux-layout-sentinel" aria-hidden="true" />
+            </section>
 
             {/* AUXILIARY */}
             <section
-              className={`sb-builder-section sb-aux-section ${isPrintPreview ? "mb-2" : "mb-0"}`}
+              className={`sb-builder-section ${isPrintPreview ? "mb-2" : "mb-0"}`}
               style={
                 isPrintPreview
                   ? { position: "relative" }
