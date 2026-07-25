@@ -6441,4 +6441,40 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
     overflow-y: auto !important;
     overscroll-behavior: contain;
   }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    align-content: start;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid > * {
+    flex: 0 0 auto !important;
+    height: auto !important;
+  }
+}
+
+/* Restroom cards share one compact track per side. Keep identity prominent
+   without allowing the name block to crowd the task list below it. */
+@container builder (min-width: 1001px) {
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-card-assign-zone {
+    padding-top: 5px !important;
+    padding-bottom: 4px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid h3 {
+    font-size: clamp(16px, 1.05vw, 18px) !important;
+    line-height: 1 !important;
+    letter-spacing: -0.03em !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-placement-trail {
+    margin-top: 2px !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-card-task-scroll {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
 }
