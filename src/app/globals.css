@@ -6428,3 +6428,106 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
     max-width: calc(100% - 235px) !important;
   }
 }
+
+/* Deployment layout isolation.
+   The auxiliary rail used to span the two auto-sized grid rows directly. Safari
+   includes a spanning item's max-content height in both row calculations, so a
+   tall rail inflated the Zones and Restrooms tracks and left large blank bands.
+   The primary sections now own the document height; the rail is constrained to
+   that height and scrolls independently when it has more cards. */
+.sb-aux-layout-sentinel {
+  display: none !important;
+}
+
+.sb-primary-deployment-sections {
+  min-width: 0;
+}
+
+.sb-with-aux-sidebar > .sb-primary-deployment-sections {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.sb-with-aux-sidebar .sb-zones-section {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.sb-with-aux-sidebar .sb-restrooms-section {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.sb-with-aux-sidebar > .sb-aux-section {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-restrooms-section {
+  margin-top: 12px;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-restrooms-section .sheet-section-header::before {
+  background: #4b7be8;
+}
+
+@media (orientation: landscape) and (min-width: 1001px) {
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
+    --sb-live-aux-width: 248px;
+    position: relative;
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-primary-deployment-sections {
+    display: flex;
+    width: calc(100% - var(--sb-live-aux-width) - 14px);
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > .sb-aux-section {
+    position: absolute !important;
+    inset: 0 0 0 auto !important;
+    width: var(--sb-live-aux-width);
+    height: auto !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.38) transparent;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > .sb-aux-section::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > .sb-aux-section::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: rgba(100, 116, 139, 0.38);
+    background-clip: padding-box;
+  }
+}
+
+@media (orientation: landscape) and (min-width: 1001px) and (max-width: 1280px) {
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
+    --sb-live-aux-width: 218px;
+  }
+}
+
+@media (orientation: portrait), (max-width: 1000px) {
+  .sb-primary-deployment-sections {
+    display: contents;
+  }
+
+  .sb-with-aux-sidebar .sb-zones-section,
+  .sb-with-aux-sidebar .sb-restrooms-section,
+  .sb-with-aux-sidebar > .sb-aux-section {
+    position: static !important;
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    width: 100% !important;
+  }
+}
