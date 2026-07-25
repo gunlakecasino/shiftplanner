@@ -67,6 +67,7 @@ export default function ExportDebugPage() {
         includeShiftNotes: true,
         planningBlankSlate: false,
         includeTimestamp: true,
+        editableTmNames: false,
       };
 
       setStatus("Rasterizing from mounted Golden session (live DOM — export path)…");

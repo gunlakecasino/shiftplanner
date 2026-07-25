@@ -51,6 +51,7 @@ export interface PrintConfig {
   includeShiftNotes: boolean;
   planningBlankSlate: boolean;
   includeTimestamp: boolean;
+  editableTmNames: boolean;
 }
 
 export const MARGIN_VALUES: Record<MarginSize, string> = {
@@ -330,6 +331,7 @@ export function PrintCommandCenter({
     setIncludeShiftNotes(config.includeShiftNotes !== false);
     setPlanningBlankSlate(config.planningBlankSlate === true);
     setIncludeTimestamp(config.includeTimestamp ?? true);
+    setEditableTmNames(config.editableTmNames === true);
   }, []);
 
   // ── Core config state ──────────────────────────────────────────────────────
@@ -338,6 +340,7 @@ export function PrintCommandCenter({
   const [includeShiftNotes, setIncludeShiftNotes] = useState(true);
   const [planningBlankSlate, setPlanningBlankSlate] = useState(false);
   const [includeTimestamp, setIncludeTimestamp] = useState(true);
+  const [editableTmNames, setEditableTmNames] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [nightStatusByDay, setNightStatusByDay] = useState<Record<number, string | null>>({});
 
@@ -508,8 +511,16 @@ export function PrintCommandCenter({
       includeShiftNotes,
       planningBlankSlate,
       includeTimestamp,
+      editableTmNames,
     }),
-    [days, printVariant, includeShiftNotes, planningBlankSlate, includeTimestamp],
+    [
+      days,
+      printVariant,
+      includeShiftNotes,
+      planningBlankSlate,
+      includeTimestamp,
+      editableTmNames,
+    ],
   );
 
   // ── Day change handler ────────────────────────────────────────────────────
@@ -628,6 +639,13 @@ export function PrintCommandCenter({
       setPlanningBlankSlate={setPlanningBlankSlate}
       includeTimestamp={includeTimestamp}
       setIncludeTimestamp={setIncludeTimestamp}
+      editableTmNames={editableTmNames}
+      setEditableTmNames={setEditableTmNames}
+      exportLabel={
+        editableTmNames
+          ? exportLabel.replace(/^Export /, "Export Editable ")
+          : exportLabel
+      }
       canAccessSudo={canAccessSudo}
     />,
     document.body,
@@ -1085,6 +1103,9 @@ function PackagePrintCommandCenterShell({
   setPlanningBlankSlate,
   includeTimestamp,
   setIncludeTimestamp,
+  editableTmNames,
+  setEditableTmNames,
+  exportLabel,
   canAccessSudo,
 }: {
   visible: boolean;
@@ -1113,6 +1134,9 @@ function PackagePrintCommandCenterShell({
   setPlanningBlankSlate: React.Dispatch<React.SetStateAction<boolean>>;
   includeTimestamp: boolean;
   setIncludeTimestamp: React.Dispatch<React.SetStateAction<boolean>>;
+  editableTmNames: boolean;
+  setEditableTmNames: React.Dispatch<React.SetStateAction<boolean>>;
+  exportLabel: string;
   canAccessSudo: boolean;
 }) {
   const toggle = (i: number, key: "printDeploy" | "printBreaks") =>
@@ -1325,7 +1349,7 @@ function PackagePrintCommandCenterShell({
           />
         </div>
 
-        <div className="px-6 py-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="px-6 py-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-4 gap-2">
           <PackagePrintOption
             label="Shift notes"
             detail="Saved notes + dot grid"
@@ -1348,6 +1372,14 @@ function PackagePrintCommandCenterShell({
             color="#16a34a"
             onChange={() => setIncludeTimestamp((value) => !value)}
             disabled={!canAccessSudo}
+          />
+          <PackagePrintOption
+            label="Editable names"
+            detail="Edits stay in the PDF"
+            on={editableTmNames}
+            color="#0a84ff"
+            onChange={() => setEditableTmNames((value) => !value)}
+            disabled={!onExport}
           />
         </div>
 
@@ -1379,7 +1411,7 @@ function PackagePrintCommandCenterShell({
                 disabled={isPrinting || pageCount === 0}
                 className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 px-3 py-2 rounded-xl transition-colors disabled:opacity-40"
               >
-                <Download size={12} /> Export PDF
+                <Download size={12} /> {exportLabel}
               </button>
             ) : null}
             {onPreviewSheet ? (

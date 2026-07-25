@@ -16,6 +16,12 @@ import {
   goldenRasterScale,
   goldenRasterScaleForClient,
 } from "@/app/shiftbuilder/print/rasterPrep";
+import { buildPdfBlobFromRasterPages } from "@/app/shiftbuilder/print/exportPdf";
+import {
+  editableTmPdfFieldName,
+  mapEditableTmFieldToPdf,
+  type EditablePdfTmField,
+} from "@/app/shiftbuilder/print/editablePdfFields";
 
 const baseConfig = (over: Partial<PrintConfig> = {}): PrintConfig => ({
   days: Array.from({ length: 7 }, (_, i) => ({
@@ -35,6 +41,7 @@ const baseConfig = (over: Partial<PrintConfig> = {}): PrintConfig => ({
   includeShiftNotes: true,
   planningBlankSlate: false,
   includeTimestamp: true,
+  editableTmNames: false,
   ...over,
 });
 
@@ -84,6 +91,71 @@ describe("Golden PDF placement (undistorted inside browser margins)", () => {
         8,
       );
     }
+  });
+});
+
+describe("editable TM PDF fields", () => {
+  const field: EditablePdfTmField = {
+    slotKey: "Z10",
+    value: "Taylor Example",
+    xPx: 105.6,
+    yPx: 81.6,
+    widthPx: 211.2,
+    heightPx: 40.8,
+    fontSizePx: 16,
+    color: "#111111",
+  };
+
+  it("maps Golden artboard rectangles into the placed PDF image", () => {
+    const mapped = mapEditableTmFieldToPdf(field, {
+      x: 18,
+      y: 18,
+      width: 756,
+      height: 584,
+    });
+    expect(mapped.x).toBeCloseTo(93.6, 5);
+    expect(mapped.y).toBeCloseTo(76.4, 5);
+    expect(mapped.width).toBeCloseTo(151.2, 5);
+    expect(mapped.height).toBeCloseTo(29.2, 5);
+    expect(mapped.fontSize).toBeCloseTo(11.45, 2);
+  });
+
+  it("creates stable, PDF-safe field names per page and occurrence", () => {
+    expect(editableTmPdfFieldName(0, 0, "Z10")).toBe("tm_1_Z10_1");
+    expect(editableTmPdfFieldName(1, 2, "OL PM/1")).toBe(
+      "tm_2_OL_PM_1_3",
+    );
+  });
+
+  it("emits real AcroForm fields with prefilled TM values", async () => {
+    const { default: sharp } = await import("sharp");
+    const png = await sharp({
+      create: {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: "#ffffff",
+      },
+    })
+      .png()
+      .toBuffer();
+    const onePixelPng = `data:image/png;base64,${png.toString("base64")}`;
+    const blob = await buildPdfBlobFromRasterPages(
+      [
+        {
+          dataUrl: onePixelPng,
+          format: "PNG",
+          editableTmFields: [field],
+        },
+      ],
+      baseConfig({ margins: "none", editableTmNames: true }),
+    );
+    const pdfText = Buffer.from(await blob.arrayBuffer()).toString("latin1");
+    expect(pdfText).toContain("/AcroForm");
+    expect(pdfText).toContain("/DR 2 0 R");
+    expect(pdfText).toMatch(/\/DA \(\/F\d+ [\d.]+ Tf 0 g\)/);
+    expect(pdfText).toContain("(tm_1_Z10_1)");
+    expect(pdfText).toContain("(Taylor Example)");
   });
 });
 

@@ -29,6 +29,10 @@ import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
 import { TASK_LABEL_COLOR, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
+import {
+  EDITABLE_PDF_TM_SOURCE_ATTR,
+  EditablePdfTmFieldAnchor,
+} from "./editablePdfFields";
 
 function formatPrintTimestamp(iso?: string) {
   const d = iso ? new Date(iso) : new Date();
@@ -290,6 +294,7 @@ export function GoldenZoneCard({
   const regular = tasks.filter((t) => !t.isCoverage);
   const coverageCount = tasks.filter((t) => t.isCoverage).length;
   const coveragePad = coverageCount > 0 ? coverageCount * COVERAGE_BAR_H + 8 : 12;
+  const hasEditableTmField = Boolean(tmName?.trim()) || !coveredBy?.length;
 
   return (
     <div
@@ -326,9 +331,17 @@ export function GoldenZoneCard({
         {!isEmpty && !suppressBreakPill ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
-        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-3 pt-2"
+        className="sb-golden-card-body relative flex flex-col flex-1 min-h-0 px-3 pt-2"
         style={{ paddingBottom: coveragePad }}
       >
+        {hasEditableTmField ? (
+          <EditablePdfTmFieldAnchor
+            slotKey={slotKey}
+            value={tmName}
+            fontSizePx={21}
+            style={{ left: 12, right: 12, top: 7, height: 26 }}
+          />
+        ) : null}
         {isEmpty ? (
           coveredBy && coveredBy.length > 0 ? (
             <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={slotKey} scale="zone" />
@@ -336,6 +349,7 @@ export function GoldenZoneCard({
             <div
               className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px]"
               style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
             >
               <span className="sb-unassigned-primary">— Unassigned —</span>
             </div>
@@ -344,6 +358,7 @@ export function GoldenZoneCard({
           <>
             <span
               className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.35px] text-[#111] truncate px-1 py-[1px] inline-block"
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
               style={{
                 fontSize: 21,
                 lineHeight: 1,
@@ -397,6 +412,7 @@ export function GoldenRRSide({
   const coveragePad = coverageCount > 0 ? coverageCount * COVERAGE_BAR_H + 8 : 6;
   const isEmpty = empty || !tmName?.trim();
   const ink = cardAccentInk(accentColor);
+  const hasEditableTmField = Boolean(tmName?.trim()) || !coveredBy?.length;
 
   return (
     <div
@@ -429,9 +445,17 @@ export function GoldenRRSide({
         {!isEmpty && !suppressBreakPill ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
-        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5"
+        className="sb-golden-card-body relative flex flex-col flex-1 min-h-0 px-2 pt-1.5"
         style={{ paddingBottom: coveragePad }}
       >
+        {hasEditableTmField ? (
+          <EditablePdfTmFieldAnchor
+            slotKey={slotKey}
+            value={tmName}
+            fontSizePx={18}
+            style={{ left: 8, right: 8, top: 5, height: 22 }}
+          />
+        ) : null}
         {isEmpty ? (
           coveredBy && coveredBy.length > 0 ? (
             <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={slotKey} scale="rr" />
@@ -439,6 +463,7 @@ export function GoldenRRSide({
             <div
               className="unassigned-label text-[10.5px] tracking-[0.3px] px-1 py-[1px]"
               style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
             >
               <span className="sb-unassigned-primary">— Unassigned —</span>
             </div>
@@ -446,6 +471,7 @@ export function GoldenRRSide({
         ) : (
           <span
             className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
+            {...EDITABLE_PDF_TM_SOURCE_ATTR}
             style={{
               fontSize: 18,
               lineHeight: 1.02,
@@ -621,6 +647,8 @@ export function GoldenAuxCard({
   const ink = isBlank ? "#9CA3AF" : cardAccentInk(color);
   const icon = getAuxIcon(def.key, role);
   const isEmpty = (empty || !tmName?.trim()) && !isBlank;
+  const hasEditableTmField =
+    !isBlank && (Boolean(tmName?.trim()) || !coveredBy?.length);
   // Aux cards never show coverage banners (builder AuxCard filters isCoverage out).
   const regular = tasks.filter((t) => !t.isCoverage);
   const bodyPadBottom = 8;
@@ -669,9 +697,17 @@ export function GoldenAuxCard({
         {!isBlank && !isEmpty && !suppressBreakPill ? <GoldenBreakPill value={breakGroup} /> : null}
       </div>
       <div
-        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5 overflow-visible"
+        className="sb-golden-card-body relative flex flex-col flex-1 min-h-0 px-2 pt-1.5 overflow-visible"
         style={{ paddingBottom: bodyPadBottom }}
       >
+        {hasEditableTmField ? (
+          <EditablePdfTmFieldAnchor
+            slotKey={def.key}
+            value={tmName}
+            fontSizePx={18}
+            style={{ left: 8, right: 8, top: 5, height: 22 }}
+          />
+        ) : null}
         {isEmpty ? (
           coveredBy && coveredBy.length > 0 ? (
             <GoldenCoveredByBlock coveredBy={coveredBy} targetSlotKey={def.key} scale="aux" />
@@ -679,6 +715,7 @@ export function GoldenAuxCard({
             <div
               className="unassigned-label text-[10.5px] tracking-[0.3px] px-1 py-[1px] flex items-center justify-center flex-1"
               style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
             >
               <span className="sb-unassigned-primary">{emptyLabel}</span>
             </div>
@@ -687,6 +724,7 @@ export function GoldenAuxCard({
           <>
             <span
               className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.35px] text-[#111] truncate px-1 py-[1px] inline-block"
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
               style={{
                 fontSize: 18,
                 lineHeight: 1.02,
@@ -752,13 +790,20 @@ export function GoldenOverlapSlot({
         </span>
       </div>
       <div
-        className="sb-golden-card-body flex flex-col flex-1 min-h-0 px-2 pt-1.5"
+        className="sb-golden-card-body relative flex flex-col flex-1 min-h-0 px-2 pt-1.5"
         style={{ paddingBottom: coveragePad }}
       >
+        <EditablePdfTmFieldAnchor
+          slotKey={slotKey}
+          value={tmName}
+          fontSizePx={16}
+          style={{ left: 8, right: 8, top: 5, height: 20 }}
+        />
         {isEmpty ? (
           <div
             className="unassigned-label text-[9.5px] tracking-[0.3px] px-1 py-[1px] flex items-center justify-center flex-1"
             style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
+            {...EDITABLE_PDF_TM_SOURCE_ATTR}
           >
             <span className="sb-unassigned-primary">— Unassigned —</span>
           </div>
@@ -766,6 +811,7 @@ export function GoldenOverlapSlot({
           <>
             <span
               className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
               style={{
                 fontSize: 16,
                 lineHeight: 1.05,

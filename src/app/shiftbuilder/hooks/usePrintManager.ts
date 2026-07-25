@@ -324,7 +324,9 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
           showToast(
             result.usedZip
               ? `ZIP downloaded (${result.filename}).`
-              : "PDF downloaded (Golden print fidelity).",
+              : result.editableTmNames
+                ? "Editable PDF downloaded (fillable TM name fields)."
+                : "PDF downloaded (Golden print fidelity).",
             "success",
           );
           setIsPrintCenterOpen(false);

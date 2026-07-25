@@ -11,6 +11,10 @@ import {
   waitForGoldenRenderSettled,
 } from "./printSession";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "./goldenConstants";
+import {
+  addEditableTmFieldsToPdf,
+  type EditablePdfTmField,
+} from "./editablePdfFields";
 
 export type ExportProgress = {
   current: number;
@@ -18,7 +22,11 @@ export type ExportProgress = {
   label: string;
 };
 
-export type GoldenRasterPage = { dataUrl: string; format: "PNG" | "JPEG" };
+export type GoldenRasterPage = {
+  dataUrl: string;
+  format: "PNG" | "JPEG";
+  editableTmFields?: EditablePdfTmField[];
+};
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -76,11 +84,16 @@ function dayFilename(
   dayIndex: number,
   dayDefs: DayDef[],
   printVariant: PrintConfig["printVariant"] = "official",
+  editableTmNames = false,
 ): string {
   const def = dayDefs[dayIndex];
-  if (!def) return `Graves-Day-${dayIndex}.pdf`;
+  if (!def) {
+    return `Graves-Day-${dayIndex}${editableTmNames ? "-Editable" : ""}.pdf`;
+  }
   const base = `Graves-${def.short}-${String(def.dateNum).padStart(2, "0")}`;
-  return printVariant === "planning" ? `${base}-Planning.pdf` : `${base}.pdf`;
+  const variantSuffix = printVariant === "planning" ? "-Planning" : "";
+  const editableSuffix = editableTmNames ? "-Editable" : "";
+  return `${base}${variantSuffix}${editableSuffix}.pdf`;
 }
 
 /** Build a landscape-letter PDF from pre-rasterized Golden pages (exact page count). */
@@ -89,12 +102,18 @@ export async function buildPdfBlobFromRasterPages(
   config: PrintConfig,
 ): Promise<Blob> {
   const placement = getGoldenPdfPlacement(config);
-  const { default: jsPDF } = await import("jspdf");
+  const hasEditableFields = rasterPages.some(
+    (page) => (page.editableTmFields?.length ?? 0) > 0,
+  );
+  const { default: jsPDF, AcroFormTextField } = await import("jspdf");
   const pdf = new jsPDF({
     orientation: "landscape",
     unit: "pt",
     format: "letter",
-    compress: true,
+    // jsPDF 4.2.1 emits invisible AcroForm appearance streams when global
+    // compression is enabled. Keep editable documents uncompressed at the
+    // document level and compress their raster image streams explicitly below.
+    compress: !hasEditableFields,
     precision: 16,
   });
   rasterPages.forEach((page, idx) => {
@@ -106,7 +125,18 @@ export async function buildPdfBlobFromRasterPages(
       placement.y,
       placement.width,
       placement.height,
+      undefined,
+      hasEditableFields && page.format === "PNG" ? "FAST" : undefined,
     );
+    if (page.editableTmFields?.length) {
+      addEditableTmFieldsToPdf(
+        pdf,
+        AcroFormTextField,
+        page.editableTmFields,
+        placement,
+        idx,
+      );
+    }
   });
   return pdf.output("blob");
 }
@@ -174,6 +204,7 @@ export async function rasterizeGoldenPrintPages(
           kind: page.kind,
           pixelRatio,
           usePng,
+          editableTmNames: config.editableTmNames === true,
           fontEmbedCss,
         }),
         30_000,
@@ -192,7 +223,13 @@ export async function rasterizeGoldenPrintPages(
         });
       }
 
-      out.push({ dataUrl: raster.dataUrl, format: raster.format });
+      out.push({
+        dataUrl: raster.dataUrl,
+        format: raster.format,
+        ...(raster.editableTmFields
+          ? { editableTmFields: raster.editableTmFields }
+          : {}),
+      });
     }
 
     return out;
@@ -204,6 +241,7 @@ export async function rasterizeGoldenPrintPages(
 export type ExportGoldenPdfResult = {
   filename: string;
   usedZip: boolean;
+  editableTmNames: boolean;
 };
 
 /**
@@ -229,6 +267,7 @@ export async function exportGoldenPdf(args: {
   const activeDayConfigs = args.config.days.filter((d) => d.printDeploy || d.printBreaks);
   const uniqueDayIndices = [...new Set(activeDayConfigs.map((d) => d.dayIndex))];
   const useZip = uniqueDayIndices.length > 1;
+  const editableTmNames = args.config.editableTmNames === true;
   const coverIdx = pages.findIndex((p) => p.key === "__cover");
   const overviewIdx = pages.findIndex((p) => p.key === "__overview");
 
@@ -243,7 +282,12 @@ export async function exportGoldenPdf(args: {
         .map(({ idx }) => idx);
       if (indices.length === 0) continue;
       zip.file(
-        dayFilename(dayIdx, args.dayDefs, args.config.printVariant),
+        dayFilename(
+          dayIdx,
+          args.dayDefs,
+          args.config.printVariant,
+          editableTmNames,
+        ),
         await buildBlob(indices.map((i) => rasterPages[i])),
       );
     }
@@ -255,17 +299,29 @@ export async function exportGoldenPdf(args: {
     }
 
     const zipBlob = await zip.generateAsync({ type: "blob" });
-    triggerPdfDownload(zipBlob, "Graves-Schedule-Export.zip");
-    return { filename: "Graves-Schedule-Export.zip", usedZip: true };
+    const filename = editableTmNames
+      ? "Graves-Schedule-Editable-Export.zip"
+      : "Graves-Schedule-Export.zip";
+    triggerPdfDownload(zipBlob, filename);
+    return { filename, usedZip: true, editableTmNames };
   }
 
   const blob = await buildBlob(rasterPages);
-  let filename = "Graves-Export.pdf";
+  let filename = editableTmNames
+    ? "Graves-Editable-Export.pdf"
+    : "Graves-Export.pdf";
   if (uniqueDayIndices.length === 1) {
-    filename = dayFilename(uniqueDayIndices[0], args.dayDefs, args.config.printVariant);
+    filename = dayFilename(
+      uniqueDayIndices[0],
+      args.dayDefs,
+      args.config.printVariant,
+      editableTmNames,
+    );
   } else if (coverIdx >= 0 || overviewIdx >= 0) {
-    filename = "Graves-Schedule-Export.pdf";
+    filename = editableTmNames
+      ? "Graves-Schedule-Editable-Export.pdf"
+      : "Graves-Schedule-Export.pdf";
   }
   triggerPdfDownload(blob, filename);
-  return { filename, usedZip: false };
+  return { filename, usedZip: false, editableTmNames };
 }

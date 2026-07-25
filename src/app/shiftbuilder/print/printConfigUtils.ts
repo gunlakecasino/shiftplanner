@@ -159,6 +159,7 @@ export function tonightPrintConfig(
     includeShiftNotes: true,
     planningBlankSlate: false,
     includeTimestamp: true,
+    editableTmNames: false,
   };
 }
 
@@ -185,6 +186,7 @@ export function fullWeekPrintConfig(): PrintConfig {
     includeShiftNotes: true,
     planningBlankSlate: false,
     includeTimestamp: true,
+    editableTmNames: false,
   };
 }
 
@@ -214,6 +216,7 @@ export function loadLastPrintConfig(selectedDayIndex: number): PrintConfig | nul
       includeShiftNotes: parsed.includeShiftNotes !== false,
       planningBlankSlate: parsed.planningBlankSlate === true,
       includeTimestamp: parsed.includeTimestamp ?? true,
+      editableTmNames: parsed.editableTmNames === true,
       customQueueOrder: null,
     };
   } catch {

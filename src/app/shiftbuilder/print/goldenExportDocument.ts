@@ -17,12 +17,17 @@ import {
   withWhiteDocumentBackground,
 } from "./rasterPrep";
 import { waitForGoldenRenderSettled } from "./printSession";
+import {
+  collectAndSuppressEditableTmFields,
+  type EditablePdfTmField,
+} from "./editablePdfFields";
 
 type RasterResult = {
   dataUrl: string;
   format: "PNG" | "JPEG";
   width: number;
   height: number;
+  editableTmFields?: EditablePdfTmField[];
 };
 
 function collectFontFaceCss(): string {
@@ -245,6 +250,7 @@ export async function rasterizeGoldenArtboardElement(args: {
   kind: PrintPageKind;
   pixelRatio: number;
   usePng: boolean;
+  editableTmNames?: boolean;
   /** Precomputed once per print job so every sheet does not refetch/re-embed fonts. */
   fontEmbedCss?: string;
 }): Promise<RasterResult> {
@@ -287,7 +293,10 @@ export async function rasterizeGoldenArtboardElement(args: {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
     }
-    return await withWhiteDocumentBackground(() =>
+    const editableTmFields = args.editableTmNames
+      ? collectAndSuppressEditableTmFields(args.artboard)
+      : [];
+    const raster = await withWhiteDocumentBackground(() =>
       captureArtboardPixels(args.artboard, {
         pixelRatio: args.pixelRatio,
         usePng: args.usePng,
@@ -296,6 +305,10 @@ export async function rasterizeGoldenArtboardElement(args: {
         fontEmbedCss: args.fontEmbedCss,
       }),
     );
+    return {
+      ...raster,
+      ...(args.editableTmNames ? { editableTmFields } : {}),
+    };
   } finally {
     restoreIsolatedHost?.();
   }

@@ -21,6 +21,10 @@ import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
 import { buildOverlapRows } from "./buildPrintDaySnapshot";
 import { hasPrintAssigneeName, printAssigneeName } from "./printAssigneeName";
 import type { PrintDaySnapshot, PrintOverlapRow, PrintPreviewPageProps } from "./printPreviewTypes";
+import {
+  EDITABLE_PDF_TM_SOURCE_ATTR,
+  EditablePdfTmFieldAnchor,
+} from "./editablePdfFields";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
@@ -270,6 +274,7 @@ function ApprovedAssignmentCard({
     !!footer &&
     (tasks.length >= (compact ? 3 : 4) || (names.length > 1 && tasks.length >= 2));
   const ink = approvedAccentInk(accent);
+  const hasEditableTmField = Boolean(assignedName) || coveredBy.length === 0;
 
   return (
     <div
@@ -287,9 +292,27 @@ function ApprovedAssignmentCard({
         ) : null}
       </div>
       <div className="sb-approved-card-body">
-        {showOpenWork ? <span className="sb-approved-open-work">OPEN WORK</span> : null}
+        {hasEditableTmField ? (
+          <EditablePdfTmFieldAnchor
+            slotKey={slotKey}
+            value={assignedName}
+            fontSizePx={compact ? 18 : 19}
+            style={{ left: 9, right: 9, top: 4, height: compact ? 21 : 23 }}
+          />
+        ) : null}
+        {showOpenWork ? (
+          <span
+            className="sb-approved-open-work"
+            {...EDITABLE_PDF_TM_SOURCE_ATTR}
+          >
+            OPEN WORK
+          </span>
+        ) : null}
         {names.length > 0 ? (
-          <div className={`sb-approved-card-names ${names.length > 1 ? "is-multiple" : ""}`}>
+          <div
+            className={`sb-approved-card-names ${names.length > 1 ? "is-multiple" : ""}`}
+            {...(assignedName ? EDITABLE_PDF_TM_SOURCE_ATTR : {})}
+          >
             {names.map((name) => <div key={name}>{name}</div>)}
           </div>
         ) : null}
@@ -501,10 +524,19 @@ function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] 
       data-slot-key={slot.key}
     >
       <div className="sb-graves-overlap-accent" style={{ background: openWork ? "#a16207" : accent }} />
-      <div className="sb-graves-overlap-body">
+      <div className="sb-graves-overlap-body" style={{ position: "relative" }}>
+        <EditablePdfTmFieldAnchor
+          slotKey={slot.key}
+          value={tmName}
+          fontSizePx={15}
+          style={{ left: 7, right: 7, top: 4, height: 18 }}
+        />
         {blank ? null : (
           <>
-            <div className={`sb-graves-overlap-name ${openWork ? "is-open" : ""}`}>
+            <div
+              className={`sb-graves-overlap-name ${openWork ? "is-open" : ""}`}
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
+            >
               {tmName || "OPEN WORK"}
             </div>
             <div className="sb-approved-overlap-tasks">
