@@ -5,7 +5,11 @@ import { CardShell } from "./CardShell";
 import { getBreakWaveLabel } from "./card-utils";
 
 // Dev preview loose shape
-type DevAssignment = any;
+type DevAssignment = {
+  tmName?: string | null;
+  slotKey: string;
+  [key: string]: unknown;
+};
 
 /**
  * BreakPlanningCard — dedicated callable component for break wave/row slots.
@@ -31,7 +35,7 @@ export function BreakPlanningCard(props: BreakPlanningCardProps) {
     <CardShell assignment={assignment} {...shellProps}>
       {hasTM ? (
         <div className="flex items-center gap-2">
-          <div className="text-[18px] font-semibold tracking-[-0.25px] text-[#1C1C1E]">{assignment.tmName}</div>
+          <div className="text-[18px] font-semibold tracking-tight text-[#1C1C1E]">{assignment.tmName}</div>
           <span className="rounded-full bg-[#EDE4D3] px-2 py-px text-[9px] font-medium text-[#8B6F2E]/80 tracking-[0.3px]">{waveLabel}</span>
         </div>
       ) : (

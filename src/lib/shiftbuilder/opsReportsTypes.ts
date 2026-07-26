@@ -1,10 +1,24 @@
-import type { ReportWindow } from "./data";
+export type ReportWindow =
+  | 14
+  | 30
+  | 60
+  | "wtd"
+  | "mtd"
+  | "qtd"
+  | "week-ending"
+  | "date-range"
+  | "this-week"
+  | "last-4-weeks";
 
-export type { ReportWindow };
+export type ReportRangeMode = Extract<
+  ReportWindow,
+  "wtd" | "mtd" | "qtd" | "week-ending" | "date-range" | "this-week" | "last-4-weeks"
+>;
 
 export type ReportsStatusFilter = "history" | "published" | "built" | "all";
 
 export type ReportDefinitionId =
+  | "matrix-report"
   | "weekly-placement-review"
   | "night-coverage-exceptions"
   | "tm-placement-history"
@@ -40,11 +54,48 @@ export type ReportFinding = {
 export type ReportRunDefinition = {
   id: ReportDefinitionId;
   title: string;
-  category: "weekly" | "night" | "team" | "area";
+  category: "matrix" | "weekly" | "night" | "team" | "area";
   description: string;
   sections: string[];
   recommended: boolean;
   estimatedPages: number;
+};
+
+export type MatrixReportParams = {
+  window: ReportWindow;
+  from?: string;
+  to?: string;
+  weekEnding?: string;
+  includeInactive: boolean;
+  tmPool: string;
+};
+
+export type MatrixReportRow = {
+  tmId: string;
+  tmName: string;
+  pool: string | null;
+  active: boolean;
+  placement: string;
+  prev1: string;
+  prev2: string;
+  prev3: string;
+  prev4: string;
+  prev5: string;
+  lastSame: string;
+  lastZone: string;
+  lastRR: string;
+  lastZ9: string;
+  lastAdmin: string;
+  lastAux: string;
+};
+
+export type MatrixReportSnapshot = {
+  columns: Array<keyof Omit<MatrixReportRow, "tmId" | "pool" | "active">>;
+  rows: MatrixReportRow[];
+  params: MatrixReportParams;
+  poolOptions: string[];
+  generatedLabel: string;
+  matrixAsOfDate: string | null;
 };
 
 export type ReportNightIntel = {
@@ -126,6 +177,7 @@ export type OpsReportsSnapshot = {
   confidence: ReportConfidenceFlag[];
   definitions: ReportRunDefinition[];
   packages: Record<ReportDefinitionId, ReportPackageSnapshot>;
+  matrixReport: MatrixReportSnapshot;
   nights: ReportNightIntel[];
   teamMembers: ReportTeamMemberIntel[];
   areas: ReportAreaIntel[];

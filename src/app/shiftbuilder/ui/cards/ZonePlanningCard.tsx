@@ -4,7 +4,11 @@ import React from "react";
 import { CardShell } from "./CardShell";
 
 // Dev preview shape (loose for isolated ui/cards/ surface)
-type DevAssignment = any;
+type DevAssignment = {
+  tmName?: string | null;
+  slotKey?: string;
+  [key: string]: unknown;
+};
 
 /**
  * ZonePlanningCard
@@ -29,7 +33,7 @@ export function ZonePlanningCard(props: ZonePlanningCardProps) {
   return (
     <CardShell assignment={assignment} {...shellProps}>
       {hasTM ? (
-        <div className="text-[18px] font-semibold leading-tight tracking-[-0.25px] text-[#1C1C1E]">
+        <div className="text-[18px] font-semibold leading-tight tracking-tight text-[#1C1C1E]">
           {assignment.tmName}
         </div>
       ) : (

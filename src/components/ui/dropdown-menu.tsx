@@ -26,6 +26,7 @@ function DropdownMenuContent({
   className,
   sideOffset = 6,
   align = "start",
+  style,
   ...props
 }: MenuPrimitive.Popup.Props &
   Pick<MenuPrimitive.Positioner.Props, "sideOffset" | "align" | "side">) {
@@ -39,9 +40,10 @@ function DropdownMenuContent({
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
-            "max-h-[var(--available-height)] min-w-[10rem] origin-[var(--transform-origin)] overflow-y-auto overflow-x-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            "min-w-[10rem] origin-[var(--transform-origin)] overflow-y-auto overflow-x-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
             className
           )}
+          style={{ maxHeight: "var(--available-height)", ...style }}
           {...props}
         />
       </MenuPrimitive.Positioner>

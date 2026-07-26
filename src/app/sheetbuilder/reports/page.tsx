@@ -1,1 +1,3 @@
-export { default } from "../../shiftbuilder/reports/page";
+import ShiftBuilderReportsPage from "../../shiftbuilder/reports/page";
+
+export default ShiftBuilderReportsPage;

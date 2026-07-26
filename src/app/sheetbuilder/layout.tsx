@@ -1,1 +1,3 @@
-export { default } from "../shiftbuilder/layout";
+import ShiftBuilderLayout from "../shiftbuilder/layout";
+
+export default ShiftBuilderLayout;

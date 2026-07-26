@@ -3,28 +3,18 @@
 import React from "react";
 import {
   AlertTriangle,
-  BarChart3,
-  CalendarDays,
-  CheckCircle2,
   Download,
+  FileSpreadsheet,
   FileText,
-  Layers3,
   Loader2,
-  MapPin,
   Printer,
   RefreshCw,
   Search,
-  ShieldCheck,
-  Sparkles,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   OpsReportsSnapshot,
-  ReportAreaIntel,
   ReportDefinitionId,
-  ReportFinding,
-  ReportNightIntel,
   ReportPackageSnapshot,
   ReportWindow,
   ReportsStatusFilter,
@@ -32,93 +22,185 @@ import type {
 import { SudoTabLoading } from "../../sudo/SudoGlass";
 import { useOpsReportsSnapshot } from "../hooks/useOpsReportsSnapshot";
 
-type ExploreView = "nights" | "team" | "areas" | "findings";
-
-type WorkbenchSelection = {
-  nightDate: string | null;
-  tmId: string | null;
-  areaKey: string | null;
-  findingId: string | null;
-};
-
-const WINDOW_OPTIONS: Array<{ value: ReportWindow; label: string }> = [
-  { value: 14, label: "14d" },
-  { value: 30, label: "30d" },
-  { value: 60, label: "60d" },
-  { value: "this-week", label: "Week" },
-  { value: "last-4-weeks", label: "4w" },
+const RANGE_OPTIONS: Array<{ value: ReportWindow; label: string }> = [
+  { value: "wtd", label: "Week to date" },
+  { value: "mtd", label: "Month to date" },
+  { value: "qtd", label: "Quarter to date" },
+  { value: "week-ending", label: "Week ending" },
+  { value: "date-range", label: "Custom range" },
 ];
 
 const STATUS_OPTIONS: Array<{ value: ReportsStatusFilter; label: string }> = [
-  { value: "history", label: "History" },
-  { value: "published", label: "Published" },
-  { value: "built", label: "Built" },
-  { value: "all", label: "All" },
+  { value: "history", label: "Historical nights" },
+  { value: "published", label: "Published only" },
+  { value: "built", label: "Built only" },
+  { value: "all", label: "All statuses" },
 ];
 
-const VIEW_OPTIONS: Array<{ id: ExploreView; label: string; icon: React.ElementType }> = [
-  { id: "nights", label: "Nights", icon: BarChart3 },
-  { id: "team", label: "TMs", icon: Users },
-  { id: "areas", label: "Areas", icon: Layers3 },
-  { id: "findings", label: "Flags", icon: Sparkles },
-];
+const EXPORT_FORMATS = ["PDF", "Excel", "CSV", "Print"] as const;
 
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "-";
-  const [year, month, day] = iso.split("-");
-  return `${month}/${day}/${year?.slice(-2)}`;
-}
-
-function flagActionLabel(severity: ReportFinding["severity"]): string {
-  if (severity === "critical") return "Fix";
-  if (severity === "warning") return "Check";
-  return "Note";
-}
+type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 function csvEscape(value: string | number): string {
-  return `"${String(value).replace(/"/g, '""')}"`;
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-function exportPackageCsv(pkg: ReportPackageSnapshot, snapshot: OpsReportsSnapshot): void {
-  const rows = pkg.rows;
-  const headers = rows[0] ? Object.keys(rows[0]) : ["Report", "Summary"];
-  const body = rows.length
-    ? rows.map((row) => headers.map((h) => csvEscape(row[h] ?? "")).join(","))
-    : [[pkg.title, pkg.summary].map(csvEscape).join(",")];
-  const csv = [
-    [`${pkg.title} (${snapshot.dateRange.from} to ${snapshot.dateRange.to})`].map(csvEscape).join(","),
-    headers.map(csvEscape).join(","),
-    ...body,
-  ].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+function packageHeaders(pkg: ReportPackageSnapshot): string[] {
+  return pkg.rows[0] ? Object.keys(pkg.rows[0]) : ["Report", "Summary"];
+}
+
+function packageRows(pkg: ReportPackageSnapshot): Array<Record<string, string | number>> {
+  return pkg.rows.length ? pkg.rows : [{ Report: pkg.title, Summary: pkg.summary }];
+}
+
+function safeFilename(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function downloadBlob(content: string, filename: string, type: string): void {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${pkg.id}-${snapshot.dateRange.from}-to-${snapshot.dateRange.to}.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-function KpiStrip({ snapshot }: { snapshot: OpsReportsSnapshot }) {
-  const kpis = [
-    { label: "Nights", value: snapshot.totals.nights, detail: `${snapshot.dateRange.from} to ${snapshot.dateRange.to}` },
-    { label: "Covered zones", value: snapshot.totals.coveredZoneNights, detail: "direct + carried" },
-    { label: "Deployed TMs", value: snapshot.totals.deployedTms, detail: "assigned in window" },
-    { label: "Report flags", value: snapshot.findings.length, detail: `${snapshot.totals.repeatRisks} repeat flags` },
-  ];
+function exportPackageCsv(pkg: ReportPackageSnapshot, snapshot: OpsReportsSnapshot): void {
+  const rows = packageRows(pkg);
+  const headers = packageHeaders(pkg);
+  const csv = [
+    [`${pkg.title} (${snapshot.dateRange.from} to ${snapshot.dateRange.to})`].map(csvEscape).join(","),
+    headers.map(csvEscape).join(","),
+    ...rows.map((row) => headers.map((h) => csvEscape(row[h] ?? "")).join(",")),
+  ].join("\n");
 
-  return (
-    <div className="sb-reports-kpis" aria-label="Report run metrics">
-      {kpis.map((kpi) => (
-        <div key={kpi.label} className="sb-reports-kpi">
-          <span>{kpi.label}</span>
-          <strong>{kpi.value}</strong>
-          <small>{kpi.detail}</small>
-        </div>
-      ))}
-    </div>
+  downloadBlob(
+    csv,
+    `${safeFilename(pkg.title)}-${snapshot.dateRange.from}-to-${snapshot.dateRange.to}.csv`,
+    "text/csv;charset=utf-8",
+  );
+}
+
+function exportPackageExcel(pkg: ReportPackageSnapshot, snapshot: OpsReportsSnapshot): void {
+  const rows = packageRows(pkg);
+  const headers = packageHeaders(pkg);
+  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body>
+    <table>
+      <tr><th colspan="${headers.length}">${escapeHtml(pkg.title)} (${escapeHtml(snapshot.dateRange.from)} to ${escapeHtml(snapshot.dateRange.to)})</th></tr>
+      <tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>
+      ${rows
+        .map((row) => `<tr>${headers.map((h) => `<td>${escapeHtml(String(row[h] ?? ""))}</td>`).join("")}</tr>`)
+        .join("")}
+    </table>
+  </body></html>`;
+
+  downloadBlob(
+    html,
+    `${safeFilename(pkg.title)}-${snapshot.dateRange.from}-to-${snapshot.dateRange.to}.xls`,
+    "application/vnd.ms-excel;charset=utf-8",
+  );
+}
+
+async function exportPackagePdf(pkg: ReportPackageSnapshot, snapshot: OpsReportsSnapshot): Promise<void> {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 30;
+  const headers = packageHeaders(pkg);
+  const rows = packageRows(pkg);
+  const colWidth = (pageWidth - margin * 2) / headers.length;
+  let y = 88;
+  let page = 1;
+
+  function drawHeader() {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(pkg.title, margin, 34);
+    doc.text("Graves Operations Reporting", pageWidth - margin, 34, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Date Range: ${snapshot.dateRange.from} to ${snapshot.dateRange.to}`, margin, 52);
+    doc.text(`Generated: ${new Date(snapshot.generatedAt).toLocaleString()}`, margin, 66);
+    doc.setDrawColor(38);
+    doc.line(margin, 76, pageWidth - margin, 76);
+    y = 96;
+    doc.setFillColor(238, 239, 241);
+    doc.rect(margin, y - 13, pageWidth - margin * 2, 18, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.6);
+    headers.forEach((h, index) => doc.text(h, margin + index * colWidth + 3, y, { maxWidth: colWidth - 6 }));
+    y += 14;
+  }
+
+  function drawFooter() {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Page ${page}`, pageWidth - margin, pageHeight - 24, { align: "right" });
+  }
+
+  drawHeader();
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.6);
+  rows.forEach((row, rowIndex) => {
+    if (y > pageHeight - 42) {
+      drawFooter();
+      doc.addPage("letter", "landscape");
+      page += 1;
+      drawHeader();
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.6);
+    }
+    if (rowIndex % 2 === 1) {
+      doc.setFillColor(248, 248, 249);
+      doc.rect(margin, y - 9, pageWidth - margin * 2, 14, "F");
+    }
+    headers.forEach((h, index) => {
+      doc.text(String(row[h] ?? ""), margin + index * colWidth + 3, y, { maxWidth: colWidth - 6 });
+    });
+    y += 14;
+  });
+  drawFooter();
+  doc.save(`${safeFilename(pkg.title)}-${snapshot.dateRange.from}-to-${snapshot.dateRange.to}.pdf`);
+}
+
+function formatDateForInput(value: string | undefined, fallback: string): string {
+  return value || fallback;
+}
+
+function formatRunTime(value: string | null): string {
+  if (!value) return "Not run";
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatPageCount(rowCount: number): number {
+  return Math.max(1, Math.ceil(rowCount / 12));
+}
+
+function filteredRows(pkg: ReportPackageSnapshot, query: string): Array<Record<string, string | number>> {
+  const rows = packageRows(pkg);
+  const needle = query.trim().toLowerCase();
+  if (!needle) return rows;
+  return rows.filter((row) =>
+    Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(needle)),
   );
 }
 
@@ -129,674 +211,109 @@ function ReportPrintSheet({
   snapshot: OpsReportsSnapshot;
   pkg: ReportPackageSnapshot;
 }) {
-  const rows = pkg.rows.slice(0, 34);
-  const headers = rows[0] ? Object.keys(rows[0]) : [];
+  const rows = packageRows(pkg);
+  const headers = packageHeaders(pkg);
 
   return (
-    <section className="sb-report-print-sheet" aria-hidden="true">
+    <section className="sb-report-print-sheet">
       <header>
         <div>
-          <p>GLCR Grave Reports</p>
+          <p>Graves Operations Reporting</p>
           <h1>{pkg.title}</h1>
         </div>
         <aside>
+          <span>Operations Analytics</span>
           <span>{snapshot.dateRange.from} to {snapshot.dateRange.to}</span>
-          <span>Run {snapshot.runId}</span>
-          <span>{snapshot.rolloverLabel}</span>
+          <span>Generated {new Date(snapshot.generatedAt).toLocaleString()}</span>
         </aside>
       </header>
 
-      <div className="sb-report-print-summary">
-        <p>{pkg.summary}</p>
-        {pkg.kpis.map((kpi) => (
-          <div key={kpi.label}>
-            <strong>{kpi.value}</strong>
-            <span>{kpi.label}</span>
-          </div>
-        ))}
-      </div>
-
-      {headers.length ? (
-        <table>
-          <thead>
-            <tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={index}>
-                {headers.map((h) => <td key={h}>{row[h]}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
+      <table>
+        <thead>
+          <tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={index}>
+              {headers.map((h) => <td key={h}>{row[h]}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <footer>
-        <span>Counts reflect assignment records and visible coverage. Call-offs are recorded events only.</span>
+        <span>{rows.length} rows · live matrix source</span>
         <span>Page 1</span>
       </footer>
     </section>
   );
 }
 
-function ReportCatalog({
-  snapshot,
-  selectedId,
-  onSelect,
-}: {
-  snapshot: OpsReportsSnapshot;
-  selectedId: ReportDefinitionId;
-  onSelect: (id: ReportDefinitionId) => void;
-}) {
-  return (
-    <aside className="sb-reports-catalog" aria-label="Report catalog">
-      <div className="sb-reports-panel-label">
-        <FileText size={14} />
-        <span>Catalog</span>
-      </div>
-      <div className="sb-reports-catalog-list">
-        {snapshot.definitions.map((definition) => {
-          const active = definition.id === selectedId;
-          return (
-            <button
-              key={definition.id}
-              type="button"
-              className={cn("sb-reports-catalog-card", active && "is-active")}
-              onClick={() => onSelect(definition.id)}
-              aria-pressed={active}
-            >
-              <span className="sb-reports-catalog-title">{definition.title}</span>
-              <span className="sb-reports-catalog-meta">
-                {definition.estimatedPages} pages · {definition.category}
-              </span>
-              <span className="sb-reports-catalog-desc">{definition.description}</span>
-            </button>
-          );
-        })}
-      </div>
-    </aside>
-  );
-}
-
-function nightZoneShortfall(night: ReportNightIntel): number {
-  return Math.max(0, 10 - night.coveredZones);
-}
-
-function nightBannerMismatch(night: ReportNightIntel): number {
-  return Math.abs(night.assignmentCoveragePairs - night.coverageBannerRows);
-}
-
-function nightIntegrityFlags(night: ReportNightIntel): number {
-  return night.invalidLocks + night.historyConflicts;
-}
-
-function nightFlagCount(night: ReportNightIntel): number {
-  return (
-    nightZoneShortfall(night) +
-    nightBannerMismatch(night) +
-    night.repeatRisks +
-    nightIntegrityFlags(night)
-  );
-}
-
-function pct(value: number, max: number): string {
-  if (max <= 0) return "0%";
-  return `${Math.max(4, Math.min(100, Math.round((value / max) * 100)))}%`;
-}
-
-function WorkbenchMetric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-}) {
-  return (
-    <div className="sb-reports-workbench-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </div>
-  );
-}
-
-function NightWorkbench({
-  snapshot,
-  selectedNightDate,
-  onSelectNight,
-}: {
-  snapshot: OpsReportsSnapshot;
-  selectedNightDate: string | null;
-  onSelectNight: (nightDate: string) => void;
-}) {
-  const selectedNight =
-    snapshot.nights.find((night) => night.nightDate === selectedNightDate) ??
-    snapshot.nights.find((night) => nightFlagCount(night) > 0) ??
-    snapshot.nights[0] ??
-    null;
-  const highestFlagCount = Math.max(1, ...snapshot.nights.map(nightFlagCount));
-  const exceptionNights = snapshot.nights
-    .filter((night) => nightFlagCount(night) > 0)
-    .sort((a, b) => nightFlagCount(b) - nightFlagCount(a))
-    .slice(0, 4);
-
-  if (!selectedNight) {
-    return (
-      <div className="sb-reports-empty">
-        <CalendarDays size={20} />
-        <span>No nights in this report window.</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="sb-reports-workbench">
-      <section className="sb-reports-focus-card">
-        <header>
-          <div>
-            <p>Night Focus</p>
-            <h3>{formatDate(selectedNight.nightDate)}</h3>
-          </div>
-          <span className="sb-reports-status-chip">{selectedNight.status ?? "unknown"}</span>
-        </header>
-        <div className="sb-reports-focus-metrics">
-          <WorkbenchMetric label="Zones" value={`${selectedNight.coveredZones}/10`} detail={`${selectedNight.directZones} direct`} />
-          <WorkbenchMetric label="Banner Match" value={`${selectedNight.assignmentCoveragePairs}/${selectedNight.coverageBannerRows}`} detail="assigned coverage / print banners" />
-          <WorkbenchMetric label="Board Changes" value={selectedNight.boardChanges} detail={`${selectedNight.callOffs} call-offs`} />
-          <WorkbenchMetric label="Open Flags" value={nightFlagCount(selectedNight)} detail="coverage, banner, repeat, integrity" />
-        </div>
-      </section>
-
-      <section className="sb-reports-night-timeline" aria-label="Night timeline">
-        {snapshot.nights.map((night) => {
-          const selected = night.nightDate === selectedNight.nightDate;
-          const flags = nightFlagCount(night);
-          return (
-            <button
-              key={night.nightDate}
-              type="button"
-              className={cn("sb-reports-night-card", selected && "is-active", flags > 0 && "has-issues")}
-              onClick={() => onSelectNight(night.nightDate)}
-            >
-              <span>{formatDate(night.nightDate)}</span>
-              <strong>{night.coveredZones}/10</strong>
-              <div className="sb-reports-mini-bar">
-                <i style={{ width: pct(night.coveredZones, 10) }} />
-              </div>
-              <small>{flags ? `${flags} flags` : "no flags"}</small>
-            </button>
-          );
-        })}
-      </section>
-
-      <section className="sb-reports-center-grid">
-        <div className="sb-reports-signal-card">
-          <header>
-            <AlertTriangle size={15} />
-            <strong>Exception Queue</strong>
-          </header>
-          {exceptionNights.length ? (
-            exceptionNights.map((night) => (
-              <button key={night.nightDate} type="button" onClick={() => onSelectNight(night.nightDate)}>
-                <span>{formatDate(night.nightDate)}</span>
-                <div className="sb-reports-mini-bar">
-                  <i style={{ width: pct(nightFlagCount(night), highestFlagCount) }} />
-                </div>
-                <strong>{nightFlagCount(night)}</strong>
-              </button>
-            ))
-          ) : (
-            <p>No night exceptions in this run.</p>
-          )}
-        </div>
-
-        <div className="sb-reports-signal-card">
-          <header>
-            <ShieldCheck size={15} />
-            <strong>Zone Coverage</strong>
-          </header>
-          <div className="sb-reports-zone-dots" aria-label="Zone coverage dots">
-            {Array.from({ length: 10 }, (_, index) => {
-              const zoneNumber = index + 1;
-              return (
-                <span
-                  key={zoneNumber}
-                  className={cn(zoneNumber <= selectedNight.coveredZones && "is-filled")}
-                >
-                  Z{zoneNumber}
-                </span>
-              );
-            })}
-          </div>
-          <p>
-            Direct zone rows and assignment-carried coverage are separated from
-            printable banner rows so drift stays visible.
-          </p>
-          <div className="sb-reports-chip-row">
-            <span>Shortfall {nightZoneShortfall(selectedNight)}</span>
-            <span>Banner mismatch {nightBannerMismatch(selectedNight)}</span>
-            <span>Integrity {nightIntegrityFlags(selectedNight)}</span>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function TeamWorkbench({
-  snapshot,
-  query,
-  selectedTmId,
-  onSelectTm,
-}: {
-  snapshot: OpsReportsSnapshot;
-  query: string;
-  selectedTmId: string | null;
-  onSelectTm: (tmId: string) => void;
-}) {
-  const q = query.trim().toLowerCase();
-  const rows = snapshot.teamMembers.filter((tm) => !q || tm.tmName.toLowerCase().includes(q));
-  const selectedTm =
-    rows.find((tm) => tm.tmId === selectedTmId) ??
-    rows.find((tm) => tm.repeatRisks > 0 || tm.compositeDutyNights > 0) ??
-    rows[0] ??
-    null;
-  const maxAssigned = Math.max(1, ...rows.map((tm) => tm.assignedNights));
-  const maxComposite = Math.max(1, ...rows.map((tm) => tm.compositeDutyNights));
-
-  if (!selectedTm) {
-    return (
-      <div className="sb-reports-empty">
-        <Users size={20} />
-        <span>No matching TMs in this report window.</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="sb-reports-workbench">
-      <section className="sb-reports-focus-card">
-        <header>
-          <div>
-            <p>TM Focus</p>
-            <h3>{selectedTm.tmName}</h3>
-          </div>
-          <span className="sb-reports-status-chip">{selectedTm.gravePool ?? "pool unknown"}</span>
-        </header>
-        <div className="sb-reports-focus-metrics">
-          <WorkbenchMetric label="Assigned" value={selectedTm.assignedNights} detail="distinct nights" />
-          <WorkbenchMetric label="Zones" value={selectedTm.zoneNights} detail={`${selectedTm.zoneGaps} zone gaps`} />
-          <WorkbenchMetric label="Doubled RR" value={selectedTm.compositeDutyNights} detail="composite restroom nights" />
-          <WorkbenchMetric label="Repeat Flags" value={selectedTm.repeatRisks} detail={`last worked ${formatDate(selectedTm.lastWorkedNight)}`} />
-        </div>
-        <div className="sb-reports-chip-row">
-          {selectedTm.topAreas.map((area) => (
-            <span key={area.areaKey}>{area.areaKey} · {area.count}</span>
-          ))}
-        </div>
-      </section>
-
-      <section className="sb-reports-heat-list" aria-label="TM placement heat">
-        {rows.slice(0, 28).map((tm) => (
-          <button
-            key={tm.tmId}
-            type="button"
-            className={cn("sb-reports-heat-row", tm.tmId === selectedTm.tmId && "is-active")}
-            onClick={() => onSelectTm(tm.tmId)}
-          >
-            <span>{tm.tmName}</span>
-            <div className="sb-reports-heat-bars">
-              <i style={{ width: pct(tm.assignedNights, maxAssigned) }} />
-              <b style={{ width: pct(tm.compositeDutyNights, maxComposite) }} />
-            </div>
-            <small>{tm.repeatRisks ? `${tm.repeatRisks} repeat flags` : `${tm.uniquePhysicalAreas} areas`}</small>
-          </button>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function AreaWorkbench({
-  snapshot,
-  selectedAreaKey,
-  onSelectArea,
-}: {
-  snapshot: OpsReportsSnapshot;
-  selectedAreaKey: string | null;
-  onSelectArea: (areaKey: string) => void;
-}) {
-  const selectedArea =
-    snapshot.areas.find((area) => area.areaKey === selectedAreaKey) ??
-    snapshot.areas.find((area) => area.repeatRisks > 0) ??
-    snapshot.areas[0] ??
-    null;
-  const maxExposure = Math.max(1, ...snapshot.areas.map((area) => area.totalExposureNights));
-  const groups: Array<{ label: string; areas: ReportAreaIntel[] }> = [
-    { label: "Zones", areas: snapshot.areas.filter((area) => area.areaType === "zone") },
-    { label: "Restrooms", areas: snapshot.areas.filter((area) => area.areaType === "restroom") },
-    { label: "Other", areas: snapshot.areas.filter((area) => !["zone", "restroom"].includes(area.areaType)) },
-  ];
-
-  if (!selectedArea) {
-    return (
-      <div className="sb-reports-empty">
-        <MapPin size={20} />
-        <span>No area coverage in this report window.</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="sb-reports-workbench">
-      <section className="sb-reports-focus-card">
-        <header>
-          <div>
-            <p>Area Focus</p>
-            <h3>{selectedArea.areaLabel}</h3>
-          </div>
-          <span className="sb-reports-status-chip">{selectedArea.areaType}</span>
-        </header>
-        <div className="sb-reports-focus-metrics">
-          <WorkbenchMetric label="Exposure" value={selectedArea.totalExposureNights} detail={`${selectedArea.coverageRatePct}% of nights`} />
-          <WorkbenchMetric label="Direct" value={selectedArea.directNights} detail="primary ownership" />
-          <WorkbenchMetric label="Carried" value={selectedArea.coverageNights} detail="fallback/additional" />
-          <WorkbenchMetric label="Carriers" value={selectedArea.carrierCount} detail={`last ${formatDate(selectedArea.lastCoveredNight)}`} />
-        </div>
-        <div className="sb-reports-chip-row">
-          {selectedArea.topTms.map((tm) => (
-            <span key={tm.tmId}>{tm.tmName} · {tm.count}</span>
-          ))}
-        </div>
-      </section>
-
-      <section className="sb-reports-area-board" aria-label="Area coverage board">
-        {groups.map((group) => (
-          <div key={group.label} className="sb-reports-area-group">
-            <h4>{group.label}</h4>
-            <div>
-              {group.areas.map((area) => (
-                <button
-                  key={area.areaKey}
-                  type="button"
-                  className={cn("sb-reports-area-tile", area.areaKey === selectedArea.areaKey && "is-active")}
-                  onClick={() => onSelectArea(area.areaKey)}
-                >
-                  <span>{area.areaLabel}</span>
-                  <strong>{area.coverageRatePct}%</strong>
-                  <div className="sb-reports-mini-bar">
-                    <i style={{ width: pct(area.totalExposureNights, maxExposure) }} />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function FindingsWorkbench({
-  snapshot,
-  selectedFindingId,
-  onSelectFinding,
-}: {
-  snapshot: OpsReportsSnapshot;
-  selectedFindingId: string | null;
-  onSelectFinding: (findingId: string) => void;
-}) {
-  const selectedFinding =
-    snapshot.findings.find((finding) => finding.id === selectedFindingId) ??
-    snapshot.findings[0] ??
-    null;
-
-  if (!selectedFinding) {
-    return (
-      <div className="sb-reports-empty">
-        <CheckCircle2 size={20} />
-        <span>No report flags in this run.</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="sb-reports-workbench">
-      <section className={cn("sb-reports-focus-card", `is-${selectedFinding.severity}`)}>
-        <header>
-          <div>
-            <p>Flag Detail</p>
-            <h3>{selectedFinding.title}</h3>
-          </div>
-          <span className="sb-reports-status-chip">{flagActionLabel(selectedFinding.severity)}</span>
-        </header>
-        <p className="sb-reports-focus-copy">{selectedFinding.detail}</p>
-        <div className="sb-reports-evidence">
-          {selectedFinding.evidence.map((line) => <span key={line}>{line}</span>)}
-        </div>
-        <small>{selectedFinding.action}</small>
-      </section>
-
-      <section className="sb-reports-triage-stack" aria-label="Finding triage">
-        {snapshot.findings.map((finding: ReportFinding) => (
-          <button
-            key={finding.id}
-            type="button"
-            className={cn("sb-reports-triage-card", `is-${finding.severity}`, finding.id === selectedFinding.id && "is-active")}
-            onClick={() => onSelectFinding(finding.id)}
-          >
-            <span>{flagActionLabel(finding.severity)}</span>
-            <strong>{finding.title}</strong>
-            <small>{finding.evidence.length} evidence lines</small>
-          </button>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function Workbench({
-  snapshot,
-  activeView,
-  query,
-  selection,
-  onSelectionChange,
-}: {
-  snapshot: OpsReportsSnapshot;
-  activeView: ExploreView;
-  query: string;
-  selection: WorkbenchSelection;
-  onSelectionChange: (next: WorkbenchSelection) => void;
-}) {
-  if (activeView === "team") {
-    return (
-      <TeamWorkbench
-        snapshot={snapshot}
-        query={query}
-        selectedTmId={selection.tmId}
-        onSelectTm={(tmId) => onSelectionChange({ ...selection, tmId })}
-      />
-    );
-  }
-  if (activeView === "areas") {
-    return (
-      <AreaWorkbench
-        snapshot={snapshot}
-        selectedAreaKey={selection.areaKey}
-        onSelectArea={(areaKey) => onSelectionChange({ ...selection, areaKey })}
-      />
-    );
-  }
-  if (activeView === "findings") {
-    return (
-      <FindingsWorkbench
-        snapshot={snapshot}
-        selectedFindingId={selection.findingId}
-        onSelectFinding={(findingId) => onSelectionChange({ ...selection, findingId })}
-      />
-    );
-  }
-  return (
-    <NightWorkbench
-      snapshot={snapshot}
-      selectedNightDate={selection.nightDate}
-      onSelectNight={(nightDate) => onSelectionChange({ ...selection, nightDate })}
-    />
-  );
-}
-
-function Inspector({
-  snapshot,
-  selectedPackage,
-  onPrint,
-  onExport,
-  loading,
-  onRefresh,
-}: {
-  snapshot: OpsReportsSnapshot;
-  selectedPackage: ReportPackageSnapshot;
-  onPrint: () => void;
-  onExport: () => void;
-  loading: boolean;
-  onRefresh: () => void;
-}) {
-  const coverageShortfallNights = snapshot.nights.filter((night) => nightZoneShortfall(night) > 0 && !night.isFuture).length;
-  const bannerMismatchNights = snapshot.nights.filter((night) => nightBannerMismatch(night) > 0).length;
-  const repeatFlagTms = snapshot.teamMembers.filter((tm) => tm.repeatRisks > 0).length;
-  const doubledRestroomTms = snapshot.teamMembers.filter((tm) => tm.compositeDutyNights > 0).length;
-  const integrityNights = snapshot.nights.filter((night) => nightIntegrityFlags(night) > 0).length;
-  const packetItems = [
-    { label: "Coverage gaps", value: coverageShortfallNights, detail: "nights below 10 covered zones" },
-    { label: "Print check", value: bannerMismatchNights, detail: "nights where coverage banners do not match" },
-    { label: "Repeat flags", value: repeatFlagTms, detail: "TMs with same-area repeat flags" },
-    { label: "Doubled RR", value: doubledRestroomTms, detail: "TMs with composite restroom nights" },
-    { label: "Lock/history", value: integrityNights, detail: "nights with integrity flags" },
-  ].filter((item) => item.value > 0);
-  const openFlagTotal = packetItems.reduce((sum, item) => sum + item.value, 0);
-
-  return (
-    <aside className="sb-reports-inspector" aria-label="Report command center">
-      <div className="sb-reports-panel-label">
-        <ShieldCheck size={14} />
-        <span>Report Packet</span>
-      </div>
-
-      <section className="sb-reports-command-card">
-        <p>{snapshot.dateRange.from} to {snapshot.dateRange.to}</p>
-        <h3>{selectedPackage.title}</h3>
-        <div className="sb-reports-packet-facts">
-          <div>
-            <strong>{snapshot.totals.nights}</strong>
-            <span>nights</span>
-          </div>
-          <div>
-            <strong>{selectedPackage.pageEstimate}</strong>
-            <span>pages</span>
-          </div>
-          <div>
-            <strong>{openFlagTotal}</strong>
-            <span>flags</span>
-          </div>
-        </div>
-        <div className="sb-reports-command-actions">
-          <button type="button" onClick={onRefresh} disabled={loading} title="Run report">
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-            Run
-          </button>
-          <button type="button" onClick={onPrint} title="Print report">
-            <Printer size={15} />
-            Print
-          </button>
-          <button type="button" onClick={onExport} title="Export CSV">
-            <Download size={15} />
-            CSV
-          </button>
-        </div>
-      </section>
-
-      <section className="sb-reports-inspector-section">
-        <h4>Pull For</h4>
-        {packetItems.length ? (
-          packetItems.map((item) => (
-            <div key={item.label} className="sb-reports-packet-row">
-              <div>
-                <strong>{item.label}</strong>
-                <span>{item.detail}</span>
-              </div>
-              <em>{item.value}</em>
-            </div>
-          ))
-        ) : (
-          <p className="sb-reports-muted">No open flags in this packet.</p>
-        )}
-      </section>
-
-      <section className="sb-reports-inspector-section">
-        <h4>Included</h4>
-        <div className="sb-reports-section-list">
-          {selectedPackage.sections.map((section) => (
-            <span key={section}>{section}</span>
-          ))}
-        </div>
-      </section>
-
-      <section className="sb-reports-inspector-section">
-        <h4>Print Note</h4>
-        <p>Counts are assignment records and visible coverage. Call-offs are recorded events only.</p>
-      </section>
-    </aside>
-  );
-}
-
-export type ReportsDashboardProps = {
+type ReportsDashboardProps = {
   embedded?: boolean;
-  initialView?: ExploreView;
+  initialReportId?: ReportDefinitionId;
   className?: string;
 };
 
 export function ReportsDashboard({
   embedded = false,
-  initialView = "nights",
+  initialReportId = "matrix-report",
   className,
 }: ReportsDashboardProps) {
   const {
     snapshot,
     reportWindow,
     setReportWindow,
+    matrixParams,
+    setMatrixParams,
     statusFilter,
     setStatusFilter,
     loading,
     error,
     refresh,
-  } = useOpsReportsSnapshot(30, "history");
-  const [activeView, setActiveView] = React.useState<ExploreView>(initialView);
-  const [selectedReportId, setSelectedReportId] =
-    React.useState<ReportDefinitionId>("weekly-placement-review");
+  } = useOpsReportsSnapshot("wtd", "history");
+  const [selectedReportId, setSelectedReportId] = React.useState<ReportDefinitionId>(initialReportId);
   const [query, setQuery] = React.useState("");
+  const [exportFormat, setExportFormat] = React.useState<ExportFormat>("PDF");
   const [printPackage, setPrintPackage] = React.useState<ReportPackageSnapshot | null>(null);
-  const [selection, setSelection] = React.useState<WorkbenchSelection>({
-    nightDate: null,
-    tmId: null,
-    areaKey: null,
-    findingId: null,
-  });
+  const [parametersHidden, setParametersHidden] = React.useState(false);
 
   const selectedPackage = snapshot?.packages[selectedReportId] ?? null;
+  const rows = selectedPackage ? filteredRows(selectedPackage, query) : [];
+  const headers = selectedPackage ? packageHeaders(selectedPackage) : [];
+  const pageCount = selectedPackage ? formatPageCount(rows.length) : 0;
+  const poolValue = matrixParams.tmPool ?? snapshot?.matrixReport.params.tmPool ?? "all";
+  const includeInactive = Boolean(matrixParams.includeInactive ?? snapshot?.matrixReport.params.includeInactive);
+  const reportRunLabel = formatRunTime(snapshot?.generatedAt ?? null);
 
   React.useEffect(() => {
     if (!printPackage) return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       window.print();
       setPrintPackage(null);
     }, 80);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [printPackage]);
+
+  function handleReset() {
+    setReportWindow("wtd");
+    setStatusFilter("history");
+    setMatrixParams({ includeInactive: false, tmPool: "all" });
+    setQuery("");
+    setExportFormat("PDF");
+  }
+
+  function handleExport(format: ExportFormat = exportFormat) {
+    if (!snapshot || !selectedPackage) return;
+    if (format === "Excel") exportPackageExcel(selectedPackage, snapshot);
+    if (format === "CSV") exportPackageCsv(selectedPackage, snapshot);
+    if (format === "PDF") void exportPackagePdf(selectedPackage, snapshot);
+    if (format === "Print") setPrintPackage(selectedPackage);
+  }
 
   if (error) {
     return (
-      <div className="sb-reports-empty is-error">
+      <div className="sb-report-viewer-empty is-error">
         <AlertTriangle size={22} />
         <span>{error}</span>
       </div>
@@ -805,108 +322,285 @@ export function ReportsDashboard({
 
   if (loading && !snapshot) {
     return (
-      <div className="flex min-h-[520px] items-center justify-center p-12">
-        <SudoTabLoading>Loading reports workspace</SudoTabLoading>
-      </div>
-    );
-  }
-
-  if (!snapshot || !selectedPackage) {
-    return (
-      <div className="sb-reports-empty">
-        <FileText size={22} />
-        <span>No report snapshot available.</span>
+      <div className="sb-report-viewer-loading">
+        <SudoTabLoading>Loading reporting services</SudoTabLoading>
       </div>
     );
   }
 
   return (
-    <div className={cn("sb-reports-workspace", embedded && "is-embedded", className)}>
-      <div className="sb-reports-toolbar">
-        <div className="sb-reports-segment" aria-label="Report window">
-          {WINDOW_OPTIONS.map((option) => (
-            <button
-              key={String(option.value)}
-              type="button"
-              className={cn(option.value === reportWindow && "is-active")}
-              onClick={() => setReportWindow(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
+    <div className={cn("sb-report-viewer", embedded && "is-embedded", className)}>
+      <nav className="sb-report-breadcrumb" aria-label="Report breadcrumb">
+        <span>Home</span>
+        <i>›</i>
+        <span>Operations</span>
+        <i>›</i>
+        <span>Reports</span>
+        <i>›</i>
+        <strong>{selectedPackage?.title ?? "Matrix Report"}</strong>
+      </nav>
+
+      <section className={cn("sb-report-parameters", parametersHidden && "is-hidden")}>
+        <header>
+          <h2>Report Parameters</h2>
+          <button type="button" onClick={() => setParametersHidden((prev) => !prev)}>
+            {parametersHidden ? "Show parameters" : "Hide parameters"}
+          </button>
+        </header>
+
+        {!parametersHidden ? (
+          <>
+            <div className="sb-report-parameter-grid">
+              <label className="sb-report-field is-wide">
+                <span>Report</span>
+                <select
+                  value={selectedReportId}
+                  onChange={(event) => setSelectedReportId(event.target.value as ReportDefinitionId)}
+                  disabled={!snapshot}
+                >
+                  {snapshot?.definitions.map((definition) => (
+                    <option key={definition.id} value={definition.id}>
+                      {definition.title}
+                    </option>
+                  )) ?? <option value="matrix-report">Matrix Report</option>}
+                </select>
+              </label>
+
+              <label className="sb-report-field">
+                <span>Period</span>
+                <select
+                  value={String(reportWindow)}
+                  onChange={(event) => setReportWindow(event.target.value as ReportWindow)}
+                >
+                  {RANGE_OPTIONS.map((option) => (
+                    <option key={String(option.value)} value={String(option.value)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="sb-report-field">
+                <span>Start date</span>
+                <input
+                  type="date"
+                  value={formatDateForInput(matrixParams.from, snapshot?.dateRange.from ?? "")}
+                  onChange={(event) => setMatrixParams((prev) => ({ ...prev, from: event.target.value }))}
+                  disabled={reportWindow !== "date-range"}
+                />
+              </label>
+
+              <label className="sb-report-field">
+                <span>End date</span>
+                <input
+                  type="date"
+                  value={formatDateForInput(
+                    reportWindow === "week-ending" ? matrixParams.weekEnding : matrixParams.to,
+                    snapshot?.dateRange.to ?? "",
+                  )}
+                  onChange={(event) =>
+                    setMatrixParams((prev) =>
+                      reportWindow === "week-ending"
+                        ? { ...prev, weekEnding: event.target.value }
+                        : { ...prev, to: event.target.value },
+                    )
+                  }
+                  disabled={reportWindow !== "date-range" && reportWindow !== "week-ending"}
+                />
+              </label>
+
+              <label className="sb-report-field">
+                <span>TM Pool</span>
+                <select
+                  value={poolValue}
+                  onChange={(event) => setMatrixParams((prev) => ({ ...prev, tmPool: event.target.value }))}
+                  disabled={!snapshot}
+                >
+                  <option value="all">All pools</option>
+                  {snapshot?.matrixReport.poolOptions.map((pool) => (
+                    <option key={pool} value={pool}>{pool}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="sb-report-field">
+                <span>Team member</span>
+                <select disabled>
+                  <option>All team members</option>
+                </select>
+              </label>
+
+              <label className="sb-report-field">
+                <span>Night status</span>
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as ReportsStatusFilter)}
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="sb-report-field">
+                <span>Export format</span>
+                <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as ExportFormat)}>
+                  {EXPORT_FORMATS.map((format) => (
+                    <option key={format} value={format}>{format}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="sb-report-check">
+                <input
+                  type="checkbox"
+                  checked={includeInactive}
+                  onChange={(event) => setMatrixParams((prev) => ({ ...prev, includeInactive: event.target.checked }))}
+                />
+                <span>Include inactive TMs</span>
+              </label>
+            </div>
+
+            <footer>
+              <span>
+                {snapshot
+                  ? `Last run: ${reportRunLabel} · data current as of ${
+                      snapshot.matrixReport.matrixAsOfDate ?? snapshot.operationalDate
+                    }`
+                  : "Report has not been run in this session."}
+              </span>
+              <div>
+                <button type="button" className="sb-report-secondary" onClick={handleReset}>Reset</button>
+                <button type="button" className="sb-report-primary" onClick={() => void refresh()} disabled={loading}>
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : null}
+                  View Report
+                </button>
+              </div>
+            </footer>
+          </>
+        ) : null}
+      </section>
+
+      <section className="sb-report-document">
+        <div className="sb-report-document-toolbar">
+          <div className="sb-report-paging">
+            <button type="button" disabled>‹</button>
+            <button type="button" disabled>›</button>
+            <span>Page 1 of {pageCount}</span>
+          </div>
+
+          <select aria-label="Zoom level" defaultValue="100">
+            <option value="75">75%</option>
+            <option value="100">100%</option>
+            <option value="125">125%</option>
+          </select>
+
+          <label className="sb-report-find">
+            <Search size={13} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Find in report"
+              aria-label="Find in report"
+            />
+          </label>
+
+          <div className="sb-report-toolbar-spacer" />
+          <span>{loading ? "Running…" : snapshot ? `Run ${new Date(snapshot.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Not run"}</span>
+          <button type="button" onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw size={13} />
+            Refresh
+          </button>
+          <button type="button" onClick={() => selectedPackage && setPrintPackage(selectedPackage)} disabled={!selectedPackage}>
+            <Printer size={13} />
+            Print
+          </button>
+          <button type="button" disabled>Subscribe</button>
+          <button type="button" onClick={() => handleExport(exportFormat)} disabled={!selectedPackage}>
+            <Download size={13} />
+            Export
+          </button>
         </div>
-        <div className="sb-reports-segment" aria-label="Night status">
-          {STATUS_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={cn(option.value === statusFilter && "is-active")}
-              onClick={() => setStatusFilter(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
+
+        <div className="sb-report-canvas">
+          {selectedPackage && snapshot ? (
+            <article className="sb-report-page-sheet">
+              <header>
+                <div>
+                  <h1>{selectedPackage.title}</h1>
+                  <p>
+                    Graves · {snapshot.dateRange.from} – {snapshot.dateRange.to}
+                    {poolValue !== "all" ? ` · ${poolValue}` : ""}
+                    {!includeInactive ? " · Active TMs" : " · Active + inactive TMs"}
+                  </p>
+                </div>
+                <aside>
+                  <span>Rows 1–{Math.min(rows.length, 12)} of {rows.length}</span>
+                  <span>{snapshot.matrixReport.generatedLabel}</span>
+                </aside>
+              </header>
+
+              <div className="sb-report-table-scroll">
+                <table className="sb-report-output-table">
+                  <thead>
+                    <tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {headers.map((header) => <td key={header}>{row[header]}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <footer>
+                <strong>Subtotal — page 1</strong>
+                <span>{rows.length} team members</span>
+              </footer>
+            </article>
+          ) : (
+            <div className="sb-report-empty-card">
+              <FileText size={26} />
+              <strong>No report rendered</strong>
+              <span>Set parameters above, then choose View Report to run Matrix Report against live data.</span>
+              <button type="button" className="sb-report-primary" onClick={() => void refresh()} disabled={loading}>
+                View Report
+              </button>
+            </div>
+          )}
         </div>
-        <div className="sb-reports-search">
-          <Search size={14} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find TM"
-            aria-label="Find team member"
-          />
-        </div>
-        <button className="sb-reports-refresh" type="button" onClick={refresh} disabled={loading}>
-          {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+
+        <footer className="sb-report-document-footer">
+          <span>{rows.length} rows · {pageCount} pages · rendered from live matrix data</span>
+          <div>
+            <button type="button" disabled>First</button>
+            <button type="button" disabled>Prev</button>
+            <button type="button">Next</button>
+            <button type="button">Last</button>
+          </div>
+        </footer>
+      </section>
+
+      <div className="sb-report-export-strip" aria-label="Quick export actions">
+        <button type="button" onClick={() => selectedPackage && snapshot && exportPackageExcel(selectedPackage, snapshot)} disabled={!selectedPackage}>
+          <FileSpreadsheet size={14} />
+          Excel
+        </button>
+        <button type="button" onClick={() => handleExport("PDF")} disabled={!selectedPackage}>
+          <Download size={14} />
+          PDF
+        </button>
+        <button type="button" onClick={() => handleExport("CSV")} disabled={!selectedPackage}>
+          <Download size={14} />
+          CSV
         </button>
       </div>
 
-      <KpiStrip snapshot={snapshot} />
-
-      <div className="sb-reports-layout">
-        <ReportCatalog
-          snapshot={snapshot}
-          selectedId={selectedReportId}
-          onSelect={setSelectedReportId}
-        />
-
-        <main className="sb-reports-main" aria-label="Reports workbench">
-          <div className="sb-reports-view-tabs">
-            {VIEW_OPTIONS.map((view) => {
-              const Icon = view.icon;
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  className={cn(activeView === view.id && "is-active")}
-                  onClick={() => setActiveView(view.id)}
-                >
-                  <Icon size={15} />
-                  {view.label}
-                </button>
-              );
-            })}
-          </div>
-          <Workbench
-            snapshot={snapshot}
-            activeView={activeView}
-            query={query}
-            selection={selection}
-            onSelectionChange={setSelection}
-          />
-        </main>
-
-        <Inspector
-          snapshot={snapshot}
-          selectedPackage={selectedPackage}
-          loading={loading}
-          onRefresh={refresh}
-          onPrint={() => setPrintPackage(selectedPackage)}
-          onExport={() => exportPackageCsv(selectedPackage, snapshot)}
-        />
-      </div>
-
-      {printPackage ? <ReportPrintSheet snapshot={snapshot} pkg={printPackage} /> : null}
+      {printPackage && snapshot ? <ReportPrintSheet snapshot={snapshot} pkg={printPackage} /> : null}
     </div>
   );
 }

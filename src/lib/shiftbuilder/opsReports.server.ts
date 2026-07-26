@@ -6,6 +6,8 @@ import { currentShiftDate, formatLocalDateISO, startOfShiftWeek } from "./dateUt
 import { dbToUi } from "./slot-keys";
 import type {
   OpsReportsSnapshot,
+  MatrixReportParams,
+  MatrixReportRow,
   ReportAreaIntel,
   ReportDefinitionId,
   ReportFinding,
@@ -20,20 +22,29 @@ const PAGE_SIZE = 1000;
 const ZONE_KEYS = ZONE_DEFS.map((z) => z.key);
 const REPORT_DEFINITIONS: ReportRunDefinition[] = [
   {
+    id: "matrix-report",
+    title: "Matrix Report",
+    category: "matrix",
+    description: "Live TM matrix table with latest placement, prior trail, and last-seen zone/RR/Admin/Aux markers.",
+    sections: ["Filters", "TM matrix", "Previous placements", "Last-seen markers"],
+    recommended: true,
+    estimatedPages: 3,
+  },
+  {
     id: "weekly-placement-review",
-    title: "Weekly Placement Review",
+    title: "People Snapshot",
     category: "weekly",
-    description: "A clean weekly handoff: nights, coverage, rotation flags, and exceptions.",
-    sections: ["Summary", "Night list", "Rotation flags", "Exceptions"],
+    description: "TM-first handoff: assigned nights, recorded call-offs, board movement, repeats, and doubled RR.",
+    sections: ["People list", "Recorded call-offs", "Board movement", "Rotation flags"],
     recommended: true,
     estimatedPages: 4,
   },
   {
     id: "night-coverage-exceptions",
-    title: "Night Coverage & Exceptions",
-    category: "night",
-    description: "Coverage gaps, fallback coverage, call-offs, board changes, invalid locks, and banner drift.",
-    sections: ["Night list", "Coverage gaps", "Print checks"],
+    title: "Call-Off & Movement",
+    category: "team",
+    description: "Who had recorded call-offs or board changes in the selected window.",
+    sections: ["People list", "Recorded call-offs", "Board changes", "Night context"],
     recommended: true,
     estimatedPages: 3,
   },
@@ -48,14 +59,18 @@ const REPORT_DEFINITIONS: ReportRunDefinition[] = [
   },
   {
     id: "area-coverage-history",
-    title: "Area Coverage History",
-    category: "area",
-    description: "Direct and fallback area coverage, frequent carriers, and exposure concentration.",
-    sections: ["Area list", "Top carriers", "Coverage notes"],
+    title: "Doubled RR Watchlist",
+    category: "team",
+    description: "TMs carrying composite restroom duty, with rotation flags and restroom context.",
+    sections: ["People list", "Doubled RR", "Restroom nights", "Rotation notes"],
     recommended: false,
     estimatedPages: 4,
   },
 ];
+
+function definition(id: ReportDefinitionId): ReportRunDefinition {
+  return REPORT_DEFINITIONS.find((item) => item.id === id) ?? REPORT_DEFINITIONS[0];
+}
 
 type NightRow = {
   id: string;
@@ -83,11 +98,6 @@ type ProfileRow = {
   grave_pool?: string | null;
 };
 
-type TaskRow = {
-  night_id: string;
-  is_coverage?: boolean | null;
-};
-
 type CallOffRow = {
   night_date: string;
   tm_id: string | null;
@@ -106,6 +116,27 @@ type OptionalIssueRow = {
   night_id?: string | null;
 };
 
+type MatrixLiveRow = {
+  tm_id: string;
+  zone_key: string | null;
+  last_placed_at?: string | null;
+  count_4w?: number | null;
+  count_8w?: number | null;
+  count_lifetime?: number | null;
+  as_of_date?: string | null;
+};
+
+type TmNightViewRow = {
+  night_date: string;
+  tm_id: string | null;
+  tm_name?: string | null;
+  slot?: string | null;
+  slot_label?: string | null;
+  slot_type?: string | null;
+  coverage_label?: string | null;
+  covered_slots?: string[] | null;
+};
+
 type PagedQuery<T> = {
   range: (from: number, to: number) => PromiseLike<{
     data: T[] | null;
@@ -113,13 +144,59 @@ type PagedQuery<T> = {
   }>;
 };
 
-function resolveWindow(reportWindow: ReportWindow): { from: string; to: string } {
+function parseISODate(value: string | undefined | null): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addDays(date: Date, days: number): Date {
+  const out = new Date(date);
+  out.setDate(out.getDate() + days);
+  return out;
+}
+
+function resolveWindow(
+  reportWindow: ReportWindow,
+  params?: Partial<MatrixReportParams>,
+): { from: string; to: string } {
   const today = currentShiftDate();
 
   if (typeof reportWindow === "number") {
     const from = new Date(today);
     from.setDate(today.getDate() - reportWindow + 1);
     return { from: formatLocalDateISO(from), to: formatLocalDateISO(today) };
+  }
+
+  if (reportWindow === "wtd") {
+    return { from: formatLocalDateISO(startOfShiftWeek(today)), to: formatLocalDateISO(today) };
+  }
+
+  if (reportWindow === "mtd") {
+    const from = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { from: formatLocalDateISO(from), to: formatLocalDateISO(today) };
+  }
+
+  if (reportWindow === "qtd") {
+    const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3;
+    const from = new Date(today.getFullYear(), quarterStartMonth, 1);
+    return { from: formatLocalDateISO(from), to: formatLocalDateISO(today) };
+  }
+
+  if (reportWindow === "week-ending") {
+    const weekEnding = parseISODate(params?.weekEnding) ?? today;
+    return {
+      from: formatLocalDateISO(addDays(weekEnding, -6)),
+      to: formatLocalDateISO(weekEnding),
+    };
+  }
+
+  if (reportWindow === "date-range") {
+    const from = parseISODate(params?.from) ?? addDays(today, -29);
+    const to = parseISODate(params?.to) ?? today;
+    return from <= to
+      ? { from: formatLocalDateISO(from), to: formatLocalDateISO(to) }
+      : { from: formatLocalDateISO(to), to: formatLocalDateISO(from) };
   }
 
   const thisFri = startOfShiftWeek(today);
@@ -200,6 +277,136 @@ function topEntries(
     .slice(0, limit);
 }
 
+function isActiveProfile(profile: ProfileRow): boolean {
+  const status = (profile.status ?? "").toLowerCase();
+  return profile.active !== false && !["inactive", "terminated", "separated"].includes(status);
+}
+
+function formatReportDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const [year, month, day] = iso.split("-");
+  if (!year || !month || !day) return iso;
+  return `${month}/${day}/${year.slice(-2)}`;
+}
+
+function normalizeReportSlot(row: TmNightViewRow): string {
+  const raw = row.coverage_label || row.slot_label || row.slot || "";
+  return raw.replace(/\s+/g, " ").trim();
+}
+
+function slotBucket(row: TmNightViewRow): "zone" | "rr" | "z9" | "admin" | "aux" | "other" {
+  const slot = `${row.slot ?? ""} ${row.slot_label ?? ""} ${row.coverage_label ?? ""}`.toUpperCase();
+  const type = (row.slot_type ?? "").toLowerCase();
+  if (slot.includes("Z9") && (slot.includes("SMOK") || slot.includes("SR"))) return "z9";
+  if (slot.includes("ADMIN") || slot === "ADM") return "admin";
+  if (type === "rr" || type === "restroom" || slot.includes("RR")) return "rr";
+  if (type === "zone" || /^Z\d+\b/.test(slot) || slot.includes("ZONE")) return "zone";
+  if (type === "aux" || type === "coverage") return "aux";
+  return "other";
+}
+
+function trailCell(row: TmNightViewRow | undefined): string {
+  if (!row) return "";
+  const placement = normalizeReportSlot(row);
+  return placement ? `${formatReportDate(row.night_date)} - ${placement}` : formatReportDate(row.night_date);
+}
+
+function lastCell(row: TmNightViewRow | undefined): string {
+  return row ? trailCell(row) : "";
+}
+
+function buildMatrixReport(args: {
+  profiles: ProfileRow[];
+  matrixRows: MatrixLiveRow[];
+  tmNightRows: TmNightViewRow[];
+  params: MatrixReportParams;
+  dateRange: { from: string; to: string };
+}): OpsReportsSnapshot["matrixReport"] {
+  const { profiles, matrixRows, tmNightRows, params, dateRange } = args;
+  const poolOptions = [...new Set(profiles.map((p) => p.grave_pool).filter((pool): pool is string => Boolean(pool)))]
+    .sort((a, b) => a.localeCompare(b));
+  const profileMap = new Map(profiles.map((p) => [p.tm_id, p]));
+  const rowsByTm = new Map<string, TmNightViewRow[]>();
+  for (const row of tmNightRows) {
+    if (!row.tm_id) continue;
+    const list = rowsByTm.get(row.tm_id) ?? [];
+    list.push(row);
+    rowsByTm.set(row.tm_id, list);
+  }
+  for (const list of rowsByTm.values()) {
+    list.sort((a, b) => b.night_date.localeCompare(a.night_date));
+  }
+
+  const matrixByTm = new Map<string, MatrixLiveRow[]>();
+  let matrixAsOfDate: string | null = null;
+  for (const row of matrixRows) {
+    const list = matrixByTm.get(row.tm_id) ?? [];
+    list.push(row);
+    matrixByTm.set(row.tm_id, list);
+    if (row.as_of_date && (!matrixAsOfDate || row.as_of_date > matrixAsOfDate)) matrixAsOfDate = row.as_of_date;
+  }
+
+  function lastMatrixZone(tmId: string, includeZ9: boolean): string {
+    const match = (matrixByTm.get(tmId) ?? [])
+      .filter((row) => {
+        const zone = (row.zone_key ?? "").toUpperCase();
+        return includeZ9 ? zone === "Z9SR" : zone && zone !== "Z9SR";
+      })
+      .sort((a, b) => (b.last_placed_at ?? "").localeCompare(a.last_placed_at ?? ""))[0];
+    if (!match?.last_placed_at || !match.zone_key) return "";
+    return `${formatReportDate(match.last_placed_at)} - ${areaLabel(match.zone_key.toUpperCase())}`;
+  }
+
+  const filteredProfiles = profiles
+    .filter((profile) => params.includeInactive || isActiveProfile(profile))
+    .filter((profile) => params.tmPool === "all" || profile.grave_pool === params.tmPool)
+    .sort((a, b) => tmName(a, a.tm_id).localeCompare(tmName(b, b.tm_id)));
+
+  const rows: MatrixReportRow[] = filteredProfiles.map((profile) => {
+    const trail = rowsByTm.get(profile.tm_id) ?? [];
+    const windowTrail = trail.filter((row) => row.night_date >= dateRange.from && row.night_date <= dateRange.to);
+    const latest = windowTrail[0];
+    const previous = latest
+      ? trail.filter((row) => row.night_date < latest.night_date).slice(0, 5)
+      : trail.slice(0, 5);
+    const latestPlacement = latest ? normalizeReportSlot(latest) : "";
+    const lastSame = latestPlacement
+      ? trail.find((row) => row.night_date < latest!.night_date && normalizeReportSlot(row) === latestPlacement)
+      : undefined;
+    const lastRR = trail.find((row) => (!latest || row.night_date < latest.night_date) && slotBucket(row) === "rr");
+    const lastAdmin = trail.find((row) => (!latest || row.night_date < latest.night_date) && slotBucket(row) === "admin");
+    const lastAux = trail.find((row) => (!latest || row.night_date < latest.night_date) && slotBucket(row) === "aux");
+
+    return {
+      tmId: profile.tm_id,
+      tmName: tmName(profileMap.get(profile.tm_id), profile.tm_id),
+      pool: profile.grave_pool ?? null,
+      active: isActiveProfile(profile),
+      placement: latestPlacement,
+      prev1: trailCell(previous[0]),
+      prev2: trailCell(previous[1]),
+      prev3: trailCell(previous[2]),
+      prev4: trailCell(previous[3]),
+      prev5: trailCell(previous[4]),
+      lastSame: lastCell(lastSame),
+      lastZone: lastMatrixZone(profile.tm_id, false),
+      lastRR: lastCell(lastRR),
+      lastZ9: lastMatrixZone(profile.tm_id, true),
+      lastAdmin: lastCell(lastAdmin),
+      lastAux: lastCell(lastAux),
+    };
+  });
+
+  return {
+    columns: ["tmName", "placement", "prev1", "prev2", "prev3", "prev4", "prev5", "lastSame", "lastZone", "lastRR", "lastZ9", "lastAdmin", "lastAux"],
+    rows,
+    params,
+    poolOptions,
+    generatedLabel: `${dateRange.from} to ${dateRange.to}`,
+    matrixAsOfDate,
+  };
+}
+
 function buildPackages(args: {
   nights: OpsReportsSnapshot["nights"];
   teamMembers: ReportTeamMemberIntel[];
@@ -207,57 +414,96 @@ function buildPackages(args: {
   findings: ReportFinding[];
   totals: OpsReportsSnapshot["totals"];
   dateRange: { from: string; to: string };
+  matrixReport: OpsReportsSnapshot["matrixReport"];
 }): Record<ReportDefinitionId, ReportPackageSnapshot> {
-  const { nights, teamMembers, areas, findings, totals, dateRange } = args;
+  const { teamMembers, totals, dateRange, matrixReport } = args;
+  const peopleWithFlags = teamMembers.filter(
+    (tm) => tm.callOffs > 0 || tm.boardChanges > 0 || tm.repeatRisks > 0 || tm.compositeDutyNights > 0,
+  );
+  const movementPeople = teamMembers
+    .filter((tm) => tm.callOffs > 0 || tm.boardChanges > 0)
+    .sort((a, b) => (b.callOffs + b.boardChanges) - (a.callOffs + a.boardChanges) || a.tmName.localeCompare(b.tmName));
+  const doubledRestroomPeople = teamMembers
+    .filter((tm) => tm.compositeDutyNights > 0 || tm.repeatRisks > 0)
+    .sort((a, b) => b.compositeDutyNights - a.compositeDutyNights || b.repeatRisks - a.repeatRisks || a.tmName.localeCompare(b.tmName));
   const commonKpis = [
+    { label: "People reviewed", value: String(totals.deployedTms), detail: "Distinct TMs assigned in window" },
     { label: "Nights", value: String(totals.nights), detail: `${dateRange.from} to ${dateRange.to}` },
-    { label: "Covered zone-nights", value: String(totals.coveredZoneNights), detail: "Direct zone rows plus assignment-carried coverage" },
-    { label: "Repeat flags", value: String(totals.repeatRisks), detail: "Same physical area inside prior three worked nights" },
     { label: "Call-offs", value: String(totals.callOffs), detail: "Recorded call-off rows only" },
+    { label: "People flags", value: String(peopleWithFlags.length), detail: "People with call-offs, movement, repeats, or doubled RR" },
   ];
 
   return {
+    "matrix-report": {
+      id: "matrix-report",
+      title: "Matrix Report",
+      sections: definition("matrix-report").sections,
+      summary: `${matrixReport.rows.length} TMs listed for ${matrixReport.generatedLabel}. Columns match the Matrix Report workbook header.`,
+      pageEstimate: definition("matrix-report").estimatedPages,
+      kpis: [
+        { label: "Rows", value: String(matrixReport.rows.length), detail: "TMs matching filters" },
+        { label: "Window", value: matrixReport.generatedLabel, detail: "Operational date range" },
+        { label: "Pool", value: matrixReport.params.tmPool === "all" ? "All" : matrixReport.params.tmPool, detail: "TM pool filter" },
+        { label: "Roster", value: matrixReport.params.includeInactive ? "Active + inactive" : "Active", detail: "Profile filter" },
+      ],
+      rows: matrixReport.rows.map((row) => ({
+        "TM Name": row.tmName,
+        Placement: row.placement,
+        "Prev. 1": row.prev1,
+        "Prev. 2": row.prev2,
+        "Prev. 3": row.prev3,
+        "Prev. 4": row.prev4,
+        "Prev. 5": row.prev5,
+        "Last - Same": row.lastSame,
+        "Last Zone": row.lastZone,
+        "Last RR": row.lastRR,
+        "Last Z9": row.lastZ9,
+        "Last Admin": row.lastAdmin,
+        "Last Aux": row.lastAux,
+      })),
+    },
     "weekly-placement-review": {
       id: "weekly-placement-review",
-      title: "Weekly Placement Review",
-      sections: REPORT_DEFINITIONS[0].sections,
-      summary: `${totals.nights} nights reviewed with ${totals.coveredZoneNights} covered zone-nights and ${findings.length} report flags.`,
-      pageEstimate: REPORT_DEFINITIONS[0].estimatedPages,
+      title: "People Snapshot",
+      sections: definition("weekly-placement-review").sections,
+      summary: `${totals.deployedTms} people reviewed across ${totals.nights} nights. ${peopleWithFlags.length} people have reportable call-off, movement, repeat, or doubled-RR context.`,
+      pageEstimate: definition("weekly-placement-review").estimatedPages,
       kpis: commonKpis,
-      rows: nights.slice(0, 14).map((n) => ({
-        Night: n.nightDate,
-        Status: n.status ?? "unknown",
-        "Zones covered": n.coveredZones,
-        "Call-offs": n.callOffs,
-        "Board changes": n.boardChanges,
-        "Repeat flags": n.repeatRisks,
+      rows: teamMembers.slice(0, 60).map((tm) => ({
+        TM: tm.tmName,
+        Pool: tm.gravePool ?? "unknown",
+        "Assigned nights": tm.assignedNights,
+        "Recorded call-offs": tm.callOffs,
+        "Board changes": tm.boardChanges,
+        "Doubled RR": tm.compositeDutyNights,
+        "Repeat flags": tm.repeatRisks,
+        "Top areas": tm.topAreas.map((area) => `${areaLabel(area.areaKey)} (${area.count})`).join(", "),
       })),
     },
     "night-coverage-exceptions": {
       id: "night-coverage-exceptions",
-      title: "Night Coverage & Exceptions",
-      sections: REPORT_DEFINITIONS[1].sections,
-      summary: `${nights.filter((n) => n.coveredZones < 10 || n.assignmentCoveragePairs !== n.coverageBannerRows || n.invalidLocks || n.historyConflicts).length} nights have coverage or integrity exceptions.`,
-      pageEstimate: REPORT_DEFINITIONS[1].estimatedPages,
+      title: "Call-Off & Movement",
+      sections: definition("night-coverage-exceptions").sections,
+      summary: `${movementPeople.length} people have recorded call-off or board-change context in this window.`,
+      pageEstimate: definition("night-coverage-exceptions").estimatedPages,
       kpis: commonKpis,
-      rows: nights
-        .filter((n) => n.coveredZones < 10 || n.assignmentCoveragePairs !== n.coverageBannerRows || n.invalidLocks || n.historyConflicts)
+      rows: movementPeople
         .slice(0, 24)
-        .map((n) => ({
-          Night: n.nightDate,
-          "Zones covered": n.coveredZones,
-          "Coverage pairs": n.assignmentCoveragePairs,
-          "Banner rows": n.coverageBannerRows,
-          "Invalid locks": n.invalidLocks,
-          "History conflicts": n.historyConflicts,
+        .map((tm) => ({
+          TM: tm.tmName,
+          Pool: tm.gravePool ?? "unknown",
+          "Recorded call-offs": tm.callOffs,
+          "Board changes": tm.boardChanges,
+          "Assigned nights": tm.assignedNights,
+          "Last worked": tm.lastWorkedNight ?? "",
         })),
     },
     "tm-placement-history": {
       id: "tm-placement-history",
       title: "TM Placement History",
-      sections: REPORT_DEFINITIONS[2].sections,
+      sections: definition("tm-placement-history").sections,
       summary: `${totals.deployedTms} deployed TMs. Counts are assigned-night history, not a performance ranking.`,
-      pageEstimate: REPORT_DEFINITIONS[2].estimatedPages,
+      pageEstimate: definition("tm-placement-history").estimatedPages,
       kpis: commonKpis,
       rows: teamMembers.slice(0, 40).map((tm) => ({
         TM: tm.tmName,
@@ -266,22 +512,25 @@ function buildPackages(args: {
         Restrooms: tm.restroomNights,
         "Doubled RR nights": tm.compositeDutyNights,
         "Repeat flags": tm.repeatRisks,
+        "Call-offs": tm.callOffs,
+        "Board changes": tm.boardChanges,
       })),
     },
     "area-coverage-history": {
       id: "area-coverage-history",
-      title: "Area Coverage History",
-      sections: REPORT_DEFINITIONS[3].sections,
-      summary: `${areas.length} physical areas observed across the loaded deployment rows.`,
-      pageEstimate: REPORT_DEFINITIONS[3].estimatedPages,
+      title: "Doubled RR Watchlist",
+      sections: definition("area-coverage-history").sections,
+      summary: `${doubledRestroomPeople.length} people have doubled-restroom or repeat-rotation context in this window.`,
+      pageEstimate: definition("area-coverage-history").estimatedPages,
       kpis: commonKpis,
-      rows: areas.slice(0, 40).map((area) => ({
-        Area: area.areaLabel,
-        Type: area.areaType,
-        "Direct nights": area.directNights,
-        "Coverage nights": area.coverageNights,
-        "Coverage rate": `${area.coverageRatePct}%`,
-        Carriers: area.carrierCount,
+      rows: doubledRestroomPeople.slice(0, 40).map((tm) => ({
+        TM: tm.tmName,
+        Pool: tm.gravePool ?? "unknown",
+        "Doubled RR nights": tm.compositeDutyNights,
+        "Restroom nights": tm.restroomNights,
+        "Repeat flags": tm.repeatRisks,
+        "Assigned nights": tm.assignedNights,
+        "Top areas": tm.topAreas.map((area) => `${areaLabel(area.areaKey)} (${area.count})`).join(", "),
       })),
     },
   };
@@ -290,11 +539,28 @@ function buildPackages(args: {
 export async function getOpsReportsSnapshot(
   reportWindow: ReportWindow,
   statusFilter: ReportsStatusFilter = "history",
+  matrixParams?: Partial<MatrixReportParams>,
 ): Promise<OpsReportsSnapshot> {
   const client = createAdminClientSafe();
   const generatedAt = new Date().toISOString();
   const operationalDate = formatLocalDateISO(currentShiftDate());
-  const { from, to } = resolveWindow(reportWindow);
+  const { from, to } = resolveWindow(reportWindow, matrixParams);
+  const params: MatrixReportParams = {
+    window: reportWindow,
+    from,
+    to,
+    weekEnding: matrixParams?.weekEnding,
+    includeInactive: matrixParams?.includeInactive ?? false,
+    tmPool: matrixParams?.tmPool || "all",
+  };
+  const emptyMatrixReport: OpsReportsSnapshot["matrixReport"] = {
+    columns: ["tmName", "placement", "prev1", "prev2", "prev3", "prev4", "prev5", "lastSame", "lastZone", "lastRR", "lastZ9", "lastAdmin", "lastAux"],
+    rows: [],
+    params,
+    poolOptions: [],
+    generatedLabel: `${from} to ${to}`,
+    matrixAsOfDate: null,
+  };
   const emptyTotals = {
     nights: 0,
     directZoneAssignments: 0,
@@ -333,7 +599,8 @@ export async function getOpsReportsSnapshot(
         },
       ],
       definitions: REPORT_DEFINITIONS,
-      packages: buildPackages({ nights: [], teamMembers: [], areas: [], findings: [], totals: emptyTotals, dateRange: { from, to } }),
+      packages: buildPackages({ nights: [], teamMembers: [], areas: [], findings: [], totals: emptyTotals, dateRange: { from, to }, matrixReport: emptyMatrixReport }),
+      matrixReport: emptyMatrixReport,
       nights: [],
       teamMembers: [],
       areas: [],
@@ -356,13 +623,15 @@ export async function getOpsReportsSnapshot(
   const nightIds = allNights.map((n) => n.id);
   const nightIdToDate = new Map(allNights.map((n) => [n.id, n.night_date]));
   const nightDateSet = new Set(allNights.map((n) => n.night_date));
+  const historyFrom = formatLocalDateISO(addDays(parseISODate(from) ?? currentShiftDate(), -180));
 
   const [
     assignmentRes,
-    taskRes,
     callOffRes,
     changeRes,
     profileRes,
+    matrixRes,
+    tmNightRes,
     invalidLockRes,
     conflictRes,
   ] = await Promise.all([
@@ -373,15 +642,6 @@ export async function getOpsReportsSnapshot(
             .select("night_id, slot_key, slot_type, rr_side, tm_id, is_locked, additional_coverage_slots")
             .in("night_id", nightIds)
             .not("tm_id", "is", null),
-        )
-      : Promise.resolve({ data: [], error: null, truncated: false }),
-    nightIds.length
-      ? fetchAll<TaskRow>(() =>
-          client
-            .from("night_slot_tasks")
-            .select("night_id, is_coverage")
-            .in("night_id", nightIds)
-            .eq("is_coverage", true),
         )
       : Promise.resolve({ data: [], error: null, truncated: false }),
     fetchAll<CallOffRow>(() =>
@@ -403,6 +663,19 @@ export async function getOpsReportsSnapshot(
         .from("tm_profiles")
         .select("tm_id, display_name, full_name, status, active, grave_pool"),
     ),
+    fetchAll<MatrixLiveRow>(() =>
+      client
+        .from("v_tm_zone_matrix_live")
+        .select("tm_id, zone_key, last_placed_at, count_4w, count_8w, count_lifetime, as_of_date"),
+    ),
+    fetchAll<TmNightViewRow>(() =>
+      client
+        .from("v_tm_night")
+        .select("night_date, tm_id, tm_name, slot, slot_label, slot_type, coverage_label, covered_slots")
+        .gte("night_date", historyFrom)
+        .lte("night_date", to)
+        .order("night_date", { ascending: false }),
+    ),
     fetchAll<OptionalIssueRow>(() =>
       client
         .from("v_invalid_locked_assignments")
@@ -420,8 +693,13 @@ export async function getOpsReportsSnapshot(
   ]);
 
   const profiles = new Map(profileRes.data.map((p) => [p.tm_id, p]));
-  const coverageBannerByNight = new Map<string, number>();
-  for (const row of taskRes.data) incrementMap(coverageBannerByNight, row.night_id);
+  const matrixReport = buildMatrixReport({
+    profiles: profileRes.data,
+    matrixRows: matrixRes.error ? [] : matrixRes.data,
+    tmNightRows: tmNightRes.error ? [] : tmNightRes.data,
+    params,
+    dateRange: { from, to },
+  });
 
   const callOffsByNight = new Map<string, number>();
   const callOffsByTm = new Map<string, number>();
@@ -627,7 +905,7 @@ export async function getOpsReportsSnapshot(
       auxAssignments: builder.auxAssignments,
       overlapAssignments: builder.overlapAssignments,
       assignmentCoveragePairs: builder.assignmentCoveragePairs,
-      coverageBannerRows: coverageBannerByNight.get(n.id) ?? 0,
+      coverageBannerRows: 0,
       callOffs: callOffsByNight.get(n.night_date) ?? 0,
       boardChanges: changesByNight.get(n.night_date) ?? 0,
       repeatRisks: builder.repeatRisks,
@@ -699,30 +977,6 @@ export async function getOpsReportsSnapshot(
   };
 
   const findings: ReportFinding[] = [];
-  const underfilled = nights.filter((n) => n.coveredZones < 10 && !n.isFuture);
-  if (underfilled.length) {
-    findings.push({
-      id: "covered-zone-shortfall",
-      severity: "warning",
-      title: `${underfilled.length} historical nights show fewer than 10 covered zones`,
-      detail: "Covered zones count direct Z1-Z10 rows plus assignment-carried fallback coverage. This is coverage visibility, not staffing misconduct.",
-      evidence: underfilled.slice(0, 5).map((n) => `${n.nightDate}: ${n.coveredZones}/10 covered zones`),
-      action: "Open the affected nights in Builder before using this as a final operating summary.",
-      confidence: "medium",
-    });
-  }
-  const bannerDrift = nights.filter((n) => n.assignmentCoveragePairs !== n.coverageBannerRows);
-  if (bannerDrift.length) {
-    findings.push({
-      id: "coverage-banner-drift",
-      severity: "warning",
-      title: `${bannerDrift.length} nights have assignment coverage that does not match banner rows`,
-      detail: "Operational coverage and printable banner projection are separate paths. Counts must match before printed reports imply banner correctness.",
-      evidence: bannerDrift.slice(0, 5).map((n) => `${n.nightDate}: ${n.assignmentCoveragePairs} assignment pairs, ${n.coverageBannerRows} banner rows`),
-      action: "Validate those nights through the print preview projection before operational distribution.",
-      confidence: "high",
-    });
-  }
   if (totals.repeatRisks) {
     findings.push({
       id: "repeat-risk-window",
@@ -781,6 +1035,14 @@ export async function getOpsReportsSnapshot(
         ? [invalidLockRes.error, conflictRes.error].filter(Boolean).join(" | ")
         : "Invalid lock and placement history conflict views were queried.",
     },
+    {
+      id: "matrix-live-source",
+      level: matrixRes.error || tmNightRes.error ? "low" as const : "high" as const,
+      label: matrixRes.error || tmNightRes.error ? "Matrix source limited" : "Live matrix loaded",
+      detail: matrixRes.error || tmNightRes.error
+        ? [matrixRes.error, tmNightRes.error].filter(Boolean).join(" | ")
+        : "v_tm_zone_matrix_live and v_tm_night were queried for the Matrix Report.",
+    },
   ];
 
   return {
@@ -792,10 +1054,10 @@ export async function getOpsReportsSnapshot(
     window: reportWindow,
     statusFilter,
     method: {
-      source: "nights, zone_assignments, night_slot_tasks, call_offs, today_assignment_changes, tm_profiles, integrity views",
+      source: "nights, zone_assignments, call_offs, today_assignment_changes, tm_profiles, integrity views",
       denominator: "Distinct loaded nights and distinct assigned TM/night rows. Fairness opportunity denominators are disclosed as limited.",
       caveats: [
-        "Counts distinguish direct zones, assignment-carried coverage, and printable banner rows.",
+        "People totals are assignment history context, not a performance ranking.",
         "Doubled restroom duty is one assignment carrying multiple physical areas, not double-booking.",
         "Call-offs are recorded events and are not treated as attendance or performance rates.",
       ],
@@ -803,14 +1065,16 @@ export async function getOpsReportsSnapshot(
     sourceCounts: [
       { label: "Nights", rows: nightRes.data.length, note: `${allNights.length} after status filter` },
       { label: "Assignments", rows: assignmentRes.data.length },
-      { label: "Coverage banner rows", rows: taskRes.data.length },
       { label: "Call-offs", rows: callOffRes.data.length },
       { label: "Board changes", rows: changeRes.data.length },
       { label: "Profiles", rows: profileRes.data.length },
+      { label: "Live matrix rows", rows: matrixRes.data.length },
+      { label: "TM night trail", rows: tmNightRes.data.length, note: `${historyFrom} to ${to}` },
     ],
     confidence,
     definitions: REPORT_DEFINITIONS,
-    packages: buildPackages({ nights, teamMembers, areas, findings, totals, dateRange: { from, to } }),
+    packages: buildPackages({ nights, teamMembers, areas, findings, totals, dateRange: { from, to }, matrixReport }),
+    matrixReport,
     nights,
     teamMembers,
     areas,

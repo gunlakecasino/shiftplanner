@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  MatrixReportParams,
   OpsReportsSnapshot,
   ReportWindow,
   ReportsStatusFilter,
@@ -12,6 +13,10 @@ export function useOpsReportsSnapshot(
   initialStatusFilter: ReportsStatusFilter = "history",
 ) {
   const [reportWindow, setReportWindow] = useState<ReportWindow>(initialWindow);
+  const [matrixParams, setMatrixParams] = useState<Partial<MatrixReportParams>>({
+    includeInactive: false,
+    tmPool: "all",
+  });
   const [statusFilter, setStatusFilter] =
     useState<ReportsStatusFilter>(initialStatusFilter);
   const [snapshot, setSnapshot] = useState<OpsReportsSnapshot | null>(null);
@@ -20,7 +25,11 @@ export function useOpsReportsSnapshot(
   const requestSeq = useRef(0);
 
   const load = useCallback(
-    async (windowValue: ReportWindow, statusValue: ReportsStatusFilter) => {
+    async (
+      windowValue: ReportWindow,
+      statusValue: ReportsStatusFilter,
+      matrixValue: Partial<MatrixReportParams>,
+    ) => {
       const seq = requestSeq.current + 1;
       requestSeq.current = seq;
       setLoading(true);
@@ -35,6 +44,7 @@ export function useOpsReportsSnapshot(
           body: JSON.stringify({
             window: windowValue,
             statusFilter: statusValue,
+            ...matrixValue,
           }),
         });
         const json = await res.json().catch(() => ({}));
@@ -62,20 +72,22 @@ export function useOpsReportsSnapshot(
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void load(reportWindow, statusFilter);
+      void load(reportWindow, statusFilter, matrixParams);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [load, reportWindow, statusFilter]);
+  }, [load, matrixParams, reportWindow, statusFilter]);
 
   const refresh = useCallback(
-    () => load(reportWindow, statusFilter),
-    [load, reportWindow, statusFilter],
+    () => load(reportWindow, statusFilter, matrixParams),
+    [load, matrixParams, reportWindow, statusFilter],
   );
 
   return {
     snapshot,
     reportWindow,
     setReportWindow,
+    matrixParams,
+    setMatrixParams,
     statusFilter,
     setStatusFilter,
     loading,

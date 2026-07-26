@@ -4,7 +4,11 @@ import React from "react";
 import { CardShell } from "./CardShell";
 
 // Dev preview loose shape
-type DevAssignment = any;
+type DevAssignment = {
+  tmName?: string | null;
+  slotKey?: string;
+  [key: string]: unknown;
+};
 
 /**
  * AuxPlanningCard — dedicated callable component for AUX / support slots.
@@ -27,7 +31,7 @@ export function AuxPlanningCard(props: AuxPlanningCardProps) {
   return (
     <CardShell assignment={assignment} {...shellProps}>
       {hasTM ? (
-        <div className="text-[18px] font-semibold tracking-[-0.25px] text-[#1C1C1E]">{assignment.tmName}</div>
+        <div className="text-[18px] font-semibold tracking-tight text-[#1C1C1E]">{assignment.tmName}</div>
       ) : (
         <div className="text-[11px] text-[#A3A39F] text-center pt-1 tracking-[0.2px]">— Unfilled —</div>
       )}

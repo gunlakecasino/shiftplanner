@@ -2,19 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { unstable_noStore } from "next/cache";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { requireOpsAnyPermission } from "@/lib/auth/requireOpsSession.server";
-import type { ReportWindow } from "@/lib/shiftbuilder/data";
 import { getOpsReportsSnapshot } from "@/lib/shiftbuilder/opsReports.server";
-import type { ReportsStatusFilter } from "@/lib/shiftbuilder/opsReportsTypes";
+import type { MatrixReportParams, ReportsStatusFilter, ReportWindow } from "@/lib/shiftbuilder/opsReportsTypes";
 
 export const dynamic = "force-dynamic";
 
-const VALID_WINDOWS: ReportWindow[] = [14, 30, 60, "this-week", "last-4-weeks"];
+const VALID_WINDOWS: ReportWindow[] = [14, 30, 60, "wtd", "mtd", "qtd", "week-ending", "date-range", "this-week", "last-4-weeks"];
 const VALID_STATUS_FILTERS: ReportsStatusFilter[] = ["history", "published", "built", "all"];
 
 function parseWindow(raw: unknown): ReportWindow {
   if (raw === 14 || raw === 30 || raw === 60) return raw;
+  if (raw === "wtd" || raw === "mtd" || raw === "qtd" || raw === "week-ending" || raw === "date-range") return raw;
   if (raw === "this-week" || raw === "last-4-weeks") return raw;
-  return 30;
+  return "wtd";
 }
 
 function parseStatusFilter(raw: unknown): ReportsStatusFilter {
@@ -50,7 +50,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid window" }, { status: 400 });
     }
 
-    const snapshot = await getOpsReportsSnapshot(window, statusFilter);
+    const matrixParams: Partial<MatrixReportParams> = {
+      from: typeof body?.from === "string" ? body.from : undefined,
+      to: typeof body?.to === "string" ? body.to : undefined,
+      weekEnding: typeof body?.weekEnding === "string" ? body.weekEnding : undefined,
+      includeInactive: Boolean(body?.includeInactive),
+      tmPool: typeof body?.tmPool === "string" ? body.tmPool : "all",
+    };
+
+    const snapshot = await getOpsReportsSnapshot(window, statusFilter, matrixParams);
     return NextResponse.json({ snapshot });
   } catch (err) {
     console.error("[api/rotation-report]", err);
