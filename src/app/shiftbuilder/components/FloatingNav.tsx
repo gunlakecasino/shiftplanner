@@ -128,6 +128,8 @@ export interface FloatingNavProps {
   onDiscardDraft?: () => void;
   isSyncing?: boolean;
   rosterOpen?: boolean;
+  /** Toggles the real RosterRail panel (search, band filters, drag-to-assign). */
+  onToggleRoster?: () => void;
   canvasMode?: "builder" | "print-preview";
   onCanvasModeChange?: (mode: "builder" | "print-preview") => void;
   isDayPublished?: boolean;
@@ -245,6 +247,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     onSaveAllDraft,
     onDiscardDraft,
     rosterOpen = false,
+    onToggleRoster,
     canvasMode = "builder",
     onCanvasModeChange,
     isDayPublished = false,
@@ -705,23 +708,26 @@ export default function FloatingNav(props: FloatingNavProps) {
               type="button"
               className="sb-sheetbuilder-roster-toggle icon-btn sb-interactive flex items-center justify-center rounded-full"
               style={{
-                color: rosterMenuOpen || rosterOpen ? "#fff" : mutedChromeText,
-                background: rosterMenuOpen || rosterOpen
+                color: rosterOpen ? "#fff" : mutedChromeText,
+                background: rosterOpen
                   ? "rgba(255,255,255,0.13)"
                   : "rgba(255,255,255,0.04)",
               }}
               onClick={() => {
-                setRosterMenuOpen((v) => !v);
+                // Opens the real RosterRail. This used to open a read-only
+                // popover listing names with no search, filters, or drag —
+                // while the functional panel was only reachable from the
+                // utility rail, which this skin hides.
+                setRosterMenuOpen(false);
                 setLaunchpadOpen(false);
                 setMoreOpen(false);
                 setProfileOpen(false);
                 setCalendarOpen(false);
+                onToggleRoster?.();
               }}
               title={rosterButtonTitle}
-              aria-label="Open roster"
-              aria-haspopup="menu"
-              aria-expanded={rosterMenuOpen}
-              aria-pressed={rosterMenuOpen || rosterOpen}
+              aria-label={rosterOpen ? "Hide roster" : "Show roster"}
+              aria-pressed={rosterOpen}
             >
               <ClipboardList size={16} strokeWidth={2} />
               {rosterCalledOffCount > 0 && (
@@ -731,47 +737,6 @@ export default function FloatingNav(props: FloatingNavProps) {
               )}
             </button>
 
-            {rosterMenuOpen && (
-              <div
-                role="menu"
-                aria-label="Roster"
-                className="sb-sheetbuilder-roster-popover absolute right-0 top-full z-[92] mt-3"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="sb-sheetbuilder-roster-popover__title">ROSTER</div>
-
-                <section className="sb-sheetbuilder-roster-popover__section">
-                  <div className="sb-sheetbuilder-roster-popover__section-header sb-sheetbuilder-roster-popover__section-header--scheduled">
-                    <span className="sb-sheetbuilder-roster-popover__state-icon">✓</span>
-                    <span>SCHEDULED</span>
-                  </div>
-                  <div className="sb-sheetbuilder-roster-popover__subhead">DEFAULT</div>
-                  {renderRosterRows(navRoster.scheduledDefault, "No default schedule")}
-                  <div className="sb-sheetbuilder-roster-popover__subhead">OVERLAPS</div>
-                  {renderRosterRows(navRoster.scheduledOverlaps, "No overlap team members")}
-                </section>
-
-                <div className="sb-sheetbuilder-roster-popover__divider" />
-
-                <section className="sb-sheetbuilder-roster-popover__section">
-                  <div className="sb-sheetbuilder-roster-popover__section-header sb-sheetbuilder-roster-popover__section-header--off">
-                    <span className="sb-sheetbuilder-roster-popover__state-icon">−</span>
-                    <span>MARKED OFF</span>
-                  </div>
-                  {renderRosterRows(navRoster.markedOff, "Nobody marked off")}
-                </section>
-
-                <div className="sb-sheetbuilder-roster-popover__divider" />
-
-                <section className="sb-sheetbuilder-roster-popover__section">
-                  <div className="sb-sheetbuilder-roster-popover__section-header sb-sheetbuilder-roster-popover__section-header--unscheduled">
-                    <span className="sb-sheetbuilder-roster-popover__state-icon">○</span>
-                    <span>NOT SCHEDULED</span>
-                  </div>
-                  {renderRosterRows(navRoster.notScheduled, "Everyone is scheduled")}
-                </section>
-              </div>
-            )}
           </div>
 
           {onViewChange && (

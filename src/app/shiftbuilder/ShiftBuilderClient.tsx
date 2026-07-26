@@ -8092,6 +8092,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onOpenCoverGuide={() => setCoverGuideOpen(true)}
         isSyncing={boardBackgroundSync}
         rosterOpen={rosterOpen}
+        onToggleRoster={() => setRosterOpen((v) => !v)}
         rosterSummary={navRosterSummary}
         rosterDropdown={navRosterDropdown}
         canvasMode={canvasMode}
