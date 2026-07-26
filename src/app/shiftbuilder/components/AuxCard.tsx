@@ -301,7 +301,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const headerLabel = (isUnsetBlank && !hasTM && !editingLabel) ? (
     <button
       type="button"
-      className="flex items-center gap-1 min-w-0 text-left text-[var(--ios-label-tertiary)]"
+      className="flex items-center gap-1 min-w-0 max-w-full text-left text-[var(--ios-label-tertiary)]"
       onClick={toggleRolePicker}
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -343,7 +343,9 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   ) : (
     <button
       type="button"
-      className="flex items-center gap-1 min-w-0 text-left"
+      /* max-w-full: a button sizes to fit-content even as a flex container, so
+         without it the label escapes its column and collides with the badges. */
+      className="flex items-center gap-1 min-w-0 max-w-full text-left"
       style={{ color: isBlank && def.label ? "#9CA3AF" : color }}
       onClick={toggleRolePicker}
       onDoubleClick={(e) => {
@@ -352,7 +354,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       }}
       title={isBlank ? "Tap to set role · double-click to edit label" : "Tap to change role · double-click to edit label"}
     >
-      <span className="text-[11px] leading-none shrink-0">{icon}</span>
+      {/* Role icon lives in CardSlotHeader's icon slot — repeating it here doubled the glyph and squeezed the label. */}
       <span className="truncate">{def.label || (isBlank ? "Set role" : "")}</span>
     </button>
   );

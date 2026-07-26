@@ -1678,9 +1678,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     isTodayBoard,
                   )}
                 >
+                  {/* Rail header is ~200px wide in the builder — compact "N/M" keeps the chip whole. */}
                   {auxDefs.filter((d) =>
                     (d.role !== "blank" || !!d.label) && slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
-                  ).length} / {auxDefs.filter((d) => d.role !== "blank" || !!d.label).length} FILLED
+                  ).length}{isPrintPreview ? " / " : "/"}{auxDefs.filter((d) => d.role !== "blank" || !!d.label).length}{isPrintPreview ? " FILLED" : ""}
                   {isTodayBoard && todayOpenAuxCount > 0 ? (
                     <span className="ml-1 font-medium text-[#AEAEB2]">· {todayOpenAuxCount} open</span>
                   ) : null}
@@ -1869,9 +1870,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
               </div>
 
             </section>
-            </div>
 
-            {/* OVERLAPS — SheetBuilder-style two-header accordion; active cards render six across. */}
+            {/* OVERLAPS — SheetBuilder-style two-header accordion; active cards render six across.
+                Lives inside the aux-sidebar grid (column 1, row 3) so the auxiliary rail can span
+                down past it — outside the grid, the rail could only reach the restrooms row. */}
             {!isPrintPreview
               ? (() => {
                   const rows = [
@@ -1975,6 +1977,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   );
                 })()
               : null}
+            </div>
           </>
         ) : (
           <div

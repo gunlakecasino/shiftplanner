@@ -3864,6 +3864,16 @@ button,
   background: transparent !important;
 }
 
+/* Shift notes strip — not part of this skin. It renders in-flow above the stage
+   but the fixed topbar paints over it, so it was never reachable here; all it
+   did was reserve ~33px of dead band between the nav and the board. Taking it
+   out of the flow entirely is what closes that band.
+   NOTE: this leaves the shift-notes pad with no entry point in the redesign
+   skin — it needs a home in the topbar or overflow menu to come back. */
+.sb-sheetbuilder-redesign > div:has(> .sb-shift-notes) {
+  display: none !important;
+}
+
 .sb-sheetbuilder-redesign .sb-builder-stage.sb-stage-host.sb-builder-live {
   align-items: stretch !important;
 }
@@ -4028,7 +4038,8 @@ button,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar {
   gap: 14px 14px;
   grid-template-columns: minmax(0, 1fr) 248px;
-  grid-template-rows: max-content max-content !important;
+  /* Row 3 holds the overlaps so the auxiliary rail can span the full board height. */
+  grid-template-rows: max-content max-content max-content !important;
   align-content: start !important;
   align-items: start !important;
   flex: 0 0 auto !important;
@@ -4060,6 +4071,22 @@ button,
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
   margin-top: 18px;
+}
+
+/* Auxiliary rail spans Zones + Restrooms + Overlaps so its bottom edge lines up
+   with the bottom of the board instead of stopping at the restrooms row. */
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+  grid-row: 1 / span 3;
+  /* Drops the 2px `.sb-builder-section + .sb-builder-section` stacking margin,
+     which is meaningless for a grid item and pushed the rail out of alignment
+     with the top of the zones row. */
+  margin-top: 0;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(4) {
+  grid-column: 1;
+  grid-row: 3;
+  min-width: 0;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sheet-section-header {
@@ -4345,10 +4372,8 @@ button,
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header .count {
-  max-width: 64px;
   padding-inline: 6px;
-  overflow: hidden;
-  text-overflow: clip;
+  white-space: nowrap;
   font-size: 8px;
 }
 
@@ -4440,7 +4465,10 @@ button,
 
   .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(1),
   .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(2),
-  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3),
+  /* Overlaps must reset too, or its explicit row 3 jumps it ahead of the
+     auxiliary rail once the board collapses to a single column. */
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(4) {
     grid-column: 1;
     grid-row: auto;
   }
@@ -4720,8 +4748,11 @@ button,
   display: flex !important;
   flex: 0 0 auto !important;
   flex-direction: column !important;
-  width: calc(100% - 262px) !important;
-  max-width: calc(100% - 262px) !important;
+  /* Was calc(100% - 262px) to dodge the auxiliary rail while this section was a
+     full-width sibling below the grid. It is now a grid item in column 1, so the
+     column already excludes the rail — subtracting again shrank it by 262px. */
+  width: 100% !important;
+  max-width: 100% !important;
   height: auto !important;
   margin-top: 22px;
   overflow: visible !important;
@@ -4845,8 +4876,9 @@ button,
 
 @media (max-width: 1280px) {
   .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-group {
-    width: calc(100% - 235px) !important;
-    max-width: calc(100% - 235px) !important;
+    /* See above — the grid column already excludes the auxiliary rail. */
+    width: 100% !important;
+    max-width: 100% !important;
   }
 }
 
@@ -6424,8 +6456,9 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   }
 
   body.sb-roster-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-group {
-    width: calc(100% - 235px) !important;
-    max-width: calc(100% - 235px) !important;
+    /* See above — the grid column already excludes the auxiliary rail. */
+    width: 100% !important;
+    max-width: 100% !important;
   }
 }
 
@@ -6436,16 +6469,35 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 @container builder (min-width: 1001px) {
   .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
     contain: size;
+    position: relative;
     height: 100% !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
+    /* The card stack scrolls, not the section — this keeps the AUXILIARY header
+       pinned and gives the fade below a stationary box to sit in. */
+    overflow: hidden !important;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid {
-    flex: 0 0 auto !important;
+    flex: 1 1 auto !important;
     height: auto !important;
+    min-height: 0 !important;
     align-content: start;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    /* Cards sliced flush against the section edge read as a clipping bug; the
+       gutter + fade below make the overflow legible as "scroll for more". */
+    padding-bottom: 14px;
+  }
+
+  .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3)::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 22px;
+    border-radius: 0 0 13px 13px;
+    background: linear-gradient(180deg, rgba(242, 243, 248, 0) 0%, rgba(242, 243, 248, 0.92) 70%, #f2f3f8 100%);
+    pointer-events: none;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid > * {
