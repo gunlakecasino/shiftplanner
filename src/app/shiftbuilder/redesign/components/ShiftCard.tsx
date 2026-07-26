@@ -3,7 +3,7 @@ import { MoreHorizontal } from "lucide-react";
 import { ZONE_COLORS, ZONE_STATUS } from "../tokens";
 import type { ShiftCardProps } from "../types";
 
-export function ShiftCard({ zone, label, name, secondName, notes, unassigned, coverage, taskContent, footer, noChip, onClick }: ShiftCardProps) {
+export function ShiftCard({ zone, label, name, secondName, notes, unassigned, coverage, projectPills, taskContent, footer, noChip, onClick }: ShiftCardProps) {
   const colors = ZONE_COLORS[zone] || ZONE_COLORS[1];
   const accentColor = colors.label;
   const cardLabel = label ?? `ZONE ${zone}`;
@@ -90,7 +90,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
       <div className="flex flex-1 min-h-0">
         <div className="w-[5px] shrink-0 rounded-l-xl" style={{ backgroundColor: accentColor }} />
         <div className="flex flex-col flex-1 p-3 min-w-0">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className={`flex items-center justify-between ${projectPills ? "mb-1" : "mb-2.5"}`}>
           {!noChip
             ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>{cardLabel}</span>
             : <div />}
@@ -99,6 +99,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
             <MoreHorizontal size={12} className="text-gray-400" />
           </div>
         </div>
+        {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
         <div className="flex flex-col gap-0.5 mb-2">
           <div className="text-[17px] font-bold text-gray-900 leading-tight truncate">{name}</div>
           {secondName && (

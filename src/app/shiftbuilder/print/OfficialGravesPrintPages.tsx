@@ -25,6 +25,11 @@ import {
   EDITABLE_PDF_TM_SOURCE_ATTR,
   EditablePdfTmFieldAnchor,
 } from "./editablePdfFields";
+import {
+  solveOfficialDeploymentTracks,
+  solveOfficialZoneRowTracks,
+  type OfficialZoneCardLoad,
+} from "./officialZoneRowLayout";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
@@ -342,6 +347,55 @@ export function OfficialGravesDeploymentPage({
     coveredByIndex,
     snapshot.auxDefs,
   );
+  const zoneLoads = ZONE_VISUAL_ORDER.map((slotKey): OfficialZoneCardLoad => {
+    const assignment = snapshot.assignments[slotKey] ?? {};
+    const assignedName = printAssigneeName(assignment.tmName, assignment.tmId);
+    const coveredBy = coveredByIndex[slotKey] ?? [];
+    const names = assignedName
+      ? [assignedName]
+      : coveredBy.map((entry) =>
+          coveredBy.length > 1 && entry.side
+            ? `${formatCoverageSideLabel(slotKey, entry.side)} ${entry.tmName}`
+            : entry.tmName,
+        );
+
+    return {
+      names,
+      tasks: taskLabels(snapshot, slotKey),
+      hasFooter: (coverageTargetsBySource[slotKey]?.length ?? 0) > 0,
+    };
+  });
+  const zoneRowTracks = solveOfficialZoneRowTracks(
+    zoneLoads.slice(0, 5),
+    zoneLoads.slice(5),
+  );
+  const restroomSlotKeys = ["W", "M"].flatMap((side) =>
+    RR_DEFS.map((def) => `${side}RR${def.num}`),
+  );
+  const restroomLoads = restroomSlotKeys.map(
+    (slotKey): OfficialZoneCardLoad => {
+      const assignment = snapshot.assignments[slotKey] ?? {};
+      const assignedName = printAssigneeName(
+        assignment.tmName,
+        assignment.tmId,
+      );
+      const coveredBy = coveredByIndex[slotKey] ?? [];
+      const names = assignedName
+        ? [assignedName]
+        : coveredBy.map((entry) =>
+            coveredBy.length > 1 && entry.side
+              ? `${formatCoverageSideLabel(slotKey, entry.side)} ${entry.tmName}`
+              : entry.tmName,
+          );
+
+      return {
+        names,
+        tasks: taskLabels(snapshot, slotKey),
+        hasFooter: (coverageTargetsBySource[slotKey]?.length ?? 0) > 0,
+        compact: true,
+      };
+    },
+  );
   const zoneAssigned = ZONE_DEFS.filter(
     (def) =>
       hasPrintAssigneeName(
@@ -372,6 +426,30 @@ export function OfficialGravesDeploymentPage({
         snapshot.assignments[def.key]?.tmId,
       ) || coveredByIndex[def.key]?.length,
   ).length;
+  const auxiliaryLoads = auxDefs.map(
+    (def): OfficialZoneCardLoad => {
+      const assignment = snapshot.assignments[def.key] ?? {};
+      const assignedName = printAssigneeName(
+        assignment.tmName,
+        assignment.tmId,
+      );
+      const coveredBy = coveredByIndex[def.key] ?? [];
+
+      return {
+        names: assignedName
+          ? [assignedName]
+          : coveredBy.map((entry) => entry.tmName),
+        tasks: taskLabels(snapshot, def.key),
+        hasFooter: (coverageTargetsBySource[def.key]?.length ?? 0) > 0,
+        compact: true,
+      };
+    },
+  );
+  const deploymentTracks = solveOfficialDeploymentTracks({
+    zoneRows: [zoneLoads.slice(0, 5), zoneLoads.slice(5)],
+    restroomRows: [restroomLoads.slice(0, 5), restroomLoads.slice(5)],
+    auxiliaryCards: auxiliaryLoads,
+  });
 
   return (
     <div className="print-artboard sb-graves-sheet" data-print-view="deployment" data-print-variant="official">
@@ -382,10 +460,16 @@ export function OfficialGravesDeploymentPage({
         printedAt={printedAt}
         includeTimestamp={includeTimestamp}
       />
-      <div className="sb-approved-deployment-body">
+      <div
+        className="sb-approved-deployment-body"
+        style={{ gridTemplateRows: deploymentTracks.cssValue }}
+      >
         <section className="sb-approved-zones-section">
           <ApprovedSectionHeader label="ZONES" count={zoneAssigned} />
-          <div className="sb-approved-zones-grid">
+          <div
+            className="sb-approved-zones-grid"
+            style={{ gridTemplateRows: zoneRowTracks.cssValue }}
+          >
             {ZONE_VISUAL_ORDER.map((slotKey) => {
               const def = ZONE_DEFS.find((zone) => zone.key === slotKey)!;
               return (
@@ -405,7 +489,12 @@ export function OfficialGravesDeploymentPage({
 
         <section className="sb-approved-restrooms-section">
           <ApprovedSectionHeader label="RESTROOMS" count={restroomAssigned} />
-          <div className="sb-approved-restrooms-grid">
+          <div
+            className="sb-approved-restrooms-grid"
+            style={{
+              gridTemplateRows: deploymentTracks.restroomRows.cssValue,
+            }}
+          >
             {["W", "M"].flatMap((side) => RR_DEFS.map((def) => {
               const slotKey = `${side}RR${def.num}`;
               return (

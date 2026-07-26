@@ -761,6 +761,7 @@ export function SlotAssignmentBody({
   placementTrail,
   placementTrailMatchSlotKey,
   onSwapCoverageSides,
+  projectPills,
 }: {
   state: SlotAssignmentState;
   scale: CardNameScale;
@@ -781,6 +782,8 @@ export function SlotAssignmentBody({
   placementTrailMatchSlotKey?: string;
   /** Swap A/B when exactly two coverers (builder only). */
   onSwapCoverageSides?: () => void;
+  /** Builder-only dated project pills, placed above the TM name. */
+  projectPills?: React.ReactNode;
 }) {
   const reducedMotion = useReducedMotion();
   const fontSize =
@@ -804,6 +807,7 @@ export function SlotAssignmentBody({
             exit={{ opacity: 0, y: -2, scale: 0.985 }}
             transition={premiumSpring}
           >
+            {projectPills}
             <TmNameBlock
               name={state.proposedName}
               fontSize={fontSize}
@@ -878,13 +882,16 @@ export function SlotAssignmentBody({
                 <LockIcon size={lockSize} />
               </span>
             ) : null}
-            <TmNameBlock
-              name={state.tmName}
-              fontSize={fontSize}
-              placementTrail={placementTrail}
-              placementTrailMatchSlotKey={placementTrailMatchSlotKey}
-              criticalRepeat={criticalRepeat}
-            />
+            <div className="flex flex-col min-w-0 w-full">
+              {projectPills}
+              <TmNameBlock
+                name={state.tmName}
+                fontSize={fontSize}
+                placementTrail={placementTrail}
+                placementTrailMatchSlotKey={placementTrailMatchSlotKey}
+                criticalRepeat={criticalRepeat}
+              />
+            </div>
             {isDuplicate ? (
               <DuplicateTmBadge otherSlots={otherSlotsForTm} animate />
             ) : null}

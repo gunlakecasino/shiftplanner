@@ -15,6 +15,7 @@ import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import { CardTaskBadge } from "./CardTaskBadge";
+import { CardProjectPills } from "./CardProjectPills";
 import { rrDbSlotComposite } from "@/lib/shiftbuilder/slotCatalog";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
@@ -107,6 +108,8 @@ const RRSide: React.FC<{
   ) => void;
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
+  showProjectPills?: boolean;
+  projectSlotKey?: string;
 }> = ({
   slotKey,
   assignment,
@@ -129,6 +132,8 @@ const RRSide: React.FC<{
   onSwapCoverageSides,
   fitChip,
   placementTrail,
+  showProjectPills = false,
+  projectSlotKey,
 }) => {
   const a = assignment || {};
   // Draft-aware TM identity, mirroring ZoneCard/OverlapSlot: in draft mode a
@@ -198,6 +203,15 @@ const RRSide: React.FC<{
           criticalRepeat={isCriticalRepeatFit(fitChip)}
           placementTrail={placementTrail}
           placementTrailMatchSlotKey={slotKey}
+          projectPills={
+            showProjectPills && hasTM ? (
+              <CardProjectPills
+                tmId={slotTm.tmId}
+                slotKey={projectSlotKey}
+                className="mb-1"
+              />
+            ) : undefined
+          }
           onSwapCoverageSides={
             showDigitalAssists &&
             coveredBy.length === 2 &&
@@ -471,6 +485,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             coveredBy={wCoveredBy}
             fitChip={fitChipW}
             placementTrail={placementTrailW}
+            showProjectPills={showTaskBadge}
+            projectSlotKey={rrDbSlotComposite(def.num, "womens")}
             {...sideProps}
           />
         )}
@@ -502,6 +518,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             coveredBy={mCoveredBy}
             fitChip={fitChipM}
             placementTrail={placementTrailM}
+            showProjectPills={showTaskBadge}
+            projectSlotKey={rrDbSlotComposite(def.num, "mens")}
             {...sideProps}
           />
         )}

@@ -18,6 +18,7 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import { CardTaskBadge } from "./CardTaskBadge";
+import { CardProjectPills } from "./CardProjectPills";
 import { auxDbSlotKey } from "@/lib/shiftbuilder/slotCatalog";
 import ZoneTaskList from "./ZoneTaskList";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
@@ -506,6 +507,15 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             criticalRepeat={isCriticalRepeatFit(fitChip)}
             placementTrail={placementTrail}
             placementTrailMatchSlotKey={def.key}
+            projectPills={
+              showTaskBadge && hasTM ? (
+                <CardProjectPills
+                  tmId={slotTm.tmId}
+                  slotKey={auxDbSlotKey(role, def.key)}
+                  className="mb-1"
+                />
+              ) : undefined
+            }
             onSwapCoverageSides={
               showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
                 ? () => onSwapCoverageSides(def.key, coveredBy)
