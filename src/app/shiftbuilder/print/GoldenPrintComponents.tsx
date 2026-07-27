@@ -27,40 +27,14 @@ import {
 import type { PrintTaskLine } from "./printPreviewTypes";
 import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
 import { TASK_LABEL_COLOR, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
+import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
 import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
 import {
   EDITABLE_PDF_TM_SOURCE_ATTR,
   EditablePdfTmFieldAnchor,
 } from "./editablePdfFields";
-
-function formatPrintTimestamp(iso?: string) {
-  const d = iso ? new Date(iso) : new Date();
-  // e.g. "3:30 AM"
-  const time = d.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).replace(/\s/g, "").toUpperCase();
-
-  // e.g. "16 JUN"
-  const date = d.toLocaleDateString([], {
-    day: "numeric",
-    month: "short",
-  }).toUpperCase().replace(".", "");
-
-  // Full for title/tooltip
-  const full = d.toLocaleString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-
-  return { time, date, full };
-}
+import { AsOfTimestamp } from "./AsOfTimestamp";
 
 type CoveredScale = "zone" | "rr" | "aux";
 
@@ -113,14 +87,18 @@ export function GoldenBreakPill({ value }: { value: number }) {
 export function GoldenTaskRow({
   task,
   hasTM,
+  slotKey,
 }: {
   task: PrintTaskLine;
   hasTM: boolean;
+  slotKey?: string;
 }) {
   const textColor = hasTM ? TASK_LABEL_COLOR.primary : TASK_LABEL_COLOR.secondary;
+  const hierarchyDepth = slotKey ? taskHierarchyDepth(slotKey, task.label) : 0;
   return (
     <div
       className="sb-list-row relative flex items-start gap-1.5 rounded px-1 -mx-0.5 py-0 leading-[1.05]"
+      data-task-depth={hierarchyDepth || undefined}
       style={{ fontSize: TASK_LABEL_SIZE_PX.print }}
     >
       <div data-task-label className="min-w-0 flex-1 leading-[1.05]">
@@ -145,10 +123,12 @@ export function GoldenTaskList({
   tasks,
   hasTM,
   dense = false,
+  slotKey,
 }: {
   tasks: PrintTaskLine[];
   hasTM: boolean;
   dense?: boolean;
+  slotKey?: string;
 }) {
   if (!tasks.length) return null;
   const textColor = hasTM
@@ -173,7 +153,7 @@ export function GoldenTaskList({
       }}
     >
       {tasks.map((t) => (
-        <GoldenTaskRow key={t.id} task={t} hasTM={hasTM} />
+        <GoldenTaskRow key={t.id} task={t} hasTM={hasTM} slotKey={slotKey} />
       ))}
     </div>
   );
@@ -368,11 +348,11 @@ export function GoldenZoneCard({
             >
               {tmName}
             </span>
-            <GoldenTaskList tasks={regular} hasTM />
+            <GoldenTaskList tasks={regular} hasTM slotKey={slotKey} />
           </>
         )}
         {isEmpty && showTasksWhenEmpty && regular.length > 0 ? (
-          <GoldenTaskList tasks={regular} hasTM={false} />
+          <GoldenTaskList tasks={regular} hasTM={false} slotKey={slotKey} />
         ) : null}
       </div>
       <GoldenCoverageStack tasks={tasks} color={color} />
@@ -919,35 +899,7 @@ export function GoldenDeploymentHeader({
           })}
         </div>
         {includeTimestamp && printedAt && (
-          /* High-quality stamp-style "UPDATED" timestamp box (transparent red) — bigger, no version */
-          <div
-            className="inline-flex flex-col items-end rounded-[2px] px-2.5 py-[4px]"
-            title={`Printed ${formatPrintTimestamp(printedAt).full}`}
-            style={{
-              fontFamily: "var(--font-atkinson)",
-              border: "1.75px solid rgba(185, 28, 28, 0.65)",
-              backgroundColor: "rgba(185, 28, 28, 0.07)",
-            }}
-          >
-            <span
-              className="text-[7.5px] font-bold tracking-[2px] uppercase leading-none"
-              style={{ color: "rgba(185, 28, 28, 0.82)" }}
-            >
-              UPDATED
-            </span>
-            <span
-              className="text-[14px] font-extrabold tabular-nums tracking-[-0.5px] leading-[1.0] mt-px"
-              style={{ color: "rgba(185, 28, 28, 0.95)" }}
-            >
-              {formatPrintTimestamp(printedAt).time}
-            </span>
-            <span
-              className="text-[9.5px] font-semibold tabular-nums leading-none mt-px"
-              style={{ color: "rgba(185, 28, 28, 0.72)" }}
-            >
-              {formatPrintTimestamp(printedAt).date}
-            </span>
-          </div>
+          <AsOfTimestamp value={printedAt} shiftDay={day} />
         )}
       </div>
     </div>
@@ -1030,35 +982,7 @@ export function GoldenBreaksHeader({
       </div>
       <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-1.5">
         {includeTimestamp && printedAt && (
-          /* Timestamp on the right side for breaks header */
-          <div
-            className="inline-flex flex-col items-end rounded-[2px] px-2 py-[3px]"
-            title={`Printed ${formatPrintTimestamp(printedAt).full}`}
-            style={{
-              fontFamily: "var(--font-atkinson)",
-              border: "1.5px solid rgba(185, 28, 28, 0.6)",
-              backgroundColor: "rgba(185, 28, 28, 0.06)",
-            }}
-          >
-            <span
-              className="text-[7px] font-bold tracking-[1.8px] uppercase leading-none"
-              style={{ color: "rgba(185, 28, 28, 0.8)" }}
-            >
-              UPDATED
-            </span>
-            <span
-              className="text-[12.5px] font-extrabold tabular-nums tracking-[-0.3px] leading-[1.0] mt-px"
-              style={{ color: "rgba(185, 28, 28, 0.92)" }}
-            >
-              {formatPrintTimestamp(printedAt).time}
-            </span>
-            <span
-              className="text-[8.5px] font-semibold tabular-nums leading-none mt-px"
-              style={{ color: "rgba(185, 28, 28, 0.7)" }}
-            >
-              {formatPrintTimestamp(printedAt).date}
-            </span>
-          </div>
+          <AsOfTimestamp value={printedAt} shiftDay={day} />
         )}
         <div className="flex gap-[2px]">
           {weekDayDefs.map((def, i) => {

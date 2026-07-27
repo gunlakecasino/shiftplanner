@@ -30,6 +30,8 @@ import {
   solveOfficialZoneRowTracks,
   type OfficialZoneCardLoad,
 } from "./officialZoneRowLayout";
+import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
+import { AsOfTimestamp } from "./AsOfTimestamp";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
@@ -42,20 +44,6 @@ export function pageTaskRowsForOverlapRows(rows: PrintOverlapRow[]): number {
     .some((slot) => slot.tasks.filter((task) => !task.isCoverage).length >= TALL_OVERLAP_TASK_LINE_THRESHOLD)
     ? PAGE_TASK_ROWS_FOR_TALL_OVERLAPS
     : PAGE_TASK_ROWS;
-}
-
-function formatAsOf(iso?: string): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  const day = date
-    .toLocaleDateString([], { month: "short", day: "numeric" })
-    .toUpperCase()
-    .replace(".", "");
-  const time = date
-    .toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })
-    .toUpperCase()
-    .replace(/\s+/g, " ");
-  return `AS OF ${day} - ${time}`;
 }
 
 const APPROVED_ACCENT_INK: Record<string, string> = {
@@ -125,10 +113,11 @@ function GravesZoneSheetHeader({
         })}
       </div>
       {includeTimestamp && printedAt ? (
-        <div className="sb-approved-as-of">
-          <span>AS OF</span>
-          <strong>{formatAsOf(printedAt).replace(/^AS OF\s+/, "")}</strong>
-        </div>
+        <AsOfTimestamp
+          value={printedAt}
+          shiftDay={day}
+          className="sb-approved-as-of"
+        />
       ) : null}
     </header>
   );
@@ -323,7 +312,17 @@ function ApprovedAssignmentCard({
         ) : null}
         {tasks.length > 0 ? (
           <div className="sb-approved-card-tasks">
-            {tasks.map((task, index) => <div key={`${task}-${index}`}>- {task}</div>)}
+            {tasks.map((task, index) => {
+              const hierarchyDepth = taskHierarchyDepth(slotKey, task);
+              return (
+                <div
+                  key={`${task}-${index}`}
+                  data-task-depth={hierarchyDepth || undefined}
+                >
+                  - {task}
+                </div>
+              );
+            })}
           </div>
         ) : null}
       </div>
