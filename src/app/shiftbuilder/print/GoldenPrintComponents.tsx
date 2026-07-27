@@ -27,7 +27,6 @@ import {
 import type { PrintTaskLine } from "./printPreviewTypes";
 import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
 import { TASK_LABEL_COLOR, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
-import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
 import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
 import {
@@ -87,18 +86,14 @@ export function GoldenBreakPill({ value }: { value: number }) {
 export function GoldenTaskRow({
   task,
   hasTM,
-  slotKey,
 }: {
   task: PrintTaskLine;
   hasTM: boolean;
-  slotKey?: string;
 }) {
   const textColor = hasTM ? TASK_LABEL_COLOR.primary : TASK_LABEL_COLOR.secondary;
-  const hierarchyDepth = slotKey ? taskHierarchyDepth(slotKey, task.label) : 0;
   return (
     <div
       className="sb-list-row relative flex items-start gap-1.5 rounded px-1 -mx-0.5 py-0 leading-[1.05]"
-      data-task-depth={hierarchyDepth || undefined}
       style={{ fontSize: TASK_LABEL_SIZE_PX.print }}
     >
       <div data-task-label className="min-w-0 flex-1 leading-[1.05]">
@@ -123,12 +118,10 @@ export function GoldenTaskList({
   tasks,
   hasTM,
   dense = false,
-  slotKey,
 }: {
   tasks: PrintTaskLine[];
   hasTM: boolean;
   dense?: boolean;
-  slotKey?: string;
 }) {
   if (!tasks.length) return null;
   const textColor = hasTM
@@ -153,7 +146,7 @@ export function GoldenTaskList({
       }}
     >
       {tasks.map((t) => (
-        <GoldenTaskRow key={t.id} task={t} hasTM={hasTM} slotKey={slotKey} />
+        <GoldenTaskRow key={t.id} task={t} hasTM={hasTM} />
       ))}
     </div>
   );
@@ -348,11 +341,11 @@ export function GoldenZoneCard({
             >
               {tmName}
             </span>
-            <GoldenTaskList tasks={regular} hasTM slotKey={slotKey} />
+            <GoldenTaskList tasks={regular} hasTM />
           </>
         )}
         {isEmpty && showTasksWhenEmpty && regular.length > 0 ? (
-          <GoldenTaskList tasks={regular} hasTM={false} slotKey={slotKey} />
+          <GoldenTaskList tasks={regular} hasTM={false} />
         ) : null}
       </div>
       <GoldenCoverageStack tasks={tasks} color={color} />

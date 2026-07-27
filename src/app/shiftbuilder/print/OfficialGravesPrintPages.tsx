@@ -30,7 +30,6 @@ import {
   solveOfficialZoneRowTracks,
   type OfficialZoneCardLoad,
 } from "./officialZoneRowLayout";
-import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
 import { AsOfTimestamp } from "./AsOfTimestamp";
 
 const PAGE_TASK_ROWS = 8;
@@ -312,17 +311,7 @@ function ApprovedAssignmentCard({
         ) : null}
         {tasks.length > 0 ? (
           <div className="sb-approved-card-tasks">
-            {tasks.map((task, index) => {
-              const hierarchyDepth = taskHierarchyDepth(slotKey, task);
-              return (
-                <div
-                  key={`${task}-${index}`}
-                  data-task-depth={hierarchyDepth || undefined}
-                >
-                  - {task}
-                </div>
-              );
-            })}
+            {tasks.map((task, index) => <div key={`${task}-${index}`}>- {task}</div>)}
           </div>
         ) : null}
       </div>

@@ -891,11 +891,6 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   line-height: 1.05 !important;
 }
 
-.print-artboard .sb-golden-task-list .sb-list-row[data-task-depth="1"],
-.print-artboard.sb-graves-sheet .sb-approved-card-tasks > [data-task-depth="1"] {
-  padding-left: 8px !important;
-}
-
 .sb-side-task-summary-card {
   border: 1px solid #b9d8db !important;
   border-radius: 3px;
