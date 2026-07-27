@@ -1377,40 +1377,82 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   -webkit-text-fill-color: #fff;
 }
 
-.sb-approved-as-of {
-  position: absolute;
-  top: 5px;
-  right: 0;
-  min-width: 122px;
-  min-height: 43px;
-  padding: 5px 8px 4px;
-  border: 2px solid #b42318;
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 1px #fecaca;
+.sb-as-of-timestamp {
+  --sb-as-of-accent: #6e695f;
+  width: 102px;
+  min-width: 102px;
+  height: 34px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
+  color: #16150f;
+  font-family: var(--font-atkinson), Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-as-of-timestamp.is-current {
+  --sb-as-of-accent: #c8102e;
+}
+
+.sb-approved-as-of {
+  position: absolute;
+  top: auto;
+  right: 0;
+  bottom: 11px;
+}
+
+.sb-as-of-eyebrow {
+  height: 6.5px;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  color: #b42318;
-  background: #fff7f7;
-  text-align: center;
-}
-
-.sb-approved-as-of > span {
-  font-size: 7.5px;
+  gap: 5px;
+  color: #6e695f;
+  font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 4.75px;
   line-height: 1;
-  font-weight: 800;
-  letter-spacing: 1.15px;
+  font-weight: 700;
+  letter-spacing: 0.95px;
+  white-space: nowrap;
 }
 
-.sb-approved-as-of > strong {
-  margin-top: 4px;
-  color: #b42318;
+.sb-as-of-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: #e3dfd7;
+}
+
+.sb-as-of-date {
+  margin-top: 1.5px;
+  color: #16150f;
   font-size: 10.5px;
   line-height: 1;
   font-weight: 800;
-  letter-spacing: 0.2px;
+  letter-spacing: -0.25px;
+}
+
+.sb-as-of-time-row {
+  margin-top: 1.5px;
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.sb-as-of-time {
+  color: var(--sb-as-of-accent);
+  font-size: 11.25px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.sb-as-of-meridiem {
+  margin-left: 3px;
+  color: var(--sb-as-of-accent);
+  font-size: 5px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.4px;
 }
 
 .sb-approved-deployment-body {

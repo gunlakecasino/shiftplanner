@@ -1384,12 +1384,13 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-as-of-timestamp {
   --sb-as-of-accent: #6e695f;
-  width: 146px;
-  min-width: 146px;
-  height: 48px;
+  width: 102px;
+  min-width: 102px;
+  height: 34px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   color: #16150f;
   font-family: var(--font-atkinson), Helvetica, Arial, sans-serif;
   font-variant-numeric: tabular-nums;
@@ -1401,21 +1402,22 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-approved-as-of {
   position: absolute;
-  top: 1px;
+  top: auto;
   right: 0;
+  bottom: 11px;
 }
 
 .sb-as-of-eyebrow {
-  height: 9px;
+  height: 6.5px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   color: #6e695f;
   font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 6.5px;
+  font-size: 4.75px;
   line-height: 1;
   font-weight: 700;
-  letter-spacing: 1.35px;
+  letter-spacing: 0.95px;
   white-space: nowrap;
 }
 
@@ -1426,16 +1428,16 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-as-of-date {
-  margin-top: 2px;
+  margin-top: 1.5px;
   color: #16150f;
-  font-size: 15px;
+  font-size: 10.5px;
   line-height: 1;
   font-weight: 800;
-  letter-spacing: -0.35px;
+  letter-spacing: -0.25px;
 }
 
 .sb-as-of-time-row {
-  margin-top: 2px;
+  margin-top: 1.5px;
   display: flex;
   align-items: baseline;
   min-width: 0;
@@ -1443,29 +1445,19 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-as-of-time {
   color: var(--sb-as-of-accent);
-  font-size: 16px;
+  font-size: 11.25px;
   line-height: 1;
   font-weight: 800;
-  letter-spacing: -0.45px;
+  letter-spacing: -0.3px;
 }
 
 .sb-as-of-meridiem {
-  margin-left: 4px;
+  margin-left: 3px;
   color: var(--sb-as-of-accent);
-  font-size: 7px;
+  font-size: 5px;
   line-height: 1;
   font-weight: 700;
-  letter-spacing: 0.55px;
-}
-
-.sb-as-of-time-zone {
-  margin-left: auto;
-  color: #6e695f;
-  font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 6.5px;
-  line-height: 1;
-  font-weight: 500;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.4px;
 }
 
 .sb-approved-deployment-body {

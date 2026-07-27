@@ -1,4 +1,6 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { OfficialGravesDeploymentPage } from "@/app/shiftbuilder/print/OfficialGravesPrintPages";
@@ -46,7 +48,7 @@ describe("Official Graves print timestamp", () => {
     expect(html).toContain("JUL 18");
     expect(html).toContain("3:30");
     expect(html).toContain("AM");
-    expect(html).toContain("EDT");
+    expect(html).not.toContain("EDT");
   });
 
   it("removes the complete stamp when disabled", () => {
@@ -80,5 +82,35 @@ describe("Official Graves print timestamp", () => {
     expect(asOfTimestampTone(friday, "2026-07-19T03:30:00-04:00")).toBe(
       "past",
     );
+  });
+
+  it("keeps the PDF export timestamp CSS in parity with the app stylesheet", () => {
+    const sourceCss = readFileSync(
+      join(
+        process.cwd(),
+        "src/app/shiftbuilder/print/printPreview.css",
+      ),
+      "utf8",
+    );
+    const exportCss = readFileSync(
+      join(process.cwd(), "public/shiftbuilder-print-preview.css"),
+      "utf8",
+    );
+    const timestampBlock = (css: string) =>
+      css
+        .slice(
+          css.indexOf(".sb-as-of-timestamp"),
+          css.indexOf(".sb-approved-deployment-body"),
+        )
+        .trim();
+
+    expect(timestampBlock(exportCss)).toBe(timestampBlock(sourceCss));
+    expect(timestampBlock(exportCss)).not.toContain(
+      "border: 2px solid #b42318",
+    );
+    expect(timestampBlock(exportCss)).toContain("width: 102px");
+    expect(timestampBlock(exportCss)).toContain("height: 34px");
+    expect(timestampBlock(exportCss)).toContain("bottom: 11px");
+    expect(timestampBlock(exportCss)).not.toContain("sb-as-of-time-zone");
   });
 });

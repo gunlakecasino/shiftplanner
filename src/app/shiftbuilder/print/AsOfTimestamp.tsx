@@ -46,7 +46,6 @@ export type AsOfTimestampParts = {
   dateShort: string;
   time: string;
   meridiem: string;
-  timeZone: string;
   full: string;
 };
 
@@ -132,7 +131,6 @@ export function formatAsOfTimestamp(
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZoneName: "short",
   }).formatToParts(date);
   const weekday = part(parts, "weekday").toUpperCase();
   const month = part(parts, "month").replace(".", "").toUpperCase();
@@ -140,15 +138,13 @@ export function formatAsOfTimestamp(
   const hour = part(parts, "hour");
   const minute = part(parts, "minute");
   const meridiem = part(parts, "dayPeriod").toUpperCase();
-  const timeZone = part(parts, "timeZoneName").toUpperCase();
 
   return {
     weekday,
     dateShort: `${month} ${day}`,
     time: `${hour}:${minute}`,
     meridiem,
-    timeZone,
-    full: `${weekday}, ${month} ${day} ${hour}:${minute} ${meridiem} ${timeZone}`,
+    full: `${weekday}, ${month} ${day} ${hour}:${minute} ${meridiem}`,
   };
 }
 
@@ -181,7 +177,6 @@ export function AsOfTimestamp({
       <span className="sb-as-of-time-row">
         <strong className="sb-as-of-time">{stamp.time}</strong>
         <span className="sb-as-of-meridiem">{stamp.meridiem}</span>
-        <span className="sb-as-of-time-zone">{stamp.timeZone}</span>
       </span>
     </time>
   );
