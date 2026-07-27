@@ -3,6 +3,7 @@ import { MARGIN_VALUES, MARGIN_ZOOM } from "../components/PrintCommandCenter";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "./goldenConstants";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
 import { postProcessOfficialDeploymentArtboard } from "./deploymentPrintLayout";
+import { PRINT_PREVIEW_STYLESHEET_HREF } from "./printStylesheetHref";
 
 import type { GoldenPrintPage } from "./assemblePages";
 
@@ -31,7 +32,7 @@ function ensureGoldenPrintBundleStyles(): void {
   const link = document.createElement("link");
   link.id = STYLE_GOLDEN_BUNDLE_ID;
   link.rel = "stylesheet";
-  link.href = "/shiftbuilder-print-preview.css";
+  link.href = PRINT_PREVIEW_STYLESHEET_HREF;
   document.head.appendChild(link);
 }
 
@@ -496,7 +497,7 @@ async function mountGoldenBrowserPrintSession(
     `<style>${fontCss}</style>` +
     `<style id="${STYLE_PRINT_ID}">${printOverrides}</style>` +
     linkTags +
-    '<link rel="stylesheet" href="/shiftbuilder-print-preview.css" />' +
+    `<link rel="stylesheet" href="${PRINT_PREVIEW_STYLESHEET_HREF}" />` +
     '</head><body class="printing-dual-mode" style="margin:0;padding:0;background:#ffffff">' +
     `<div class="print-dual-container">${pagesHtml}</div></body></html>`,
   );

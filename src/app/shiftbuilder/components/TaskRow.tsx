@@ -13,6 +13,7 @@ import {
   taskLabelSizeClass,
   TASK_LABEL_SIZE_PX,
 } from "@/lib/shiftbuilder/taskTextStyle";
+import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
 // Shared color palette for tasks (used by TaskRow accent + TaskTextEditPad)
 // Using iOS 26 system colors for accents/highlights
 export const TASK_COLOR_SPHERES = [
@@ -213,11 +214,13 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   }, [canDrag, taskDragListeners]);
 
   const taskHostId = `task-${slotKey}-${task.id}`;
+  const hierarchyDepth = taskHierarchyDepth(slotKey, task.taskLabel);
 
   return (
     <div
       ref={setRowRef}
       data-task-host={taskHostId}
+      data-task-depth={hierarchyDepth || undefined}
       className={`sb-list-row group/task relative flex items-start gap-1.5 rounded px-1 -mx-0.5 ${isPrintPreview ? 'py-0' : 'py-[2px]'} hover:bg-white/60 dark:hover:bg-white/5 ${textSize} ${textColorClass} ${isOverTaskItem ? 'ring-1 ring-[var(--sb-gold-border)]' : ''} ${isDragging ? 'sb-dragging' : ''} ${canDrag ? 'touch-none select-none cursor-default' : ''}`}
       {...(canDrag ? dragListeners : {})}
       {...(canDrag ? taskDragAttributes : {})}

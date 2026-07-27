@@ -15,6 +15,7 @@ import {
 import { renderPrintPreviewHtml } from "../../print/renderPrintPreviewHtml";
 import { prepareExportSessionForRaster } from "../../print/rasterPrep";
 import { mountGoldenPrintSession, waitForGoldenRenderSettled } from "../../print/printSession";
+import { PRINT_PREVIEW_STYLESHEET_HREF } from "../../print/printStylesheetHref";
 import { shiftBuilderVersionLabel } from "../../version";
 import type { PrintConfig } from "../../components/PrintCommandCenter";
 
@@ -49,7 +50,7 @@ export default function ExportDebugPage() {
         includeTimestamp: true,
       });
 
-      const shell = `<!DOCTYPE html><html class="${document.documentElement.className}"><head><link rel="stylesheet" href="/shiftbuilder-print-preview.css" /></head><body class="printing-dual-mode" style="margin:0;background:#fff"><div class="print-dual-container">${html}</div></body></html>`;
+      const shell = `<!DOCTYPE html><html class="${document.documentElement.className}"><head><link rel="stylesheet" href="${PRINT_PREVIEW_STYLESHEET_HREF}" /></head><body class="printing-dual-mode" style="margin:0;background:#fff"><div class="print-dual-container">${html}</div></body></html>`;
       setIframeSrc(shell);
 
       const kind = view === "breaks" ? "breaks" : "deploy";

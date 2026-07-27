@@ -17,6 +17,7 @@ import {
   withWhiteDocumentBackground,
 } from "./rasterPrep";
 import { waitForGoldenRenderSettled } from "./printSession";
+import { PRINT_PREVIEW_STYLESHEET_HREF } from "./printStylesheetHref";
 import {
   collectAndSuppressEditableTmFields,
   type EditablePdfTmField,
@@ -345,7 +346,7 @@ export async function rasterizeGoldenPageHtml(args: {
       `<style>${rootVars}</style>` +
       `<style>${fontCss}</style>` +
       linkTags +
-      '<link rel="stylesheet" href="/shiftbuilder-print-preview.css" />' +
+      `<link rel="stylesheet" href="${PRINT_PREVIEW_STYLESHEET_HREF}" />` +
       "</head><body class=\"printing-dual-mode golden-export-raster\" " +
       'style="margin:0;padding:0;background:#ffffff">' +
       `<div class="print-dual-container" style="width:${GOLDEN_WIDTH_PX}px;height:${GOLDEN_HEIGHT_PX}px;background:#ffffff;overflow:hidden;margin:0;padding:0">` +

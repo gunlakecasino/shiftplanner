@@ -4276,6 +4276,10 @@ button,
   line-height: 1.2;
 }
 
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-package-card-task-list .sb-list-row[data-task-depth="1"] {
+  padding-left: 12px !important;
+}
+
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-list-row::before {
   content: "•";
   flex: 0 0 auto;
