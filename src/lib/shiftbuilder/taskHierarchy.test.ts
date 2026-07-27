@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { taskHierarchyDepth } from "./taskHierarchy";
+import {
+  taskHierarchyDepth,
+  taskHierarchyFontSizePx,
+} from "./taskHierarchy";
 
 describe("taskHierarchyDepth", () => {
   it.each(["Black Tray Carts", "Trash", "Vacuum"])(
@@ -12,6 +15,18 @@ describe("taskHierarchyDepth", () => {
 
   it("does not indent the Poker Room parent", () => {
     expect(taskHierarchyDepth("Z4", "Poker Room")).toBe(0);
+  });
+
+  it.each(["Locker Rooms", "Restroom", "Smoking Room"])(
+    "indents the Zone 5 Team Member Hallway child task %s",
+    (taskLabel) => {
+      expect(taskHierarchyDepth("Z5", taskLabel)).toBe(1);
+      expect(taskHierarchyDepth("zone_5", taskLabel)).toBe(1);
+    },
+  );
+
+  it("does not indent the Team Member Hallway parent", () => {
+    expect(taskHierarchyDepth("Z5", "Team Member Hallway")).toBe(0);
   });
 
   it.each(["Red Tray Carts", "Vacuum", "Trash"])(
@@ -29,5 +44,12 @@ describe("taskHierarchyDepth", () => {
   it("does not indent matching task names in other zones", () => {
     expect(taskHierarchyDepth("Z6", "Vacuum")).toBe(0);
     expect(taskHierarchyDepth("Z4", "Red Tray Carts")).toBe(0);
+    expect(taskHierarchyDepth("Z9", "Smoking Room")).toBe(0);
+  });
+
+  it("renders indented subtasks one point smaller than their parent size", () => {
+    expect(taskHierarchyFontSizePx(11, 1)).toBe(10);
+    expect(taskHierarchyFontSizePx(13, 1)).toBe(12);
+    expect(taskHierarchyFontSizePx(11, 0)).toBe(11);
   });
 });

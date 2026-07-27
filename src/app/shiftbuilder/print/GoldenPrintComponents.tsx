@@ -27,7 +27,10 @@ import {
 import type { PrintTaskLine } from "./printPreviewTypes";
 import { TaskMarkerLabel } from "../components/TaskMarkerLabel";
 import { TASK_LABEL_COLOR, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
-import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
+import {
+  taskHierarchyDepth,
+  taskHierarchyFontSizePx,
+} from "@/lib/shiftbuilder/taskHierarchy";
 import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
 import {
@@ -95,20 +98,27 @@ export function GoldenTaskRow({
 }) {
   const textColor = hasTM ? TASK_LABEL_COLOR.primary : TASK_LABEL_COLOR.secondary;
   const hierarchyDepth = slotKey ? taskHierarchyDepth(slotKey, task.label) : 0;
+  const fontSizePx = taskHierarchyFontSizePx(
+    task.textStyle?.fontSizePx ?? TASK_LABEL_SIZE_PX.print,
+    hierarchyDepth,
+  );
+  const renderedTextStyle = task.textStyle?.fontSizePx
+    ? { ...task.textStyle, fontSizePx: undefined }
+    : task.textStyle;
   return (
     <div
       className="sb-list-row relative flex items-start gap-1.5 rounded px-1 -mx-0.5 py-0 leading-[1.05]"
       data-task-depth={hierarchyDepth || undefined}
-      style={{ fontSize: TASK_LABEL_SIZE_PX.print }}
+      style={{ fontSize: fontSizePx }}
     >
       <div data-task-label className="min-w-0 flex-1 leading-[1.05]">
         <TaskMarkerLabel
           label={task.label}
           color={task.color}
           markerType={task.markerType}
-          textStyle={task.textStyle}
+          textStyle={renderedTextStyle}
           isPrintPreview
-          fontSize={`${TASK_LABEL_SIZE_PX.print}px`}
+          fontSize={`${fontSizePx}px`}
           textColor={textColor}
           className="block rounded-sm font-bold py-px min-w-0 max-w-full"
           // Wrap overflow onto a new indented line (no "…"). Matches builder hanging indent.

@@ -13,7 +13,10 @@ import {
   taskLabelSizeClass,
   TASK_LABEL_SIZE_PX,
 } from "@/lib/shiftbuilder/taskTextStyle";
-import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
+import {
+  taskHierarchyDepth,
+  taskHierarchyFontSizePx,
+} from "@/lib/shiftbuilder/taskHierarchy";
 // Shared color palette for tasks (used by TaskRow accent + TaskTextEditPad)
 // Using iOS 26 system colors for accents/highlights
 export const TASK_COLOR_SPHERES = [
@@ -76,11 +79,23 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   const hasColor = !!task.color;
   const showMarker = shouldRenderTaskMarker(markerType, task.color);
   const labelRef = React.useRef<HTMLSpanElement>(null);
-  const baseSizePx = parseTaskLabelSizePx(textSize, TASK_LABEL_SIZE_PX.default);
-  const shrinkSizePx = taskLabelShrinkPx(baseSizePx);
-  const [fontSize, setFontSize] = React.useState(
-    isPrintPreview ? `${TASK_LABEL_SIZE_PX.print}px` : `${baseSizePx}px`,
+  const hierarchyDepth = taskHierarchyDepth(slotKey, task.taskLabel);
+  const configuredSizePx =
+    task.textStyle?.fontSizePx ??
+    parseTaskLabelSizePx(textSize, TASK_LABEL_SIZE_PX.default);
+  const baseSizePx = taskHierarchyFontSizePx(
+    configuredSizePx,
+    hierarchyDepth,
   );
+  const shrinkSizePx = taskLabelShrinkPx(baseSizePx);
+  const renderedTextStyle = React.useMemo(
+    () =>
+      task.textStyle?.fontSizePx
+        ? { ...task.textStyle, fontSizePx: undefined }
+        : task.textStyle,
+    [task.textStyle],
+  );
+  const [fontSize, setFontSize] = React.useState(`${baseSizePx}px`);
   const [hanging, setHanging] = React.useState<{ textIndent: string; paddingLeft: string }>({
     textIndent: '0',
     paddingLeft: '0',
@@ -95,7 +110,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     if (isPrintPreview) {
       // Static compact for Golden print/export — no ResizeObserver during capture.
       // Long labels wrap with a hanging indent (tab) instead of trailing off with "…".
-      const staticSize = `${parseTaskLabelSizePx(textSize, TASK_LABEL_SIZE_PX.print)}px`;
+      const staticSize = `${baseSizePx}px`;
       setFontSize(staticSize);
       setHanging({ textIndent: "-1em", paddingLeft: "1em" });
       return;
@@ -214,7 +229,6 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
   }, [canDrag, taskDragListeners]);
 
   const taskHostId = `task-${slotKey}-${task.id}`;
-  const hierarchyDepth = taskHierarchyDepth(slotKey, task.taskLabel);
 
   return (
     <div
@@ -238,7 +252,7 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
             label={task.taskLabel}
             color={showMarker ? task.color : null}
             markerType={showMarker ? markerType : "none"}
-            textStyle={task.textStyle}
+            textStyle={renderedTextStyle}
             isPrintPreview={isPrintPreview}
             fontSize={fontSize}
             hanging={hanging}
