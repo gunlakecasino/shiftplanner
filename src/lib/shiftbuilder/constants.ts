@@ -257,13 +257,17 @@ export const getAuxIcon = (key: string, role?: AuxRole) => {
 
 // iOS 26 system colors for card title accents / highlights (from design tokens)
 // Yellow, red, pink, blue, brown, green etc. respectively for visual identity
+export const SB_ZONE_6_ACCENT = "#C05A98";
+export const SB_ZONE_6_INK = "#7D3A68";
+export const SB_ZONE_1_COVERAGE = "#946E00";
+
 export const ZONE_COLORS: Record<string, string> = {
   Z1:  '#ffcc00', // yellow (gold/entry)
   Z2:  '#ffcc00', // yellow — matches Z1
   Z3:  '#ff3b30', // red
   Z4:  '#ff3b30', // red
   Z5:  '#ff3b30', // red
-  Z6:  '#ff2d55', // pink
+  Z6:  SB_ZONE_6_ACCENT, // subdued orchid pink
   Z7:  '#007aff', // blue
   Z8:  '#a2845e', // brown
   Z9:  '#ff3b30', // red
@@ -279,6 +283,7 @@ export const SB_GOLD_INK = "#d4a800";
 const CARD_ACCENT_INK: Record<string, string> = {
   "#ffcc00": SB_GOLD_INK,
   "#ffdb4d": SB_GOLD_INK,
+  [SB_ZONE_6_ACCENT.toLowerCase()]: SB_ZONE_6_INK,
 };
 
 export function cardAccentInk(displayColor: string): string {
@@ -290,11 +295,20 @@ export function isGoldAccent(displayColor: string): boolean {
   return key === "#ffcc00" || key === "#ffdb4d";
 }
 
-/** Slightly muted gold for coverage banners (less harsh than #ffcc00 stripe). */
+/** Darker same-family tones keep white coverage text legible in print. */
 export function coverageBarBg(displayColor: string): string {
   const key = displayColor.trim().toLowerCase();
-  if (key === "#ffcc00" || key === "#ffdb4d") return "#D4A800";
-  return displayColor;
+  const coverageColors: Record<string, string> = {
+    "#ffcc00": SB_ZONE_1_COVERAGE,
+    "#ffdb4d": SB_ZONE_1_COVERAGE,
+    "#ff3b30": "#B42318",
+    "#ff2d55": "#A90E3D",
+    [SB_ZONE_6_ACCENT.toLowerCase()]: SB_ZONE_6_INK,
+    "#007aff": "#0057B8",
+    "#a2845e": "#6F5438",
+    "#34c759": "#176B32",
+  };
+  return coverageColors[key] ?? displayColor;
 }
 
 export function getOverlapAccent(slotKey: string): string {
@@ -313,7 +327,7 @@ export function overlapSlotLabel(slotKey: string): string {
 // RR accent — mirrors the zone color of the area each RR serves (iOS 26 palette)
 export const RR_COLORS: Record<number, string> = {
   1:  '#ffcc00', // yellow (Main Entry, paired with Z1/Z2)
-  6:  '#ff2d55', // pink (Slots East, matches Z6)
+  6:  SB_ZONE_6_ACCENT, // subdued orchid pink (matches Z6)
   7:  '#007aff', // blue (High Limit, matches Z7)
   8:  '#a2845e', // brown (Table Games, paired with Z8)
   10: '#34c759', // green (Poker, paired with Z10)

@@ -31,7 +31,11 @@ import {
   taskHierarchyDepth,
   taskHierarchyFontSizePx,
 } from "@/lib/shiftbuilder/taskHierarchy";
-import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
+import {
+  formatCoverageSideLabel,
+  formatSecondaryZonePrimaryLabel,
+  type CoveredByEntry,
+} from "@/lib/shiftbuilder/coverageHelpers";
 import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
 import {
   EDITABLE_PDF_TM_SOURCE_ATTR,
@@ -50,6 +54,43 @@ function GoldenCoveredByBlock({
   targetSlotKey?: string;
   scale: CoveredScale;
 }) {
+  const zoneRows =
+    scale === "zone" && targetSlotKey
+      ? coveredBy.map((entry) => ({
+          name:
+            coveredBy.length > 1 && entry.side
+              ? `${formatCoverageSideLabel(targetSlotKey, entry.side)} ${entry.tmName}`
+              : entry.tmName,
+          primaryZoneLabel: formatSecondaryZonePrimaryLabel(
+            targetSlotKey,
+            entry.sourceKey,
+          ),
+        }))
+      : [];
+  const showPrimaryZoneContext = zoneRows.some(
+    (row) => row.primaryZoneLabel !== null,
+  );
+
+  if (showPrimaryZoneContext) {
+    return (
+      <div className="sb-golden-covered-zone-lines">
+        {zoneRows.map((row) => (
+          <div
+            key={`${row.name}-${row.primaryZoneLabel ?? ""}`}
+            className="sb-golden-covered-zone-line"
+          >
+            <span className="sb-golden-covered-zone-name">{row.name}</span>
+            {row.primaryZoneLabel ? (
+              <span className="sb-golden-covered-zone-primary">
+                {row.primaryZoneLabel}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <CoveredByPrintLabel
       coveredBy={coveredBy}
@@ -281,6 +322,7 @@ export function GoldenZoneCard({
   const ink = cardAccentInk(color);
   const icon = ZONE_ICONS[slotKey] ?? "●";
   const isEmpty = empty || !tmName?.trim();
+  const isCovered = isEmpty && Boolean(coveredBy?.length);
   const regular = tasks.filter((t) => !t.isCoverage);
   const coverageCount = tasks.filter((t) => t.isCoverage).length;
   const coveragePad = coverageCount > 0 ? coverageCount * COVERAGE_BAR_H + 8 : 12;
@@ -290,7 +332,7 @@ export function GoldenZoneCard({
     <div
       className={`assignment-card sb-assignment-card relative overflow-hidden flex flex-col h-full rounded-[3px] ${
         isEmpty ? "empty sb-card-empty" : ""
-      }`}
+      } ${isCovered ? "covered sb-card-covered" : ""}`}
       style={{ ["--card-accent" as string]: color }}
       data-slot-key={slotKey}
       onClick={onClick}
@@ -362,7 +404,7 @@ export function GoldenZoneCard({
           </>
         )}
         {isEmpty && showTasksWhenEmpty && regular.length > 0 ? (
-          <GoldenTaskList tasks={regular} hasTM={false} slotKey={slotKey} />
+          <GoldenTaskList tasks={regular} hasTM={isCovered} slotKey={slotKey} />
         ) : null}
       </div>
       <GoldenCoverageStack tasks={tasks} color={color} />

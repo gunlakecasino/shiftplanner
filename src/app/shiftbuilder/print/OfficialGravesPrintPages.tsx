@@ -3,15 +3,19 @@ import {
   AUX_ROLE_COLORS,
   BREAK_GROUP_OVERLAPS,
   RR_DEFS,
+  SB_ZONE_6_ACCENT,
+  SB_ZONE_6_INK,
   ZONE_DEFS,
   ZONE_VISUAL_ORDER,
   cardAccentInk,
+  coverageBarBg,
   getOverlapAccent,
   getRRAccent,
   getZoneColor,
 } from "@/lib/shiftbuilder/constants";
 import {
   buildCoveredByIndex,
+  formatSecondaryZonePrimaryLabel,
   formatCoveragePositionLabel,
   formatCoverageSideLabel,
   getSlotCoverageLabel,
@@ -50,6 +54,7 @@ const APPROVED_ACCENT_INK: Record<string, string> = {
   "#ffcc00": "#7a5a00",
   "#ff3b30": "#b42318",
   "#ff2d55": "#a90e3d",
+  [SB_ZONE_6_ACCENT.toLowerCase()]: SB_ZONE_6_INK,
   "#007aff": "#0057b8",
   "#a2845e": "#6f5438",
   "#34c759": "#176b32",
@@ -246,13 +251,19 @@ function ApprovedAssignmentCard({
   const assignment = snapshot.assignments[slotKey] ?? {};
   const assignedName = printAssigneeName(assignment.tmName, assignment.tmId);
   const isCovered = !assignedName && coveredBy.length > 0;
-  const names = assignedName
-    ? [assignedName]
-    : coveredBy.map((entry) =>
-        coveredBy.length > 1 && entry.side
-          ? `${formatCoverageSideLabel(slotKey, entry.side)} ${entry.tmName}`
-          : entry.tmName,
-      );
+  const nameRows = assignedName
+    ? [{ name: assignedName, primaryZoneLabel: null }]
+    : coveredBy.map((entry) => ({
+        name:
+          coveredBy.length > 1 && entry.side
+            ? `${formatCoverageSideLabel(slotKey, entry.side)} ${entry.tmName}`
+            : entry.tmName,
+        primaryZoneLabel: formatSecondaryZonePrimaryLabel(
+          slotKey,
+          entry.sourceKey,
+        ),
+      }));
+  const names = nameRows.map((row) => row.name);
   const breakGroup = assignedName
     ? assignment.breakGroup
     : coveredBy.length === 1
@@ -268,12 +279,17 @@ function ApprovedAssignmentCard({
     !!footer &&
     (tasks.length >= (compact ? 3 : 4) || (names.length > 1 && tasks.length >= 2));
   const ink = approvedAccentInk(accent);
+  const coverageBg = coverageBarBg(accent);
   const hasEditableTmField = Boolean(assignedName) || coveredBy.length === 0;
 
   return (
     <div
       className={`sb-approved-assignment-card ${compact ? "is-compact" : ""} ${dense ? "is-dense" : ""} ${isCovered ? "is-covered" : ""} ${showOpenWork ? "is-open-work" : ""} ${footer ? "has-footer" : ""}`.trim()}
-      style={{ ["--approved-accent" as string]: accent, ["--approved-ink" as string]: ink }}
+      style={{
+        ["--approved-accent" as string]: accent,
+        ["--approved-ink" as string]: ink,
+        ["--approved-coverage" as string]: coverageBg,
+      }}
       data-slot-key={slotKey}
     >
       <div className="sb-approved-card-accent" />
@@ -307,7 +323,16 @@ function ApprovedAssignmentCard({
             className={`sb-approved-card-names ${names.length > 1 ? "is-multiple" : ""}`}
             {...(assignedName ? EDITABLE_PDF_TM_SOURCE_ATTR : {})}
           >
-            {names.map((name) => <div key={name}>{name}</div>)}
+            {nameRows.map((row) => (
+              <div key={`${row.name}-${row.primaryZoneLabel ?? ""}`}>
+                <span>{row.name}</span>
+                {row.primaryZoneLabel ? (
+                  <span className="sb-approved-card-primary-zone">
+                    {row.primaryZoneLabel}
+                  </span>
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : null}
         {tasks.length > 0 ? (

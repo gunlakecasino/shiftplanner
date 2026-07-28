@@ -35,6 +35,26 @@ export function getSlotCoverageLabel(uiKey: string): string {
   return uiKey;
 }
 
+function directZoneNumber(slotKey: string): string | null {
+  const normalized = slotKey.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const match = normalized.match(/^(?:Z|ZONE)(10|[1-9])$/);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Context shown beside the TM name on a covered secondary-zone print card.
+ * Only direct zone-to-zone coverage qualifies; restroom and auxiliary
+ * fallback retain their existing covered-by presentation.
+ */
+export function formatSecondaryZonePrimaryLabel(
+  targetSlotKey: string,
+  sourceSlotKey: string,
+): string | null {
+  if (!directZoneNumber(targetSlotKey)) return null;
+  const sourceZone = directZoneNumber(sourceSlotKey);
+  return sourceZone ? `AND ZONE ${sourceZone}` : null;
+}
+
 /** Numeric / short suffix for A/B badges (Z6 → 6, MRR8 → 8, Z9SR → 9SR). */
 export function coveragePositionSuffix(targetSlotKey: string): string {
   if (targetSlotKey === "Z9SR") return "9SR";

@@ -163,6 +163,63 @@ body.golden-export-raster .print-dual-container .print-artboard .sb-covered-by-p
   column-gap: 5px;
 }
 
+.sb-golden-covered-zone-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 1px 4px;
+}
+
+.sb-golden-covered-zone-line {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.sb-golden-covered-zone-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #111827;
+  font-family: var(--font-atkinson);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+}
+
+.sb-golden-covered-zone-primary,
+.sb-approved-card-primary-zone {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  color: #929292;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: -0.1px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.print-artboard .sb-assignment-card.sb-card-covered {
+  border-color: #c9cdd3 !important;
+  background: #f4f5f6 !important;
+}
+
+.print-artboard .sb-assignment-card.sb-card-covered > :first-child {
+  opacity: 0.68;
+}
+
+.print-artboard .sb-assignment-card.sb-card-covered > :nth-child(2) {
+  opacity: 0.76;
+}
+
+.print-artboard .sb-assignment-card.sb-card-covered .sb-golden-covered-zone-name {
+  color: #626872;
+}
+
 body.printing-dual-mode .print-dual-container .print-artboard .sb-builder-section,
 body.golden-export-raster .print-dual-container .print-artboard .sb-builder-section {
   flex-shrink: 0;
@@ -176,7 +233,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   --sb-print-accent-green: #34c759;
   --sb-print-accent-red: #ff3b30;
   --sb-print-accent-blue: #007aff;
-  --sb-print-accent-pink: #ff2d55;
+  --sb-print-accent-pink: #C05A98;
   --sb-print-accent-brown: #a2845e;
   --sb-print-task-weight: 700;
   --sb-print-coverage-font-px: 11px;
@@ -1547,8 +1604,28 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-approved-assignment-card.is-covered {
-  border-color: #9db4cc;
-  background: #f4f8fc;
+  border-color: #c9cdd3;
+  background: #f4f5f6;
+}
+
+.sb-approved-assignment-card.is-covered .sb-approved-card-accent {
+  opacity: 0.68;
+}
+
+.sb-approved-assignment-card.is-covered .sb-approved-card-header > span:first-child {
+  opacity: 0.76;
+}
+
+.sb-approved-assignment-card.is-covered .sb-approved-break-pill {
+  background: #4b5563;
+}
+
+.sb-approved-assignment-card.is-covered .sb-approved-card-names {
+  color: #626872;
+}
+
+.sb-approved-assignment-card.is-covered .sb-approved-card-tasks {
+  color: #111827;
 }
 
 .sb-approved-assignment-card.is-open-work {
@@ -1628,6 +1705,10 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   letter-spacing: 0;
 }
 
+.sb-approved-card-primary-zone {
+  font-size: 11px;
+}
+
 .sb-approved-card-tasks {
   margin-top: 9px;
   color: #111827;
@@ -1646,7 +1727,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   box-sizing: border-box;
   color: #fff;
   -webkit-text-fill-color: #fff;
-  background: var(--approved-ink);
+  background: var(--approved-coverage, var(--approved-ink));
   font-size: 9.5px;
   line-height: 1.05;
   font-weight: 800;

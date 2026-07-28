@@ -88,7 +88,7 @@
   --sb-z3:  #ff3b30; /* red */
   --sb-z4:  #ff3b30;
   --sb-z5:  #ff3b30;
-  --sb-z6:  #ff2d55; /* pink */
+  --sb-z6:  #C05A98; /* subdued orchid pink */
   --sb-z7:  #007aff; /* blue */
   --sb-z8:  #a2845e; /* brown */
   --sb-z9:  #ff3b30;
@@ -96,7 +96,7 @@
 
   /* ── Restroom colors (iOS 26) ────────────────────────────────────────── */
   --sb-rr1:  #ffcc00;
-  --sb-rr6:  #ff2d55;
+  --sb-rr6:  #C05A98;
   --sb-rr7:  #007aff;
   --sb-rr8:  #a2845e;
   --sb-rr10: #34c759;

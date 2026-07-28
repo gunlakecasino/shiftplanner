@@ -4,7 +4,7 @@ export const ZONE_COLORS: Record<number, { border: string; bg: string; chip: str
   3:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
   4:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
   5:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
-  6:  { border: "border-l-[#D96B9A]", bg: "bg-[#D96B9A]", chip: "bg-[#fce8f3] text-[#b03c78]", label: "#D96B9A" },
+  6:  { border: "border-l-[#C05A98]", bg: "bg-[#C05A98]", chip: "bg-[#f3e2ec] text-[#7D3A68]", label: "#C05A98" },
   7:  { border: "border-l-[#4B7BE8]", bg: "bg-[#4B7BE8]", chip: "bg-[#e6edfc] text-[#2449a8]", label: "#4B7BE8" },
   8:  { border: "border-l-[#9B6A45]", bg: "bg-[#9B6A45]", chip: "bg-[#f5ebe0] text-[#6b3e1e]", label: "#9B6A45" },
   9:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
