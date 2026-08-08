@@ -42,6 +42,19 @@ const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
 const TALL_OVERLAP_TASK_LINE_THRESHOLD = 4;
 const PAGE_ONE_TASK_PREVIEW = 3;
 
+export function configuredOfficialAuxDefs(
+  auxDefs: PrintDaySnapshot["auxDefs"],
+): PrintDaySnapshot["auxDefs"] {
+  return auxDefs.filter(
+    (def) => def.role !== "blank" || !!def.label?.trim(),
+  );
+}
+
+export function officialAuxGridColumnCount(auxCardCount: number): number {
+  // Side Tasks occupies one cell beside every configured AUX card.
+  return Math.max(1, auxCardCount + 1);
+}
+
 export function pageTaskRowsForOverlapRows(rows: PrintOverlapRow[]): number {
   return rows
     .flatMap((row) => row.slots)
@@ -440,9 +453,8 @@ export function OfficialGravesDeploymentPage({
       ) || coveredByIndex[`MRR${def.num}`]?.length ? 1 : 0),
     0,
   );
-  const auxDefs = snapshot.auxDefs
-    .filter((def) => def.role !== "blank" || !!def.label?.trim())
-    .slice(0, 3);
+  const auxDefs = configuredOfficialAuxDefs(snapshot.auxDefs);
+  const auxGridColumnCount = officialAuxGridColumnCount(auxDefs.length);
   const auxAssigned = auxDefs.filter(
     (def) =>
       hasPrintAssigneeName(
@@ -539,7 +551,12 @@ export function OfficialGravesDeploymentPage({
 
         <section className="sb-approved-aux-section">
           <ApprovedSectionHeader label="AUXILIARY" count={auxAssigned} />
-          <div className="sb-approved-aux-grid">
+          <div
+            className="sb-approved-aux-grid"
+            style={{
+              gridTemplateColumns: `repeat(${auxGridColumnCount}, minmax(0, 1fr))`,
+            }}
+          >
             {auxDefs.map((def) => (
               <ApprovedAssignmentCard
                 key={def.key}
