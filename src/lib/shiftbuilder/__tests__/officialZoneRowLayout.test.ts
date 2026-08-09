@@ -128,4 +128,22 @@ describe("official zone row layout", () => {
       cssValue: "127fr 127fr",
     });
   });
+
+  it("reserves two compact rows for four auxiliary cards", () => {
+    const tracks = solveOfficialDeploymentTracks({
+      zoneRows: [
+        Array.from({ length: 5 }, () => emptyCard),
+        Array.from({ length: 5 }, () => emptyCard),
+      ],
+      restroomRows: [
+        Array.from({ length: 5 }, () => emptyCard),
+        Array.from({ length: 5 }, () => emptyCard),
+      ],
+      auxiliaryCards: Array.from({ length: 4 }, () => emptyCard),
+      auxiliaryRows: 2,
+    });
+
+    expect(tracks.auxiliary).toBeGreaterThanOrEqual(125);
+    expect(tracks.zones + tracks.restrooms + tracks.auxiliary).toBe(689);
+  });
 });

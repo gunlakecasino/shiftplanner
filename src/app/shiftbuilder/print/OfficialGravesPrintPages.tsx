@@ -50,9 +50,15 @@ export function configuredOfficialAuxDefs(
   );
 }
 
-export function officialAuxGridColumnCount(auxCardCount: number): number {
-  // Side Tasks occupies one cell beside every configured AUX card.
-  return Math.max(1, auxCardCount + 1);
+export function officialAuxCardGridShape(auxCardCount: number): {
+  columns: number;
+  rows: number;
+} {
+  const columns = Math.max(1, Math.min(2, auxCardCount));
+  return {
+    columns,
+    rows: Math.max(1, Math.ceil(auxCardCount / columns)),
+  };
 }
 
 export function pageTaskRowsForOverlapRows(rows: PrintOverlapRow[]): number {
@@ -179,7 +185,7 @@ function SideTasksSummaryCard({ tasks }: { tasks: PrintSideTask[] }) {
   const rows = active.length <= PAGE_ONE_TASK_PREVIEW ? active : active.slice(0, 2);
 
   return (
-    <div className="sb-approved-side-task-card">
+    <div className={`sb-approved-side-task-card ${active.length === 0 ? "is-empty" : ""}`}>
       <div className="sb-side-task-summary-header">
         <span>SIDE TASKS</span>
         {active.length > 0 ? (
@@ -250,6 +256,7 @@ function ApprovedAssignmentCard({
   coveredBy = [],
   coverageTargets = [],
   compact = false,
+  auxMini = false,
   blankWhenEmpty = true,
 }: {
   slotKey: string;
@@ -259,6 +266,7 @@ function ApprovedAssignmentCard({
   coveredBy?: CoveredByEntry[];
   coverageTargets?: string[];
   compact?: boolean;
+  auxMini?: boolean;
   blankWhenEmpty?: boolean;
 }) {
   const assignment = snapshot.assignments[slotKey] ?? {};
@@ -297,7 +305,7 @@ function ApprovedAssignmentCard({
 
   return (
     <div
-      className={`sb-approved-assignment-card ${compact ? "is-compact" : ""} ${dense ? "is-dense" : ""} ${isCovered ? "is-covered" : ""} ${showOpenWork ? "is-open-work" : ""} ${footer ? "has-footer" : ""}`.trim()}
+      className={`sb-approved-assignment-card ${compact ? "is-compact" : ""} ${auxMini ? "is-aux-mini" : ""} ${empty ? "is-empty" : ""} ${dense ? "is-dense" : ""} ${isCovered ? "is-covered" : ""} ${showOpenWork ? "is-open-work" : ""} ${footer ? "has-footer" : ""}`.trim()}
       style={{
         ["--approved-accent" as string]: accent,
         ["--approved-ink" as string]: ink,
@@ -319,8 +327,10 @@ function ApprovedAssignmentCard({
           <EditablePdfTmFieldAnchor
             slotKey={slotKey}
             value={assignedName}
-            fontSizePx={compact ? 18 : 19}
-            style={{ left: 9, right: 9, top: 4, height: compact ? 21 : 23 }}
+            fontSizePx={auxMini ? 12 : compact ? 18 : 19}
+            style={auxMini
+              ? { left: 7, right: 7, top: 2, height: 16 }
+              : { left: 9, right: 9, top: 4, height: compact ? 21 : 23 }}
           />
         ) : null}
         {showOpenWork ? (
@@ -454,7 +464,7 @@ export function OfficialGravesDeploymentPage({
     0,
   );
   const auxDefs = configuredOfficialAuxDefs(snapshot.auxDefs);
-  const auxGridColumnCount = officialAuxGridColumnCount(auxDefs.length);
+  const auxGridShape = officialAuxCardGridShape(auxDefs.length);
   const auxAssigned = auxDefs.filter(
     (def) =>
       hasPrintAssigneeName(
@@ -485,6 +495,7 @@ export function OfficialGravesDeploymentPage({
     zoneRows: [zoneLoads.slice(0, 5), zoneLoads.slice(5)],
     restroomRows: [restroomLoads.slice(0, 5), restroomLoads.slice(5)],
     auxiliaryCards: auxiliaryLoads,
+    auxiliaryRows: auxGridShape.rows,
   });
 
   return (
@@ -551,25 +562,29 @@ export function OfficialGravesDeploymentPage({
 
         <section className="sb-approved-aux-section">
           <ApprovedSectionHeader label="AUXILIARY" count={auxAssigned} />
-          <div
-            className="sb-approved-aux-grid"
-            style={{
-              gridTemplateColumns: `repeat(${auxGridColumnCount}, minmax(0, 1fr))`,
-            }}
-          >
-            {auxDefs.map((def) => (
-              <ApprovedAssignmentCard
-                key={def.key}
-                slotKey={def.key}
-                label={def.role === "z9sr" ? "ZONE 9 SMOKING ROOM" : (def.label || def.locations?.[0] || def.key).toUpperCase()}
-                accent={def.role !== "blank" ? AUX_ROLE_COLORS[def.role] : "#9ca3af"}
-                snapshot={snapshot}
-                coveredBy={coveredByIndex[def.key]}
-                coverageTargets={coverageTargetsBySource[def.key]}
-                compact
-                blankWhenEmpty={def.role === "admin" || def.role === "z9sr"}
-              />
-            ))}
+          <div className="sb-approved-aux-grid">
+            <div
+              className="sb-approved-aux-card-grid"
+              style={{
+                gridTemplateColumns: `repeat(${auxGridShape.columns}, minmax(0, 1fr))`,
+                gridTemplateRows: `repeat(${auxGridShape.rows}, minmax(0, 1fr))`,
+              }}
+            >
+              {auxDefs.map((def) => (
+                <ApprovedAssignmentCard
+                  key={def.key}
+                  slotKey={def.key}
+                  label={def.role === "z9sr" ? "ZONE 9 SMOKING ROOM" : (def.label || def.locations?.[0] || def.key).toUpperCase()}
+                  accent={def.role !== "blank" ? AUX_ROLE_COLORS[def.role] : "#9ca3af"}
+                  snapshot={snapshot}
+                  coveredBy={coveredByIndex[def.key]}
+                  coverageTargets={coverageTargetsBySource[def.key]}
+                  compact
+                  auxMini
+                  blankWhenEmpty={def.role === "admin" || def.role === "z9sr"}
+                />
+              ))}
+            </div>
             <SideTasksSummaryCard tasks={snapshot.sideTasks ?? []} />
           </div>
         </section>

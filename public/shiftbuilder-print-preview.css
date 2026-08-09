@@ -1583,7 +1583,16 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   height: calc(100% - 33px);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 11px;
+  column-gap: 11px;
+  min-height: 0;
+}
+
+.sb-approved-aux-card-grid {
+  grid-column: 1 / span 2;
+  display: grid;
+  gap: 8px 11px;
+  min-width: 0;
+  min-height: 0;
 }
 
 .sb-approved-aux-section .sb-approved-section-header {
@@ -1776,6 +1785,53 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   line-height: 1.02;
 }
 
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-accent {
+  height: 4px;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-header {
+  height: 20px;
+  padding: 4px 7px 0;
+  font-size: 8.5px;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-break-pill {
+  min-width: 20px;
+  height: 13px;
+  padding: 0 4px;
+  border-radius: 5px;
+  font-size: 7px;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-body {
+  top: 20px;
+  padding: 2px 7px;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-names {
+  font-size: 12px;
+  letter-spacing: -0.1px;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-names.is-multiple {
+  font-size: 9.5px;
+  line-height: 1.05;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-primary-zone {
+  font-size: 7.5px;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-tasks {
+  margin-top: 2px;
+  font-size: 7.5px;
+}
+
+.sb-approved-assignment-card.is-aux-mini.is-empty {
+  height: 20px;
+  align-self: start;
+}
+
 .sb-approved-open-work {
   display: inline-flex;
   min-height: 16px;
@@ -1790,7 +1846,13 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-approved-side-task-card {
   grid-column: 4;
+  align-self: stretch;
   border-color: #b9a7e8;
+}
+
+.sb-approved-side-task-card.is-empty {
+  height: 28px;
+  align-self: start;
 }
 
 .sb-approved-side-task-card::before {

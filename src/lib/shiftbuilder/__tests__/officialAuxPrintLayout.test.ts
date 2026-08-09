@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import {
   configuredOfficialAuxDefs,
-  officialAuxGridColumnCount,
+  officialAuxCardGridShape,
 } from "@/app/shiftbuilder/print/OfficialGravesPrintPages";
 
 describe("official AUX print layout", () => {
-  it("keeps all four configured AUX cards and reserves a fifth column for Side Tasks", () => {
+  it("keeps all four configured AUX cards in a compact two-by-two grid", () => {
     const auxDefs: AuxDef[] = [
       { key: "AUX1", role: "admin", label: "ADMIN", locations: ["Floor Admin"] },
       { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: ["Z9 Smoking Room"] },
@@ -22,7 +22,10 @@ describe("official AUX print layout", () => {
       "AUX3",
       "AUX4",
     ]);
-    expect(officialAuxGridColumnCount(configured.length)).toBe(5);
+    expect(officialAuxCardGridShape(configured.length)).toEqual({
+      columns: 2,
+      rows: 2,
+    });
   });
 
   it("omits only truly unconfigured blank shells", () => {
@@ -34,6 +37,9 @@ describe("official AUX print layout", () => {
     const configured = configuredOfficialAuxDefs(auxDefs);
 
     expect(configured.map((def) => def.key)).toEqual(["AUX1"]);
-    expect(officialAuxGridColumnCount(configured.length)).toBe(2);
+    expect(officialAuxCardGridShape(configured.length)).toEqual({
+      columns: 1,
+      rows: 1,
+    });
   });
 });

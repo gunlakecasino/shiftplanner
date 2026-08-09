@@ -50,6 +50,7 @@ const SECTION_HEADER_PX = 30;
 const AUX_SECTION_HEADER_PX = 33;
 const ROW_GAP_PX = 8;
 const MIN_AUX_CARD_TRACK_PX = 59;
+const MIN_AUX_MINI_ROW_PX = 42;
 
 /**
  * Estimate wrapped task lines at the fixed approved-card width.
@@ -163,7 +164,18 @@ function sectionNeed(rows: OfficialZoneRowTracks): number {
   return SECTION_HEADER_PX + rows.first + rows.second + ROW_GAP_PX;
 }
 
-function auxSectionNeed(cards: OfficialZoneCardLoad[]): number {
+function auxSectionNeed(
+  cards: OfficialZoneCardLoad[],
+  rowCount: number,
+): number {
+  if (rowCount > 1) {
+    return (
+      AUX_SECTION_HEADER_PX +
+      rowCount * MIN_AUX_MINI_ROW_PX +
+      (rowCount - 1) * ROW_GAP_PX
+    );
+  }
+
   return (
     AUX_SECTION_HEADER_PX +
     Math.max(
@@ -183,17 +195,19 @@ export function solveOfficialDeploymentTracks({
   zoneRows,
   restroomRows,
   auxiliaryCards,
+  auxiliaryRows = 1,
 }: {
   zoneRows: [OfficialZoneCardLoad[], OfficialZoneCardLoad[]];
   restroomRows: [OfficialZoneCardLoad[], OfficialZoneCardLoad[]];
   auxiliaryCards: OfficialZoneCardLoad[];
+  auxiliaryRows?: number;
 }): OfficialDeploymentTracks {
   const solvedZoneRows = solveOfficialZoneRowTracks(...zoneRows);
   const solvedRestroomRows = solveOfficialZoneRowTracks(...restroomRows);
   const required = {
     zones: sectionNeed(solvedZoneRows),
     restrooms: sectionNeed(solvedRestroomRows),
-    auxiliary: auxSectionNeed(auxiliaryCards),
+    auxiliary: auxSectionNeed(auxiliaryCards, auxiliaryRows),
   };
   const tracks = { ...required };
   let remaining =
@@ -220,7 +234,7 @@ export function solveOfficialDeploymentTracks({
     const floors = {
       zones: SECTION_HEADER_PX + MIN_ROW_TRACK_PX * 2 + ROW_GAP_PX,
       restrooms: SECTION_HEADER_PX + MIN_ROW_TRACK_PX * 2 + ROW_GAP_PX,
-      auxiliary: AUX_SECTION_HEADER_PX + MIN_AUX_CARD_TRACK_PX,
+      auxiliary: required.auxiliary,
     };
     let deficit = -remaining;
     (["auxiliary", "zones", "restrooms"] as const).forEach((section) => {
