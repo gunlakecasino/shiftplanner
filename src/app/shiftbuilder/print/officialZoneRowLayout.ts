@@ -39,6 +39,8 @@ const TASK_LINE_PX = 11 * 1.08;
 const COMPACT_TASK_LINE_PX = 10.5 * 1.08;
 const DENSE_TASK_LINE_PX = 10 * 1.02;
 const COMPACT_DENSE_TASK_LINE_PX = 9.5 * 1.02;
+const TALL_TASK_STACK_SAFETY_PX = 10;
+const TALL_TASK_STACK_LINE_THRESHOLD = 6;
 const SINGLE_NAME_LINE_CAPACITY = 18;
 const COMPACT_SINGLE_NAME_LINE_CAPACITY = 19;
 const COMPACT_DENSE_NAME_LINE_CAPACITY = 21;
@@ -157,7 +159,11 @@ export function estimateOfficialZoneCardHeight(load: OfficialZoneCardLoad): numb
   const tasksHeight =
     taskLines === 0
       ? 0
-      : taskMargin + taskLines * taskLine;
+      : taskMargin +
+        taskLines * taskLine +
+        (taskLines >= TALL_TASK_STACK_LINE_THRESHOLD
+          ? TALL_TASK_STACK_SAFETY_PX
+          : 0);
 
   return Math.ceil(
     CARD_HEADER_PX +

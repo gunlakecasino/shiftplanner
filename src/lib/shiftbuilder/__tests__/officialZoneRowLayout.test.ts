@@ -93,6 +93,7 @@ describe("official zone row layout", () => {
       hasFooter: false,
     });
 
+    expect(shortName).toBe(175);
     expect(wrappedName).toBe(shortName + 19);
   });
 
