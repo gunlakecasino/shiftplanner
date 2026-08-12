@@ -46,6 +46,7 @@ const COMPACT_SINGLE_NAME_LINE_CAPACITY = 19;
 const COMPACT_DENSE_NAME_LINE_CAPACITY = 21;
 const MULTIPLE_NAME_LINE_CAPACITY = 24;
 const DENSE_MULTIPLE_NAME_LINE_CAPACITY = 26;
+const DENSE_CARD_TASK_THRESHOLD = 8;
 const MIN_ROW_TRACK_PX = 72;
 const DEPLOYMENT_BODY_PX = 689;
 const BASE_SECTION_TRACKS = {
@@ -118,12 +119,19 @@ function estimatedNameLines(
   );
 }
 
+export function isOfficialZoneCardDense(load: OfficialZoneCardLoad): boolean {
+  const compact = load.compact === true;
+  return (
+    load.tasks.length >= DENSE_CARD_TASK_THRESHOLD ||
+    (load.hasFooter &&
+      (load.tasks.length >= (compact ? 3 : 4) ||
+        (load.names.length > 1 && load.tasks.length >= 2)))
+  );
+}
+
 export function estimateOfficialZoneCardHeight(load: OfficialZoneCardLoad): number {
   const compact = load.compact === true;
-  const dense =
-    load.hasFooter &&
-    (load.tasks.length >= (compact ? 3 : 4) ||
-      (load.names.length > 1 && load.tasks.length >= 2));
+  const dense = isOfficialZoneCardDense(load);
   const nameLines = estimatedNameLines(load.names, dense, compact);
   const nameHeight =
     nameLines === 0

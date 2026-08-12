@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   estimateOfficialZoneCardHeight,
+  isOfficialZoneCardDense,
   solveOfficialDeploymentTracks,
   solveOfficialZoneRowTracks,
   type OfficialZoneCardLoad,
@@ -11,6 +12,19 @@ const emptyCard: OfficialZoneCardLoad = {
   tasks: [],
   hasFooter: false,
 };
+
+const standardZoneFiveTasks = [
+  "Chill Bar: Bartop Machines",
+  "Promo Stage",
+  "Team Member Hallway",
+  "Locker Rooms",
+  "Restroom",
+  "Smoking Room",
+  "High Limit Table Games",
+  "Red Tray Carts",
+  "Vacuum",
+  "Trash",
+];
 
 describe("official zone row layout", () => {
   it("keeps equally loaded rows equal", () => {
@@ -72,27 +86,22 @@ describe("official zone row layout", () => {
   });
 
   it("reserves a second assignee line before laying out Zone 5 tasks", () => {
-    const zoneFiveTasks = [
-      "Team Member Hallway",
-      "Locker Rooms",
-      "Restroom",
-      "Smoking Room",
-      "High Limit Table Games",
-      "Red Tray Carts",
-      "Vacuum",
-      "Trash",
-    ];
     const shortName = estimateOfficialZoneCardHeight({
       names: ["Pat"],
-      tasks: zoneFiveTasks,
+      tasks: standardZoneFiveTasks,
       hasFooter: false,
     });
     const wrappedName = estimateOfficialZoneCardHeight({
       names: ["Christopher Richardson"],
-      tasks: zoneFiveTasks,
+      tasks: standardZoneFiveTasks,
       hasFooter: false,
     });
 
+    expect(isOfficialZoneCardDense({
+      names: ["Pat"],
+      tasks: standardZoneFiveTasks,
+      hasFooter: false,
+    })).toBe(true);
     expect(shortName).toBe(175);
     expect(wrappedName).toBe(shortName + 19);
   });
@@ -105,16 +114,7 @@ describe("official zone row layout", () => {
     };
     const wrappedZoneFive: OfficialZoneCardLoad = {
       names: ["Christopher Richardson"],
-      tasks: [
-        "Team Member Hallway",
-        "Locker Rooms",
-        "Restroom",
-        "Smoking Room",
-        "High Limit Table Games",
-        "Red Tray Carts",
-        "Vacuum",
-        "Trash",
-      ],
+      tasks: standardZoneFiveTasks,
       hasFooter: false,
     };
 

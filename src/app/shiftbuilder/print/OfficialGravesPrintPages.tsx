@@ -30,6 +30,7 @@ import {
   EditablePdfTmFieldAnchor,
 } from "./editablePdfFields";
 import {
+  isOfficialZoneCardDense,
   solveOfficialDeploymentTracks,
   solveOfficialZoneRowTracks,
   type OfficialZoneCardLoad,
@@ -296,9 +297,12 @@ function ApprovedAssignmentCard({
   const footer = coverageTargets.join(" / ");
   const footerText =
     footer === "ZONE 9 SMOKING ROOM" ? `AND ${footer}` : `ALSO COVERS ${footer}`;
-  const dense =
-    !!footer &&
-    (tasks.length >= (compact ? 3 : 4) || (names.length > 1 && tasks.length >= 2));
+  const dense = isOfficialZoneCardDense({
+    names,
+    tasks,
+    hasFooter: !!footer,
+    compact,
+  });
   const ink = approvedAccentInk(accent);
   const coverageBg = coverageBarBg(accent);
   const hasEditableTmField = Boolean(assignedName) || coveredBy.length === 0;
