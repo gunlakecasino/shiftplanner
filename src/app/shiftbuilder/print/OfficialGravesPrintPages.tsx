@@ -30,13 +30,13 @@ import {
   EditablePdfTmFieldAnchor,
 } from "./editablePdfFields";
 import {
+  buildOfficialTaskRows,
   isOfficialZoneCardDense,
   solveOfficialDeploymentTracks,
   solveOfficialZoneRowTracks,
   type OfficialZoneCardLoad,
 } from "./officialZoneRowLayout";
 import { AsOfTimestamp } from "./AsOfTimestamp";
-import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
@@ -298,6 +298,7 @@ function ApprovedAssignmentCard({
   const footerText =
     footer === "ZONE 9 SMOKING ROOM" ? `AND ${footer}` : `ALSO COVERS ${footer}`;
   const dense = isOfficialZoneCardDense({
+    slotKey,
     names,
     tasks,
     hasFooter: !!footer,
@@ -364,14 +365,16 @@ function ApprovedAssignmentCard({
         ) : null}
         {tasks.length > 0 ? (
           <div className="sb-approved-card-tasks">
-            {tasks.map((task, index) => {
-              const hierarchyDepth = taskHierarchyDepth(slotKey, task);
+            {buildOfficialTaskRows(slotKey, tasks).map((row, rowIndex) => {
               return (
                 <div
-                  key={`${task}-${index}`}
-                  data-task-depth={hierarchyDepth || undefined}
+                  key={`${row.tasks.join("|")}-${rowIndex}`}
+                  className={row.tasks.length > 1 ? "sb-approved-subtask-row" : undefined}
+                  data-task-depth={row.depth || undefined}
                 >
-                  - {task}
+                  {row.tasks.map((task) => (
+                    <span key={task}>- {task}</span>
+                  ))}
                 </div>
               );
             })}
@@ -411,6 +414,7 @@ export function OfficialGravesDeploymentPage({
         );
 
     return {
+      slotKey,
       names,
       tasks: taskLabels(snapshot, slotKey),
       hasFooter: (coverageTargetsBySource[slotKey]?.length ?? 0) > 0,
@@ -440,6 +444,7 @@ export function OfficialGravesDeploymentPage({
           );
 
       return {
+        slotKey,
         names,
         tasks: taskLabels(snapshot, slotKey),
         hasFooter: (coverageTargetsBySource[slotKey]?.length ?? 0) > 0,
@@ -486,6 +491,7 @@ export function OfficialGravesDeploymentPage({
       const coveredBy = coveredByIndex[def.key] ?? [];
 
       return {
+        slotKey: def.key,
         names: assignedName
           ? [assignedName]
           : coveredBy.map((entry) => entry.tmName),

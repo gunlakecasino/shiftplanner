@@ -1,4 +1,7 @@
+import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
+
 export type OfficialZoneCardLoad = {
+  slotKey?: string;
   names: string[];
   tasks: string[];
   hasFooter: boolean;
@@ -60,6 +63,46 @@ const ROW_GAP_PX = 8;
 const MIN_AUX_CARD_TRACK_PX = 59;
 const MIN_AUX_MINI_ROW_PX = 42;
 
+export type OfficialTaskRow = {
+  depth: 0 | 1;
+  tasks: string[];
+};
+
+/**
+ * Zone 5 has two explicit parent/child families. Its print card uses two
+ * compact child columns so the hierarchy stays visible without consuming ten
+ * separate lines. All other slots preserve one task per row.
+ */
+export function buildOfficialTaskRows(
+  slotKey: string | undefined,
+  tasks: string[],
+): OfficialTaskRow[] {
+  if (slotKey?.trim().toUpperCase() !== "Z5") {
+    return tasks.map((task) => ({ depth: 0, tasks: [task] }));
+  }
+
+  const rows: OfficialTaskRow[] = [];
+  let subtasks: string[] = [];
+  const flushSubtasks = () => {
+    for (let index = 0; index < subtasks.length; index += 2) {
+      rows.push({ depth: 1, tasks: subtasks.slice(index, index + 2) });
+    }
+    subtasks = [];
+  };
+
+  tasks.forEach((task) => {
+    if (taskHierarchyDepth(slotKey, task) === 1) {
+      subtasks.push(task);
+      return;
+    }
+    flushSubtasks();
+    rows.push({ depth: 0, tasks: [task] });
+  });
+  flushSubtasks();
+
+  return rows;
+}
+
 /**
  * Estimate wrapped task lines at the fixed approved-card width.
  * This deliberately errs slightly tall so print never trades legibility for
@@ -84,17 +127,19 @@ function estimatedWrappedLines(value: string, lineCapacity: number): number {
 }
 
 function estimatedTaskLines(
+  slotKey: string | undefined,
   tasks: string[],
   dense: boolean,
   compact: boolean,
 ): number {
   const lineCapacity = compact ? (dense ? 34 : 32) : dense ? 31 : 29;
 
-  return tasks.reduce(
-    (total, task) =>
-      total + estimatedWrappedLines(`- ${task}`, lineCapacity),
-    0,
-  );
+  return buildOfficialTaskRows(slotKey, tasks).reduce((total, row) => {
+    if (row.tasks.length === 1) {
+      return total + estimatedWrappedLines(`- ${row.tasks[0]}`, lineCapacity);
+    }
+    return total + 1;
+  }, 0);
 }
 
 function estimatedNameLines(
@@ -149,7 +194,7 @@ export function estimateOfficialZoneCardHeight(load: OfficialZoneCardLoad): numb
             : dense
               ? DENSE_MULTIPLE_NAME_LINE_PX
               : MULTIPLE_NAME_LINE_PX);
-  const taskLines = estimatedTaskLines(load.tasks, dense, compact);
+  const taskLines = estimatedTaskLines(load.slotKey, load.tasks, dense, compact);
   const taskMargin = dense
     ? compact
       ? COMPACT_DENSE_TASK_MARGIN_PX

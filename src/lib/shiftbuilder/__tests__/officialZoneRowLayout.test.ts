@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOfficialTaskRows,
   estimateOfficialZoneCardHeight,
   isOfficialZoneCardDense,
   solveOfficialDeploymentTracks,
@@ -27,6 +28,24 @@ const standardZoneFiveTasks = [
 ];
 
 describe("official zone row layout", () => {
+  it("pairs only Zone 5 subtasks beneath their parent rows", () => {
+    expect(buildOfficialTaskRows("Z5", standardZoneFiveTasks)).toEqual([
+      { depth: 0, tasks: ["Chill Bar: Bartop Machines"] },
+      { depth: 0, tasks: ["Promo Stage"] },
+      { depth: 0, tasks: ["Team Member Hallway"] },
+      { depth: 1, tasks: ["Locker Rooms", "Restroom"] },
+      { depth: 1, tasks: ["Smoking Room"] },
+      { depth: 0, tasks: ["High Limit Table Games"] },
+      { depth: 1, tasks: ["Red Tray Carts", "Vacuum"] },
+      { depth: 1, tasks: ["Trash"] },
+    ]);
+    expect(buildOfficialTaskRows("Z4", ["Poker Room", "Trash"]))
+      .toEqual([
+        { depth: 0, tasks: ["Poker Room"] },
+        { depth: 0, tasks: ["Trash"] },
+      ]);
+  });
+
   it("keeps equally loaded rows equal", () => {
     const load: OfficialZoneCardLoad = {
       names: ["Porter"],
@@ -87,22 +106,25 @@ describe("official zone row layout", () => {
 
   it("reserves a second assignee line before laying out Zone 5 tasks", () => {
     const shortName = estimateOfficialZoneCardHeight({
+      slotKey: "Z5",
       names: ["Pat"],
       tasks: standardZoneFiveTasks,
       hasFooter: false,
     });
     const wrappedName = estimateOfficialZoneCardHeight({
+      slotKey: "Z5",
       names: ["Christopher Richardson"],
       tasks: standardZoneFiveTasks,
       hasFooter: false,
     });
 
     expect(isOfficialZoneCardDense({
+      slotKey: "Z5",
       names: ["Pat"],
       tasks: standardZoneFiveTasks,
       hasFooter: false,
     })).toBe(true);
-    expect(shortName).toBe(175);
+    expect(shortName).toBe(155);
     expect(wrappedName).toBe(shortName + 19);
   });
 
@@ -113,6 +135,7 @@ describe("official zone row layout", () => {
       hasFooter: false,
     };
     const wrappedZoneFive: OfficialZoneCardLoad = {
+      slotKey: "Z5",
       names: ["Christopher Richardson"],
       tasks: standardZoneFiveTasks,
       hasFooter: false,
