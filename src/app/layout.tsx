@@ -2,11 +2,11 @@
 // PRODUCTION-READY — ShiftBuilder v1.0.0 floor release (June 24, 2026)
 // UI frozen. Hardening only: security headers, structured logging, audit API, route aliases, UX transitions.
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { Geist, Geist_Mono } from "next/font/google";
 import {
   Atkinson_Hyperlegible,
   Bricolage_Grotesque,
-  Inter_Tight,
   JetBrains_Mono,
 } from "next/font/google";
 import "./globals.css";
@@ -40,11 +40,14 @@ const bricolage = Bricolage_Grotesque({
   axes: ["opsz"],
 });
 
-// Inter Tight — Velvet UI body font (top bar, labels, buttons, roster)
-const interTight = Inter_Tight({
+// Inter Tight — Velvet UI body font (top bar, labels, buttons, roster).
+// Keep this font local so production builds do not depend on fonts.gstatic.com.
+const interTight = localFont({
+  src: "./fonts/inter-tight-latin-variable.woff2",
   variable: "--font-inter-tight",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
 });
 
 // JetBrains Mono — Velvet mono font (time codes, slot keys, counts, kbd hints)
