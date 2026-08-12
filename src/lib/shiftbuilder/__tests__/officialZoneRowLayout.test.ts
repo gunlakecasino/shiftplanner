@@ -71,6 +71,68 @@ describe("official zone row layout", () => {
     expect(wrappedWithFooter).toBeGreaterThan(plain + 20);
   });
 
+  it("reserves a second assignee line before laying out Zone 5 tasks", () => {
+    const zoneFiveTasks = [
+      "Team Member Hallway",
+      "Locker Rooms",
+      "Restroom",
+      "Smoking Room",
+      "High Limit Table Games",
+      "Red Tray Carts",
+      "Vacuum",
+      "Trash",
+    ];
+    const shortName = estimateOfficialZoneCardHeight({
+      names: ["Pat"],
+      tasks: zoneFiveTasks,
+      hasFooter: false,
+    });
+    const wrappedName = estimateOfficialZoneCardHeight({
+      names: ["Christopher Richardson"],
+      tasks: zoneFiveTasks,
+      hasFooter: false,
+    });
+
+    expect(wrappedName).toBe(shortName + 19);
+  });
+
+  it("transfers page height to a Zone 5 row with a wrapped assignee", () => {
+    const normal: OfficialZoneCardLoad = {
+      names: ["Pat"],
+      tasks: ["Task one", "Task two"],
+      hasFooter: false,
+    };
+    const wrappedZoneFive: OfficialZoneCardLoad = {
+      names: ["Christopher Richardson"],
+      tasks: [
+        "Team Member Hallway",
+        "Locker Rooms",
+        "Restroom",
+        "Smoking Room",
+        "High Limit Table Games",
+        "Red Tray Carts",
+        "Vacuum",
+        "Trash",
+      ],
+      hasFooter: false,
+    };
+
+    const tracks = solveOfficialDeploymentTracks({
+      zoneRows: [
+        [normal, normal, normal, wrappedZoneFive, normal],
+        Array.from({ length: 5 }, () => normal),
+      ],
+      restroomRows: [
+        Array.from({ length: 5 }, () => normal),
+        Array.from({ length: 5 }, () => normal),
+      ],
+      auxiliaryCards: [emptyCard, emptyCard, emptyCard],
+    });
+
+    expect(tracks.zones).toBeGreaterThan(296);
+    expect(tracks.zones + tracks.restrooms + tracks.auxiliary).toBe(689);
+  });
+
   it("models compact dense restroom cards using their print typography", () => {
     const denseRestroom = estimateOfficialZoneCardHeight({
       names: ["Porter"],

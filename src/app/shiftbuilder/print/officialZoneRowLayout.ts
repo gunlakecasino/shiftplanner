@@ -39,6 +39,11 @@ const TASK_LINE_PX = 11 * 1.08;
 const COMPACT_TASK_LINE_PX = 10.5 * 1.08;
 const DENSE_TASK_LINE_PX = 10 * 1.02;
 const COMPACT_DENSE_TASK_LINE_PX = 9.5 * 1.02;
+const SINGLE_NAME_LINE_CAPACITY = 18;
+const COMPACT_SINGLE_NAME_LINE_CAPACITY = 19;
+const COMPACT_DENSE_NAME_LINE_CAPACITY = 21;
+const MULTIPLE_NAME_LINE_CAPACITY = 24;
+const DENSE_MULTIPLE_NAME_LINE_CAPACITY = 26;
 const MIN_ROW_TRACK_PX = 72;
 const DEPLOYMENT_BODY_PX = 689;
 const BASE_SECTION_TRACKS = {
@@ -57,6 +62,24 @@ const MIN_AUX_MINI_ROW_PX = 42;
  * This deliberately errs slightly tall so print never trades legibility for
  * a mathematically tighter row.
  */
+function estimatedWrappedLines(value: string, lineCapacity: number): number {
+  const words = value.trim().split(/\s+/);
+  let lines = 1;
+  let used = 0;
+
+  words.forEach((word) => {
+    const next = used === 0 ? word.length : used + 1 + word.length;
+    if (next > lineCapacity && used > 0) {
+      lines += 1;
+      used = word.length;
+    } else {
+      used = next;
+    }
+  });
+
+  return lines;
+}
+
 function estimatedTaskLines(
   tasks: string[],
   dense: boolean,
@@ -64,23 +87,33 @@ function estimatedTaskLines(
 ): number {
   const lineCapacity = compact ? (dense ? 34 : 32) : dense ? 31 : 29;
 
-  return tasks.reduce((total, task) => {
-    const words = `- ${task}`.trim().split(/\s+/);
-    let lines = 1;
-    let used = 0;
+  return tasks.reduce(
+    (total, task) =>
+      total + estimatedWrappedLines(`- ${task}`, lineCapacity),
+    0,
+  );
+}
 
-    words.forEach((word) => {
-      const next = used === 0 ? word.length : used + 1 + word.length;
-      if (next > lineCapacity && used > 0) {
-        lines += 1;
-        used = word.length;
-      } else {
-        used = next;
-      }
-    });
+function estimatedNameLines(
+  names: string[],
+  dense: boolean,
+  compact: boolean,
+): number {
+  const multiple = names.length > 1;
+  const lineCapacity = multiple
+    ? dense
+      ? DENSE_MULTIPLE_NAME_LINE_CAPACITY
+      : MULTIPLE_NAME_LINE_CAPACITY
+    : compact
+      ? dense
+        ? COMPACT_DENSE_NAME_LINE_CAPACITY
+        : COMPACT_SINGLE_NAME_LINE_CAPACITY
+      : SINGLE_NAME_LINE_CAPACITY;
 
-    return total + lines;
-  }, 0);
+  return names.reduce(
+    (total, name) => total + estimatedWrappedLines(name, lineCapacity),
+    0,
+  );
 }
 
 export function estimateOfficialZoneCardHeight(load: OfficialZoneCardLoad): number {
@@ -89,16 +122,18 @@ export function estimateOfficialZoneCardHeight(load: OfficialZoneCardLoad): numb
     load.hasFooter &&
     (load.tasks.length >= (compact ? 3 : 4) ||
       (load.names.length > 1 && load.tasks.length >= 2));
+  const nameLines = estimatedNameLines(load.names, dense, compact);
   const nameHeight =
-    load.names.length === 0
+    nameLines === 0
       ? 0
       : load.names.length === 1
-        ? compact
-          ? dense
-            ? COMPACT_DENSE_NAME_PX
-            : COMPACT_SINGLE_NAME_PX
-          : SINGLE_NAME_PX
-        : load.names.length *
+        ? nameLines *
+          (compact
+            ? dense
+              ? COMPACT_DENSE_NAME_PX
+              : COMPACT_SINGLE_NAME_PX
+            : SINGLE_NAME_PX)
+        : nameLines *
           (compact && dense
             ? COMPACT_DENSE_NAME_PX
             : dense
