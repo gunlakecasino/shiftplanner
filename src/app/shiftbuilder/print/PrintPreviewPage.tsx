@@ -100,11 +100,9 @@ function AuxCardsSection({
 
 function OverlapRowsSection({
   overlapRows,
-  placementTrailsByTmId,
   className = "",
 }: {
   overlapRows: ReturnType<typeof buildOverlapRows>;
-  placementTrailsByTmId: Record<string, string[]>;
   className?: string;
 }) {
   return (
@@ -140,7 +138,6 @@ function OverlapRowsSection({
                     slotKey={slot.key}
                     tmName={slot.tmName}
                     tasks={slot.tasks}
-                    placementTrail={slot.tmId ? placementTrailsByTmId[slot.tmId] : undefined}
                   />
                 </div>
               ))}
@@ -169,7 +166,6 @@ export function PrintPreviewPage({
   const placementTrailsByTmId = snapshot.placementTrailsByTmId ?? {};
   const variantAttr = isPlanning ? "planning" : "official";
   const blankSlate = isPlanning && planningBlankSlate;
-  const planningNotes = blankSlate ? undefined : snapshot.notes;
   const coveredByForPlanning = blankSlate
     ? ({} as ReturnType<typeof buildCoveredByIndex>)
     : buildCoveredByIndex(assignments, tasksBySlot, auxDefs);
@@ -248,7 +244,6 @@ export function PrintPreviewPage({
             <div className="sb-breaks-planning-upper flex flex-col min-h-0 gap-1">
               <OverlapRowsSection
                 overlapRows={overlapRows}
-                placementTrailsByTmId={placementTrailsByTmId}
                 className="sb-planning-overlaps-block flex-shrink-0 pt-1"
               />
               <AuxCardsSection
@@ -263,7 +258,7 @@ export function PrintPreviewPage({
               />
             </div>
             {includeShiftNotes ? (
-              <GoldenPlanningNotesPanel notes={planningNotes} />
+              <GoldenPlanningNotesPanel />
             ) : null}
           </div>
         </div>
@@ -387,7 +382,6 @@ export function PrintPreviewPage({
 
           <OverlapRowsSection
             overlapRows={overlapRows}
-            placementTrailsByTmId={placementTrailsByTmId}
             className="mt-auto pt-1.5"
           />
         </div>

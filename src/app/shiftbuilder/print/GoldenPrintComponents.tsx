@@ -852,12 +852,10 @@ export function GoldenOverlapSlot({
   slotKey,
   tmName,
   tasks,
-  placementTrail,
 }: {
   slotKey: string;
   tmName?: string | null;
   tasks: PrintTaskLine[];
-  placementTrail?: string[];
 }) {
   const accent = getOverlapAccent(slotKey);
   const ink = cardAccentInk(accent);
@@ -926,7 +924,6 @@ export function GoldenOverlapSlot({
             >
               {tmName}
             </span>
-            <GoldenPlacementTrail labels={placementTrail} />
             <GoldenTaskList tasks={regular} hasTM dense />
           </>
         )}
@@ -1189,18 +1186,11 @@ function GoldenPlanningNotesColumn({
   );
 }
 
-export function GoldenPlanningNotesPanel({ notes }: { notes?: string }) {
-  const trimmed = notes?.trim() ?? "";
+export function GoldenPlanningNotesPanel() {
   return (
     <div className="golden-planning-notes-panel flex flex-col flex-1 min-h-0 border border-[#E5E5E7] rounded-[3px] bg-[#FAFAFB] overflow-hidden">
       <div className="golden-planning-notes-panel-grid grid flex-1 min-h-0 grid-cols-[35%_40%_25%]">
-        <GoldenPlanningNotesColumn label="Notes">
-          {trimmed ? (
-            <div className="golden-planning-notes-prefill flex-shrink-0 text-[9px] leading-[1.4] text-[#374151] whitespace-pre-wrap mb-1">
-              {trimmed}
-            </div>
-          ) : null}
-        </GoldenPlanningNotesColumn>
+        <GoldenPlanningNotesColumn label="Notes" />
         <GoldenPlanningNotesColumn label="Projects" />
         <GoldenPlanningNotesColumn label="Events" />
       </div>

@@ -59,15 +59,21 @@ function snapshot(): PrintDaySnapshot {
     day,
     assignments: {
       Z5: { tmId: "tm-jack", tmName: "Jack", breakGroup: 2 },
+      "OL-PM-0": { tmId: "tm-overlap", tmName: "Alex", breakGroup: 4 },
     },
-    tasksBySlot: { Z5: zoneFiveTasks },
+    tasksBySlot: {
+      Z5: zoneFiveTasks,
+      "OL-PM-0": [task("overlap-task", "Tables and Restrooms", 0)],
+    },
     auxDefs: [],
     amOverlapDayName: "Saturday",
     amOverlapDateNum: 15,
     nextDayColor: "#006ec8",
     breakCounts: { 1: 0, 2: 1, 3: 0, 4: 0 },
+    notes: "Saved shift note should not print in the writing grid.",
     placementTrailsByTmId: {
       "tm-jack": ["Z4", "RR8M", "ADMIN"],
+      "tm-overlap": ["Z6", "RR7W", "Z9SR"],
     },
   };
 }
@@ -99,6 +105,9 @@ describe("planning worksheet print", () => {
     expect(secondPageHtml).not.toContain("Shift Planning Notes");
     expect(secondPageHtml).not.toContain("golden-planning-notes-panel-title");
     expect(secondPageHtml).toContain(">Notes<");
+    expect(secondPageHtml).not.toContain("Saved shift note should not print");
+    expect(secondPageHtml).toContain("Alex");
+    expect(secondPageHtml).not.toContain("sb-golden-placement-trail");
     expect(html).toContain("sb-golden-placement-trail");
     expect(html).toContain("Z4");
     expect(html).toContain("RR8M");
@@ -107,6 +116,25 @@ describe("planning worksheet print", () => {
     expect(html).toContain("Red Tray Carts");
     expect(html).toContain("Vacuum");
     expect(html).toContain("Trash");
+  });
+
+  it("replaces the official page-two projects register with the writing grid", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PrintPreviewPage, {
+        view: "breaks",
+        snapshot: snapshot(),
+        weekDayDefs: [day],
+        printVariant: "official",
+      }),
+    );
+
+    expect(html).not.toContain("SIDE TASKS / PROJECTS");
+    expect(html).not.toContain("sb-side-task-register");
+    expect(html).toContain("sb-official-notes-projects-events");
+    expect(html).toContain(">Notes<");
+    expect(html).toContain(">Projects<");
+    expect(html).toContain(">Events<");
+    expect(html).not.toContain("Saved shift note should not print");
   });
 
   it("defaults sudo-admin print commands to no timestamp", () => {

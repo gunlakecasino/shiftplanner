@@ -725,16 +725,16 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper {
-  flex: 0 1 48%;
+  flex: 0 1 51%;
   min-height: 0;
-  max-height: 50%;
+  max-height: 52%;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel {
-  flex: 1.08 1 50%;
-  min-height: 50%;
+  flex: 1.08 1 47%;
+  min-height: 47%;
   margin-top: 2px;
 }
 
@@ -758,7 +758,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid {
-  grid-auto-rows: minmax(66px, 1fr) !important;
+  grid-auto-rows: minmax(82px, 1fr) !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"] .golden-planning-notes-column-body,
@@ -2030,6 +2030,32 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   height: 325px;
   min-height: 0;
   overflow: hidden;
+}
+
+.print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-official-notes-projects-events {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 405px;
+  min-height: 0;
+}
+
+.print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-official-notes-projects-events {
+  height: 373px;
+}
+
+.print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-official-notes-projects-events .golden-planning-notes-panel {
+  height: 100%;
+  border-color: #d1d5db;
+  border-radius: 5px;
+}
+
+.print-artboard.sb-graves-sheet[data-print-view="breaks"] .sb-official-notes-projects-events .golden-planning-notes-column-body {
+  background-color: #f8f8fa !important;
+  background-image: radial-gradient(circle, #d1d5db 0.45px, transparent 0.45px) !important;
+  background-size: 7px 7px !important;
+  background-position: 1px 1px !important;
 }
 
 .print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-side-task-register {

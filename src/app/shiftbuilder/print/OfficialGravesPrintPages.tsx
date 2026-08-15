@@ -37,6 +37,7 @@ import {
   type OfficialZoneCardLoad,
 } from "./officialZoneRowLayout";
 import { AsOfTimestamp } from "./AsOfTimestamp";
+import { GoldenPlanningNotesPanel } from "./GoldenPrintComponents";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
@@ -82,13 +83,6 @@ const APPROVED_ACCENT_INK: Record<string, string> = {
 
 function approvedAccentInk(accent: string): string {
   return APPROVED_ACCENT_INK[accent.toLowerCase()] ?? cardAccentInk(accent);
-}
-
-function formatCompletedTime(iso: string | null): string {
-  if (!iso) return "";
-  return new Date(iso)
-    .toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })
-    .replace(/\s+/g, " ");
 }
 
 function GravesZoneSheetHeader({
@@ -190,7 +184,7 @@ function SideTasksSummaryCard({ tasks }: { tasks: PrintSideTask[] }) {
       <div className="sb-side-task-summary-header">
         <span>SIDE TASKS</span>
         {active.length > 0 ? (
-          <span className="sb-side-task-summary-link">{active.length} ACTIVE - P2</span>
+          <span className="sb-side-task-summary-link">{active.length} ACTIVE</span>
         ) : null}
       </div>
       <div className="sb-side-task-summary-rows">
@@ -204,7 +198,7 @@ function SideTasksSummaryCard({ tasks }: { tasks: PrintSideTask[] }) {
           </div>
         ))}
         {active.length > PAGE_ONE_TASK_PREVIEW ? (
-          <div className="sb-side-task-summary-overflow">+{active.length - 2} MORE ON PAGE 2</div>
+          <div className="sb-side-task-summary-overflow">+{active.length - 2} MORE</div>
         ) : null}
       </div>
     </div>
@@ -603,68 +597,6 @@ export function OfficialGravesDeploymentPage({
   );
 }
 
-function CompletedCheckbox({ completed }: { completed: boolean }) {
-  return <span className={`sb-side-task-checkbox ${completed ? "is-complete" : ""}`}>{completed ? "✓" : ""}</span>;
-}
-
-function SideTaskRegister({ tasks, rowCount = PAGE_TASK_ROWS }: { tasks: PrintSideTask[]; rowCount?: number }) {
-  const visible = tasks.slice(0, rowCount);
-  const rows: Array<PrintSideTask | null> = [
-    ...visible,
-    ...Array.from({ length: Math.max(0, rowCount - visible.length) }, () => null),
-  ];
-
-  return (
-    <section className="sb-side-task-register">
-      <ApprovedStatusHeader
-        label="SIDE TASKS / PROJECTS"
-        statuses={[
-          { label: "CAPACITY", count: rowCount },
-          { label: "ENTRIES", count: visible.length },
-          { label: "OPEN WORK", count: visible.filter((task) => !task.assigneeName && !task.completed).length, tone: "open" },
-        ]}
-      />
-      <div className="sb-side-task-table">
-        <div className="sb-side-task-table-header">
-          <span>#</span>
-          <span>TASK / PROJECT</span>
-          <span>ASSIGNED TO</span>
-          <span className="is-centered">COMPLETED</span>
-          <span>COMPLETED BY</span>
-          <span>TIME</span>
-        </div>
-        {rows.map((task, index) => (
-          <div key={task?.id ?? `blank-${index}`} className="sb-side-task-table-row">
-            <span className="sb-side-task-index">{index + 1}</span>
-            <span className="sb-side-task-title">{task?.title ?? ""}</span>
-            <span className={`sb-side-task-assignee ${task && !task.assigneeName ? "is-open" : ""}`}>
-              {task ? task.assigneeName ?? "OPEN WORK" : ""}
-            </span>
-            <span className="sb-side-task-completed-cell">
-              <CompletedCheckbox completed={task?.completed === true} />
-            </span>
-            <span>{task?.completedByName ?? ""}</span>
-            <span className="sb-side-task-time">{task ? formatCompletedTime(task.completedAt) : ""}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function NotesChangesBand({ notes }: { notes?: string }) {
-  return (
-    <section className="sb-graves-notes-band">
-      <div className="sb-graves-notes-label">NOTES / CHANGES</div>
-      <div className="sb-graves-notes-lines">
-        {notes?.trim() ? <div className="sb-graves-notes-prefill">{notes.trim()}</div> : null}
-        <div />
-        <div />
-      </div>
-    </section>
-  );
-}
-
 function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] }) {
   const accent = getOverlapAccent(slot.key);
   const regularTasks = slot.tasks.filter((task) => !task.isCoverage);
@@ -749,11 +681,10 @@ export function OfficialGravesTasksPage({
   weekDayDefs,
   printedAt,
   includeTimestamp,
-  includeShiftNotes = true,
 }: Omit<PrintPreviewPageProps, "view">) {
   const overlapRows = buildOverlapRows(snapshot);
-  const sideTaskRows = pageTaskRowsForOverlapRows(overlapRows);
-  const overlapDensity = sideTaskRows < PAGE_TASK_ROWS ? "tall" : "normal";
+  const overlapDensity =
+    pageTaskRowsForOverlapRows(overlapRows) < PAGE_TASK_ROWS ? "tall" : "normal";
 
   return (
     <div
@@ -769,9 +700,10 @@ export function OfficialGravesTasksPage({
         printedAt={printedAt}
         includeTimestamp={includeTimestamp}
       />
-      <div className={`sb-graves-tasks-body ${includeShiftNotes ? "" : "sb-graves-tasks-body--no-notes"}`.trim()}>
-        <SideTaskRegister tasks={snapshot.sideTasks ?? []} rowCount={sideTaskRows} />
-        {includeShiftNotes ? <NotesChangesBand notes={snapshot.notes} /> : null}
+      <div className="sb-graves-tasks-body">
+        <section className="sb-official-notes-projects-events">
+          <GoldenPlanningNotesPanel />
+        </section>
         <OfficialOverlapsSection rows={overlapRows} snapshot={snapshot} />
       </div>
     </div>
