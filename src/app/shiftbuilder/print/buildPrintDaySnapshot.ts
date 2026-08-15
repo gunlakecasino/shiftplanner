@@ -1,7 +1,7 @@
-import { addDays } from "@/lib/shiftbuilder/dateUtils";
+import { addDays, formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { DAY_LONG, SHIFT_DAY_COLORS } from "@/lib/shiftbuilder/dateUtils";
-import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import { mapNightTasksToUiKeys } from "@/lib/shiftbuilder/mapNightTasksToUiKeys";
 import {
   ZONE_DEFS,
@@ -20,6 +20,10 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { fetchNightCoreData } from "@/app/shiftbuilder/hooks/fetchNightCoreData";
 import { fetchNightSecondaryData } from "@/app/shiftbuilder/hooks/fetchNightSecondaryData";
 import { hasPrintAssigneeName, printAssigneeName } from "./printAssigneeName";
+import {
+  buildPlacementTrailLabels,
+  PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+} from "@/app/shiftbuilder/components/placementPadHelpers";
 import type {
   PrintDaySnapshot,
   PrintPlanningCardModel,
@@ -50,6 +54,64 @@ export function slotShowsFilled(
 
 import { computeBreakCounts } from "@/lib/shiftbuilder/processNightData";
 export { computeBreakCounts };
+
+const PRINT_HISTORY_CHUNK_SIZE = 48;
+
+/**
+ * Add newest-first placement trails after persisted, live, and draft assignment
+ * overlays have settled. The history query is anchored to the planned night so
+ * a later planning page can include earlier built nights in the same week.
+ */
+export async function hydratePrintPlacementTrails(
+  snapshot: PrintDaySnapshot,
+): Promise<PrintDaySnapshot> {
+  const tmIds = [
+    ...new Set(
+      Object.values(snapshot.assignments)
+        .map((assignment) => assignment?.tmId)
+        .filter((tmId): tmId is string => Boolean(tmId)),
+    ),
+  ].sort();
+  if (tmIds.length === 0) return snapshot;
+
+  const placementTrailsByTmId = {
+    ...(snapshot.placementTrailsByTmId ?? {}),
+  };
+  const missingTmIds = tmIds.filter((tmId) => !(tmId in placementTrailsByTmId));
+  if (missingTmIds.length === 0) return snapshot;
+
+  const beforeIso = formatLocalDateISO(snapshot.day.date);
+  try {
+    for (let index = 0; index < missingTmIds.length; index += PRINT_HISTORY_CHUNK_SIZE) {
+      const chunk = missingTmIds.slice(index, index + PRINT_HISTORY_CHUNK_SIZE);
+      const response = await fetch("/api/shiftbuilder/placement-histories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tmIds: chunk,
+          days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+          throughDate: beforeIso,
+        }),
+      });
+      if (!response.ok) throw new Error(`placement-histories ${response.status}`);
+
+      const payload = (await response.json()) as {
+        histories?: Record<string, ZoneDetailEntry | null>;
+      };
+      for (const tmId of chunk) {
+        placementTrailsByTmId[tmId] = buildPlacementTrailLabels(
+          payload.histories?.[tmId] ?? null,
+          beforeIso,
+        );
+      }
+    }
+  } catch (error) {
+    console.warn("[print] placement trails unavailable", error);
+    return snapshot;
+  }
+
+  return { ...snapshot, placementTrailsByTmId };
+}
 
 function coverageFromTasks(tasks: PrintTaskLine[]): { label: string | null; color: string | null } {
   const cov = tasks.find((t) => t.isCoverage);
@@ -86,7 +148,11 @@ function accentForSlot(slotKey: string, auxDefs: AuxDef[]): string {
   return getAuxAccent(slotKey, def?.role);
 }
 
-export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Promise<PrintDaySnapshot> {
+export async function buildPrintDaySnapshot(
+  day: DayDef,
+  dayIndex: number,
+  options: { includePlacementTrails?: boolean } = {},
+): Promise<PrintDaySnapshot> {
   const [core, secondary] = await Promise.all([
     fetchNightCoreData(day, { printOnly: true }),
     fetchNightSecondaryData(day, { printOnly: true }),
@@ -97,7 +163,7 @@ export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Prom
 
   const nightStatus: "published" | "draft" = core.status === "published" ? "published" : "draft";
 
-  return {
+  const snapshot: PrintDaySnapshot = {
     dayIndex,
     day,
     assignments,
@@ -115,6 +181,10 @@ export async function buildPrintDaySnapshot(day: DayDef, dayIndex: number): Prom
     sideTasks: secondary.sideTasks ?? [],
     nightStatus,
   };
+
+  return options.includePlacementTrails
+    ? hydratePrintPlacementTrails(snapshot)
+    : snapshot;
 }
 
 export function buildZoneCardModels(snapshot: PrintDaySnapshot): PrintPlanningCardModel[] {

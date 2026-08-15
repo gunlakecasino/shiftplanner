@@ -42,6 +42,7 @@ import {
   EditablePdfTmFieldAnchor,
 } from "./editablePdfFields";
 import { AsOfTimestamp } from "./AsOfTimestamp";
+import { buildOfficialTaskRows } from "./officialZoneRowLayout";
 
 type CoveredScale = "zone" | "rr" | "aux";
 
@@ -188,6 +189,16 @@ export function GoldenTaskList({
   const fontSize = dense
     ? `var(--sb-print-task-dense-px, ${TASK_LABEL_SIZE_PX.printDense}px)`
     : `var(--sb-print-task-px, ${TASK_LABEL_SIZE_PX.print}px)`;
+  const rowPlan = buildOfficialTaskRows(
+    slotKey,
+    tasks.map((task) => task.label),
+  );
+  const taskRows = rowPlan.map((row, rowIndex) => {
+    const taskIndex = rowPlan
+      .slice(0, rowIndex)
+      .reduce((count, precedingRow) => count + precedingRow.tasks.length, 0);
+    return tasks.slice(taskIndex, taskIndex + row.tasks.length);
+  });
 
   return (
     <div
@@ -203,8 +214,53 @@ export function GoldenTaskList({
         overflow: "visible",
       }}
     >
-      {tasks.map((t) => (
-        <GoldenTaskRow key={t.id} task={t} hasTM={hasTM} slotKey={slotKey} />
+      {taskRows.map((rowTasks, rowIndex) => {
+        if (rowTasks.length === 1) {
+          const task = rowTasks[0];
+          return (
+            <GoldenTaskRow
+              key={task.id}
+              task={task}
+              hasTM={hasTM}
+              slotKey={slotKey}
+            />
+          );
+        }
+        return (
+          <div
+            key={`${rowTasks.map((task) => task.id).join("|")}-${rowIndex}`}
+            className="sb-golden-subtask-row"
+          >
+            {rowTasks.map((task) => (
+              <GoldenTaskRow
+                key={task.id}
+                task={task}
+                hasTM={hasTM}
+                slotKey={slotKey}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function GoldenPlacementTrail({ labels }: { labels?: string[] }) {
+  const recent = labels?.slice(0, 3) ?? [];
+  if (recent.length === 0) return null;
+
+  return (
+    <div
+      className="sb-golden-placement-trail"
+      aria-label={`Recent placements: ${recent.join(", ")}`}
+      title={`Last ${recent.length} placements (newest first): ${recent.join(" → ")}`}
+    >
+      {recent.map((label, index) => (
+        <React.Fragment key={`${label}-${index}`}>
+          {index > 0 ? <span aria-hidden>·</span> : null}
+          <span>{label}</span>
+        </React.Fragment>
       ))}
     </div>
   );
@@ -299,6 +355,7 @@ export function GoldenZoneCard({
   tasks,
   empty,
   coveredBy,
+  placementTrail,
   suppressBreakPill = false,
   showEmptyLabel = true,
   showTasksWhenEmpty = true,
@@ -313,6 +370,7 @@ export function GoldenZoneCard({
   tasks: PrintTaskLine[];
   empty?: boolean;
   coveredBy?: CoveredByEntry[];
+  placementTrail?: string[];
   suppressBreakPill?: boolean;
   showEmptyLabel?: boolean;
   showTasksWhenEmpty?: boolean;
@@ -400,6 +458,7 @@ export function GoldenZoneCard({
             >
               {tmName}
             </span>
+            <GoldenPlacementTrail labels={placementTrail} />
             <GoldenTaskList tasks={regular} hasTM slotKey={slotKey} />
           </>
         )}
@@ -422,6 +481,7 @@ export function GoldenRRSide({
   tasks,
   empty,
   coveredBy,
+  placementTrail,
   suppressBreakPill = false,
   showEmptyLabel = true,
   showTasksWhenEmpty = true,
@@ -435,6 +495,7 @@ export function GoldenRRSide({
   tasks: PrintTaskLine[];
   empty: boolean;
   coveredBy?: CoveredByEntry[];
+  placementTrail?: string[];
   suppressBreakPill?: boolean;
   showEmptyLabel?: boolean;
   showTasksWhenEmpty?: boolean;
@@ -501,18 +562,21 @@ export function GoldenRRSide({
             </div>
           ) : null
         ) : (
-          <span
-            className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
-            {...EDITABLE_PDF_TM_SOURCE_ATTR}
-            style={{
-              fontSize: 18,
-              lineHeight: 1.02,
-              fontFamily: "var(--font-atkinson)",
-              fontWeight: 700,
-            }}
-          >
-            {tmName}
-          </span>
+          <>
+            <span
+              className="sb-golden-assignee-name shrink-0 font-bold tracking-[-0.3px] text-[#111] truncate px-1 py-[1px] inline-block"
+              {...EDITABLE_PDF_TM_SOURCE_ATTR}
+              style={{
+                fontSize: 18,
+                lineHeight: 1.02,
+                fontFamily: "var(--font-atkinson)",
+                fontWeight: 700,
+              }}
+            >
+              {tmName}
+            </span>
+            <GoldenPlacementTrail labels={placementTrail} />
+          </>
         )}
         {!isEmpty || showTasksWhenEmpty ? (
           <GoldenTaskList tasks={regular} hasTM={!isEmpty} dense />
@@ -586,13 +650,15 @@ export function GoldenRRPrintGrid({
   suppressBreakPillKeys,
   showEmptyLabels = true,
   showTasksWhenEmpty = true,
+  placementTrailsByTmId = {},
 }: {
-  assignments: Record<string, { tmName?: string | null; breakGroup?: number }>;
+  assignments: Record<string, { tmId?: string; tmName?: string | null; breakGroup?: number }>;
   tasksBySlot: Record<string, NightSlotTask[] | PrintTaskLine[] | undefined>;
   coveredByIndex?: Record<string, CoveredByEntry[]>;
   suppressBreakPillKeys?: Set<string>;
   showEmptyLabels?: boolean;
   showTasksWhenEmpty?: boolean;
+  placementTrailsByTmId?: Record<string, string[]>;
 }) {
   const toLines = (key: string): PrintTaskLine[] =>
     toTaskLines(tasksBySlot[key] as NightSlotTask[] | PrintTaskLine[] | undefined);
@@ -616,6 +682,7 @@ export function GoldenRRPrintGrid({
               tasks={toLines(wKey)}
               empty={!a.tmName}
               coveredBy={coveredByIndex[wKey]}
+              placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
               suppressBreakPill={suppressBreakPillKeys?.has(wKey)}
               showEmptyLabel={showEmptyLabels}
               showTasksWhenEmpty={showTasksWhenEmpty}
@@ -640,6 +707,7 @@ export function GoldenRRPrintGrid({
               tasks={toLines(mKey)}
               empty={!a.tmName}
               coveredBy={coveredByIndex[mKey]}
+              placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
               suppressBreakPill={suppressBreakPillKeys?.has(mKey)}
               showEmptyLabel={showEmptyLabels}
               showTasksWhenEmpty={showTasksWhenEmpty}
@@ -658,6 +726,7 @@ export function GoldenAuxCard({
   tasks,
   empty,
   coveredBy,
+  placementTrail,
   suppressBreakPill = false,
   emptyLabel = "— Unassigned —",
   showTasksWhenEmpty = true,
@@ -668,6 +737,7 @@ export function GoldenAuxCard({
   tasks: PrintTaskLine[];
   empty?: boolean;
   coveredBy?: CoveredByEntry[];
+  placementTrail?: string[];
   suppressBreakPill?: boolean;
   /** null leaves an unassigned card visually blank. */
   emptyLabel?: string | null;
@@ -766,6 +836,7 @@ export function GoldenAuxCard({
             >
               {tmName}
             </span>
+            <GoldenPlacementTrail labels={placementTrail} />
             <GoldenTaskList tasks={regular} hasTM dense />
           </>
         ) : null}
@@ -781,10 +852,12 @@ export function GoldenOverlapSlot({
   slotKey,
   tmName,
   tasks,
+  placementTrail,
 }: {
   slotKey: string;
   tmName?: string | null;
   tasks: PrintTaskLine[];
+  placementTrail?: string[];
 }) {
   const accent = getOverlapAccent(slotKey);
   const ink = cardAccentInk(accent);
@@ -853,6 +926,7 @@ export function GoldenOverlapSlot({
             >
               {tmName}
             </span>
+            <GoldenPlacementTrail labels={placementTrail} />
             <GoldenTaskList tasks={regular} hasTM dense />
           </>
         )}
@@ -1055,19 +1129,6 @@ export function GoldenBreaksHeader({
           })}
         </div>
       </div>
-    </div>
-  );
-}
-
-export function GoldenPlanningHeaderBadge() {
-  return (
-    <div
-      className="golden-planning-header-badge flex-shrink-0 mb-0.5 px-2 py-[2px] rounded-[2px] border border-[#D1D5DB] bg-[#F3F4F6] text-center"
-      style={{ fontFamily: "var(--font-atkinson)" }}
-    >
-      <span className="text-[7.5px] font-extrabold tracking-[1.2px] uppercase text-[#4B5563]">
-        Planning Worksheet — Not For Floor Distribution
-      </span>
     </div>
   );
 }

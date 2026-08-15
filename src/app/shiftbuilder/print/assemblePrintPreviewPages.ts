@@ -1,6 +1,9 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { PrintConfig, PrintDayConfig } from "../components/PrintCommandCenter";
-import { buildPrintDaySnapshot } from "./buildPrintDaySnapshot";
+import {
+  buildPrintDaySnapshot,
+  hydratePrintPlacementTrails,
+} from "./buildPrintDaySnapshot";
 import {
   applyDraftToPrintSnapshot,
   applyLiveBoardToPrintSnapshot,
@@ -51,7 +54,9 @@ export async function capturePrintPreviewPages(args: {
     if (!dayConf) continue;
 
     onProgress?.(`Loading ${def.name}…`);
-    let snapshot = await buildPrintDaySnapshot(def, dayIdx);
+    let snapshot = await buildPrintDaySnapshot(def, dayIdx, {
+      includePlacementTrails: printVariant === "planning",
+    });
     const liveOverlay = liveOverlaysByDay?.get(dayIdx);
     if (liveOverlay) {
       snapshot = applyLiveBoardToPrintSnapshot(snapshot, liveOverlay);
@@ -62,6 +67,9 @@ export async function capturePrintPreviewPages(args: {
       Object.keys(draftAssignments).length > 0
     ) {
       snapshot = applyDraftToPrintSnapshot(snapshot, draftAssignments);
+    }
+    if (printVariant === "planning") {
+      snapshot = await hydratePrintPlacementTrails(snapshot);
     }
     const entry: { deployHTML?: string; breaksHTML?: string } = {};
 

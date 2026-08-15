@@ -587,6 +587,55 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   min-height: 0;
   opacity: 1;
   overflow: visible;
+  gap: 1px !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 2px;
+  min-width: 0;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row .sb-list-row,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row .sb-list-row,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row .sb-list-row {
+  min-width: 0;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row [data-task-label] span,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row [data-task-label] span,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] [data-slot-key="Z5"] .sb-golden-subtask-row [data-task-label] span {
+  white-space: nowrap !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 4px;
+  color: #6b7280;
+  font-family: var(--font-atkinson), var(--font-ui), system-ui, sans-serif;
+  font-size: 7.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail > span,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail > span,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail > span {
+  flex-shrink: 0;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-card-body,
@@ -653,6 +702,14 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] [data-task-label] span,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] [data-task-label] span {
   color: #374151 !important;
+  font-size: 9px !important;
+  line-height: 1.05 !important;
+}
+
+.print-stage-inner .print-artboard[data-print-variant="planning"] .sb-list-row[data-task-depth="1"] [data-task-label] span,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-list-row[data-task-depth="1"] [data-task-label] span,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-list-row[data-task-depth="1"] [data-task-label] span {
+  font-size: 8px !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"] .golden-shift-notes-band,
@@ -668,16 +725,16 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-breaks-planning-upper {
-  flex: 0 1 46%;
+  flex: 0 1 48%;
   min-height: 0;
-  max-height: 48%;
+  max-height: 50%;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .golden-planning-notes-panel {
-  flex: 1.08 1 52%;
-  min-height: 52%;
+  flex: 1.08 1 50%;
+  min-height: 50%;
   margin-top: 2px;
 }
 
@@ -701,7 +758,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .print-stage-inner .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"][data-print-view="breaks"] .sb-planning-aux-block .sb-print-card-grid {
-  grid-auto-rows: minmax(56px, 1fr) !important;
+  grid-auto-rows: minmax(66px, 1fr) !important;
 }
 
 .print-stage-inner .print-artboard[data-print-variant="planning"] .golden-planning-notes-column-body,

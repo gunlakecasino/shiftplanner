@@ -7,7 +7,6 @@ import {
   GoldenBreaksPlanningHeader,
   GoldenDeploymentHeader,
   GoldenOverlapSlot,
-  GoldenPlanningHeaderBadge,
   GoldenRRPrintGrid,
   GoldenSectionHeader,
   GoldenPlanningNotesPanel,
@@ -50,6 +49,7 @@ function AuxCardsSection({
   coveredByIndex,
   auxFilled,
   auxTotal,
+  placementTrailsByTmId,
   className = "",
   sectionStyle,
 }: {
@@ -59,6 +59,7 @@ function AuxCardsSection({
   coveredByIndex: ReturnType<typeof buildCoveredByIndex>;
   auxFilled: number;
   auxTotal: number;
+  placementTrailsByTmId: Record<string, string[]>;
   className?: string;
   sectionStyle?: React.CSSProperties;
 }) {
@@ -85,6 +86,7 @@ function AuxCardsSection({
                 tmName={a.tmName}
                 breakGroup={a.breakGroup ?? 0}
                 tasks={toTaskLines(tasksBySlot[def.key])}
+                placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
                 empty={!isBlank && !slotShowsFilled(def.key, assignments)}
                 coveredBy={coveredByIndex[def.key]}
               />
@@ -98,9 +100,11 @@ function AuxCardsSection({
 
 function OverlapRowsSection({
   overlapRows,
+  placementTrailsByTmId,
   className = "",
 }: {
   overlapRows: ReturnType<typeof buildOverlapRows>;
+  placementTrailsByTmId: Record<string, string[]>;
   className?: string;
 }) {
   return (
@@ -136,6 +140,7 @@ function OverlapRowsSection({
                     slotKey={slot.key}
                     tmName={slot.tmName}
                     tasks={slot.tasks}
+                    placementTrail={slot.tmId ? placementTrailsByTmId[slot.tmId] : undefined}
                   />
                 </div>
               ))}
@@ -161,6 +166,7 @@ export function PrintPreviewPage({
   const { day, assignments, auxDefs, tasksBySlot, breakCounts } = snapshot;
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
   const isPlanning = printVariant === "planning";
+  const placementTrailsByTmId = snapshot.placementTrailsByTmId ?? {};
   const variantAttr = isPlanning ? "planning" : "official";
   const blankSlate = isPlanning && planningBlankSlate;
   const planningNotes = blankSlate ? undefined : snapshot.notes;
@@ -231,7 +237,6 @@ export function PrintPreviewPage({
 
       return (
         <div className="print-artboard" data-print-view="breaks" data-print-variant={variantAttr}>
-          <GoldenPlanningHeaderBadge />
           <GoldenBreaksPlanningHeader
             day={day}
             dayIndex={snapshot.dayIndex}
@@ -243,6 +248,7 @@ export function PrintPreviewPage({
             <div className="sb-breaks-planning-upper flex flex-col min-h-0 gap-1">
               <OverlapRowsSection
                 overlapRows={overlapRows}
+                placementTrailsByTmId={placementTrailsByTmId}
                 className="sb-planning-overlaps-block flex-shrink-0 pt-1"
               />
               <AuxCardsSection
@@ -252,6 +258,7 @@ export function PrintPreviewPage({
                 coveredByIndex={coveredByIndex}
                 auxFilled={auxFilled}
                 auxTotal={auxTotal}
+                placementTrailsByTmId={placementTrailsByTmId}
                 className="sb-planning-aux-block flex-1 min-h-0 mb-0"
               />
             </div>
@@ -378,7 +385,11 @@ export function PrintPreviewPage({
             })}
           </div>
 
-          <OverlapRowsSection overlapRows={overlapRows} className="mt-auto pt-1.5" />
+          <OverlapRowsSection
+            overlapRows={overlapRows}
+            placementTrailsByTmId={placementTrailsByTmId}
+            className="mt-auto pt-1.5"
+          />
         </div>
       </div>
     );
@@ -412,7 +423,6 @@ export function PrintPreviewPage({
       data-print-aux-grow={officialLayout ? String(officialLayout.auxFlexGrow) : undefined}
       style={officialArtboardStyle}
     >
-      {isPlanning ? <GoldenPlanningHeaderBadge /> : null}
       <GoldenDeploymentHeader
         day={day}
         dayIndex={snapshot.dayIndex}
@@ -459,6 +469,7 @@ export function PrintPreviewPage({
                         tasks={tasks}
                         empty={!slotShowsFilled(zKey, assignments)}
                         coveredBy={coveredByIndex[zKey]}
+                        placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
                       />
                     </div>
                   );
@@ -482,6 +493,7 @@ export function PrintPreviewPage({
                           tasks={tasks}
                           empty={!slotShowsFilled(zKey, assignments)}
                           coveredBy={coveredByIndex[zKey]}
+                          placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
                         />
                       </div>
                     );
@@ -503,6 +515,7 @@ export function PrintPreviewPage({
                           tasks={tasks}
                           empty={!slotShowsFilled(zKey, assignments)}
                           coveredBy={coveredByIndex[zKey]}
+                          placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
                         />
                       </div>
                     );
@@ -535,6 +548,7 @@ export function PrintPreviewPage({
               assignments={assignments}
               tasksBySlot={tasksBySlot}
               coveredByIndex={coveredByIndex}
+              placementTrailsByTmId={placementTrailsByTmId}
             />
           </div>
         </section>
@@ -547,6 +561,7 @@ export function PrintPreviewPage({
             coveredByIndex={coveredByIndex}
             auxFilled={auxFilled}
             auxTotal={auxTotal}
+            placementTrailsByTmId={placementTrailsByTmId}
             className="sb-print-aux-pinned shrink-0 mb-2"
             sectionStyle={{ flexGrow: 0, flexShrink: 0, flexBasis: "auto" }}
           />

@@ -74,6 +74,8 @@ export type PrintDaySnapshot = {
   /** Approved Graves work due for this exact shift date. */
   sideTasks?: PrintSideTask[];
   nightStatus?: "published" | "draft";
+  /** Last three worked-grave placement labels per TM, newest first. */
+  placementTrailsByTmId?: Record<string, string[]>;
 };
 
 export type PrintPreviewPageProps = {

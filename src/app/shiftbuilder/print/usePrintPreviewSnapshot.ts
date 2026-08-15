@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { DraftAssignmentRow } from "../components/placementFitForSlot";
-import { buildPrintDaySnapshot } from "./buildPrintDaySnapshot";
+import {
+  buildPrintDaySnapshot,
+  hydratePrintPlacementTrails,
+} from "./buildPrintDaySnapshot";
 import {
   applyDraftToPrintSnapshot,
   applyLiveBoardToPrintSnapshot,
@@ -16,6 +19,7 @@ export type UsePrintPreviewSnapshotArgs = {
   day: DayDef;
   dayIndex: number;
   enabled: boolean;
+  includePlacementTrails?: boolean;
   isDraftMode: boolean;
   draftAssignments: Record<string, DraftAssignmentRow>;
   /** When set, overlays live board aux/assignments/tasks for the active night. */
@@ -35,7 +39,15 @@ export type UsePrintPreviewSnapshotResult = {
 export function usePrintPreviewSnapshot(
   args: UsePrintPreviewSnapshotArgs,
 ): UsePrintPreviewSnapshotResult {
-  const { day, dayIndex, enabled, isDraftMode, draftAssignments, liveBoard } = args;
+  const {
+    day,
+    dayIndex,
+    enabled,
+    includePlacementTrails = false,
+    isDraftMode,
+    draftAssignments,
+    liveBoard,
+  } = args;
   const dayDateKey = formatLocalDateISO(day.date);
   const liveBoardKey = liveBoard ? JSON.stringify(liveBoard) : "";
   const draftKey =
@@ -58,8 +70,8 @@ export function usePrintPreviewSnapshot(
     setLoading(true);
     setError(null);
 
-    buildPrintDaySnapshot(day, dayIndex)
-      .then((base) => {
+    buildPrintDaySnapshot(day, dayIndex, { includePlacementTrails })
+      .then(async (base) => {
         if (cancelled) return;
         let merged = liveBoard
           ? applyLiveBoardToPrintSnapshot(base, liveBoard)
@@ -67,7 +79,11 @@ export function usePrintPreviewSnapshot(
         if (isDraftMode && Object.keys(draftAssignments).length > 0) {
           merged = applyDraftToPrintSnapshot(merged, draftAssignments);
         }
-        setSnapshot(merged);
+        const hydrated = includePlacementTrails
+          ? await hydratePrintPlacementTrails(merged)
+          : merged;
+        if (cancelled) return;
+        setSnapshot(hydrated);
         setLoading(false);
       })
       .catch((e) => {
@@ -80,7 +96,15 @@ export function usePrintPreviewSnapshot(
     return () => {
       cancelled = true;
     };
-  }, [dayDateKey, dayIndex, enabled, isDraftMode, draftKey, liveBoardKey]);
+  }, [
+    dayDateKey,
+    dayIndex,
+    enabled,
+    includePlacementTrails,
+    isDraftMode,
+    draftKey,
+    liveBoardKey,
+  ]);
 
   return { snapshot, loading, error };
 }

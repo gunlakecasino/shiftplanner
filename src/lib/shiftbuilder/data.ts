@@ -2996,7 +2996,8 @@ export async function getZoneDetailReport(reportWindow: ReportWindow): Promise<Z
  */
 export async function getTmPlacementHistory(
   tmId: string,
-  days = 30
+  days = 30,
+  throughDateIso?: string,
 ): Promise<ZoneDetailEntry | null> {
   // Server API routes: prefer service role so trails aren't empty under RLS/anon.
   // Browser: standard public client (caller should use /api/shiftbuilder/placement-histories).
@@ -3012,11 +3013,18 @@ export async function getTmPlacementHistory(
       /* keep default client */
     }
   }
-  const today = new Date();
-  const cutoff = new Date(today);
+  const validThroughDate =
+    typeof throughDateIso === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(throughDateIso)
+      ? throughDateIso
+      : null;
+  const throughDate = validThroughDate
+    ? new Date(`${validThroughDate}T12:00:00`)
+    : new Date();
+  const cutoff = new Date(throughDate);
   cutoff.setDate(cutoff.getDate() - days);
   const from = formatLocalDateISO(cutoff);
-  const to   = formatLocalDateISO(today);
+  const to = validThroughDate ?? formatLocalDateISO(throughDate);
 
   const { data: nightRows } = await client
     .from("nights")

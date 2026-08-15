@@ -17,6 +17,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const tmIds = Array.isArray(body?.tmIds) ? (body.tmIds as string[]) : [];
     const days = typeof body?.days === "number" ? body.days : 30;
+    const throughDate =
+      typeof body?.throughDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.throughDate)
+        ? body.throughDate
+        : undefined;
     // Cap per request (client chunks boards larger than this).
     const unique = [...new Set(tmIds.filter((id) => typeof id === "string" && id.length > 0))].slice(
       0,
@@ -25,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const entries = await Promise.all(
       unique.map(async (tmId) => {
-        const h = await getTmPlacementHistory(tmId, days);
+        const h = await getTmPlacementHistory(tmId, days, throughDate);
         return [tmId, h] as const;
       }),
     );
