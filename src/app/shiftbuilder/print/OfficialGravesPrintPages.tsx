@@ -56,7 +56,7 @@ export function officialAuxCardGridShape(auxCardCount: number): {
   columns: number;
   rows: number;
 } {
-  const columns = Math.max(1, Math.min(2, auxCardCount));
+  const columns = Math.max(1, Math.min(3, auxCardCount));
   return {
     columns,
     rows: Math.max(1, Math.ceil(auxCardCount / columns)),
@@ -180,7 +180,7 @@ function SideTasksSummaryCard({ tasks }: { tasks: PrintSideTask[] }) {
   const rows = active.length <= PAGE_ONE_TASK_PREVIEW ? active : active.slice(0, 2);
 
   return (
-    <div className={`sb-approved-side-task-card ${active.length === 0 ? "is-empty" : ""}`}>
+    <div className="sb-approved-side-task-card">
       <div className="sb-side-task-summary-header">
         <span>SIDE TASKS</span>
         {active.length > 0 ? (
@@ -200,6 +200,14 @@ function SideTasksSummaryCard({ tasks }: { tasks: PrintSideTask[] }) {
         {active.length > PAGE_ONE_TASK_PREVIEW ? (
           <div className="sb-side-task-summary-overflow">+{active.length - 2} MORE</div>
         ) : null}
+        <div className="sb-side-task-summary-blank-list" aria-label="Three blank side task lines">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="sb-side-task-summary-blank-row">
+              <span className="sb-side-task-summary-blank-bullet" aria-hidden>•</span>
+              <span className="sb-side-task-summary-blank-line" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

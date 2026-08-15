@@ -43,6 +43,7 @@ import {
 } from "./editablePdfFields";
 import { AsOfTimestamp } from "./AsOfTimestamp";
 import { buildOfficialTaskRows } from "./officialZoneRowLayout";
+import { trailLabelMatchesSlotKey } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 
 type CoveredScale = "zone" | "rr" | "aux";
 
@@ -246,7 +247,13 @@ export function GoldenTaskList({
   );
 }
 
-export function GoldenPlacementTrail({ labels }: { labels?: string[] }) {
+export function GoldenPlacementTrail({
+  labels,
+  matchSlotKey,
+}: {
+  labels?: string[];
+  matchSlotKey?: string;
+}) {
   const recent = labels?.slice(0, 3) ?? [];
   if (recent.length === 0) return null;
 
@@ -256,12 +263,22 @@ export function GoldenPlacementTrail({ labels }: { labels?: string[] }) {
       aria-label={`Recent placements: ${recent.join(", ")}`}
       title={`Last ${recent.length} placements (newest first): ${recent.join(" → ")}`}
     >
-      {recent.map((label, index) => (
-        <React.Fragment key={`${label}-${index}`}>
-          {index > 0 ? <span aria-hidden>·</span> : null}
-          <span>{label}</span>
-        </React.Fragment>
-      ))}
+      {recent.map((label, index) => {
+        const isRepeat = Boolean(
+          matchSlotKey && trailLabelMatchesSlotKey(label, matchSlotKey),
+        );
+        return (
+          <React.Fragment key={`${label}-${index}`}>
+            {index > 0 ? <span aria-hidden>·</span> : null}
+            <span
+              className={`sb-golden-placement-trail-item ${isRepeat ? "is-repeat" : ""}`.trim()}
+              data-placement-repeat={isRepeat ? "true" : undefined}
+            >
+              {label}
+            </span>
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -458,7 +475,7 @@ export function GoldenZoneCard({
             >
               {tmName}
             </span>
-            <GoldenPlacementTrail labels={placementTrail} />
+            <GoldenPlacementTrail labels={placementTrail} matchSlotKey={slotKey} />
             <GoldenTaskList tasks={regular} hasTM slotKey={slotKey} />
           </>
         )}
@@ -575,7 +592,7 @@ export function GoldenRRSide({
             >
               {tmName}
             </span>
-            <GoldenPlacementTrail labels={placementTrail} />
+            <GoldenPlacementTrail labels={placementTrail} matchSlotKey={slotKey} />
           </>
         )}
         {!isEmpty || showTasksWhenEmpty ? (
@@ -836,7 +853,7 @@ export function GoldenAuxCard({
             >
               {tmName}
             </span>
-            <GoldenPlacementTrail labels={placementTrail} />
+            <GoldenPlacementTrail labels={placementTrail} matchSlotKey={def.key} />
             <GoldenTaskList tasks={regular} hasTM dense />
           </>
         ) : null}

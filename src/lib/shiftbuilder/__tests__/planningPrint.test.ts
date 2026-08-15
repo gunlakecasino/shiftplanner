@@ -59,20 +59,26 @@ function snapshot(): PrintDaySnapshot {
     day,
     assignments: {
       Z5: { tmId: "tm-jack", tmName: "Jack", breakGroup: 2 },
+      MRR8: { tmId: "tm-rr", tmName: "Morgan", breakGroup: 3 },
+      TR1: { tmId: "tm-trash", tmName: "Taylor", breakGroup: 1 },
       "OL-PM-0": { tmId: "tm-overlap", tmName: "Alex", breakGroup: 4 },
     },
     tasksBySlot: {
       Z5: zoneFiveTasks,
       "OL-PM-0": [task("overlap-task", "Tables and Restrooms", 0)],
     },
-    auxDefs: [],
+    auxDefs: [
+      { key: "TR1", role: "trash", label: "TRASH 1", locations: ["Trash"] },
+    ],
     amOverlapDayName: "Saturday",
     amOverlapDateNum: 15,
     nextDayColor: "#006ec8",
     breakCounts: { 1: 0, 2: 1, 3: 0, 4: 0 },
     notes: "Saved shift note should not print in the writing grid.",
     placementTrailsByTmId: {
-      "tm-jack": ["Z4", "RR8M", "ADMIN"],
+      "tm-jack": ["Z5", "RR8M", "ADMIN"],
+      "tm-rr": ["RR8M", "Z2", "SUP1"],
+      "tm-trash": ["TSH1", "Z4", "RR7W"],
       "tm-overlap": ["Z6", "RR7W", "Z9SR"],
     },
   };
@@ -107,11 +113,23 @@ describe("planning worksheet print", () => {
     expect(secondPageHtml).toContain(">Notes<");
     expect(secondPageHtml).not.toContain("Saved shift note should not print");
     expect(secondPageHtml).toContain("Alex");
-    expect(secondPageHtml).not.toContain("sb-golden-placement-trail");
+    expect(secondPageHtml).not.toContain("Recent placements: Z6, RR7W, Z9SR");
+    expect(secondPageHtml).toContain(
+      'class="sb-golden-placement-trail-item is-repeat" data-placement-repeat="true">TSH1</span>',
+    );
     expect(html).toContain("sb-golden-placement-trail");
-    expect(html).toContain("Z4");
+    expect(html).toContain("Z5");
     expect(html).toContain("RR8M");
     expect(html).toContain("ADMIN");
+    expect(html).toContain(
+      'class="sb-golden-placement-trail-item is-repeat" data-placement-repeat="true">Z5</span>',
+    );
+    expect(html).toContain(
+      'class="sb-golden-placement-trail-item">RR8M</span>',
+    );
+    expect(html).toContain(
+      'class="sb-golden-placement-trail-item is-repeat" data-placement-repeat="true">RR8M</span>',
+    );
     expect(html.match(/sb-golden-subtask-row/g)).toHaveLength(2);
     expect(html).toContain("Red Tray Carts");
     expect(html).toContain("Vacuum");
@@ -135,6 +153,19 @@ describe("planning worksheet print", () => {
     expect(html).toContain(">Projects<");
     expect(html).toContain(">Events<");
     expect(html).not.toContain("Saved shift note should not print");
+  });
+
+  it("renders three blank writing bullets beside the official AUX grid", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PrintPreviewPage, {
+        view: "deployment",
+        snapshot: snapshot(),
+        weekDayDefs: [day],
+        printVariant: "official",
+      }),
+    );
+
+    expect(html.match(/sb-side-task-summary-blank-row/g)).toHaveLength(3);
   });
 
   it("defaults sudo-admin print commands to no timestamp", () => {

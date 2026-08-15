@@ -61,7 +61,7 @@ const SECTION_HEADER_PX = 30;
 const AUX_SECTION_HEADER_PX = 33;
 const ROW_GAP_PX = 8;
 const MIN_AUX_CARD_TRACK_PX = 59;
-const MIN_AUX_MINI_ROW_PX = 42;
+const MIN_AUX_MINI_ROW_PX = 48;
 
 export type OfficialTaskRow = {
   depth: 0 | 1;

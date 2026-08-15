@@ -638,6 +638,13 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   flex-shrink: 0;
 }
 
+.print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail-item.is-repeat,
+body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail-item.is-repeat,
+body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-placement-trail-item.is-repeat {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
 .print-stage-inner .print-artboard[data-print-variant="planning"] .sb-golden-card-body,
 body.printing-dual-mode .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-card-body,
 body.golden-export-raster .print-dual-container .print-artboard[data-print-variant="planning"] .sb-golden-card-body {
@@ -1656,7 +1663,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-approved-aux-card-grid {
-  grid-column: 1 / span 2;
+  grid-column: 1 / span 3;
   display: grid;
   gap: 8px 11px;
   min-width: 0;
@@ -1918,11 +1925,6 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   border-color: #b9a7e8;
 }
 
-.sb-approved-side-task-card.is-empty {
-  height: 28px;
-  align-self: start;
-}
-
 .sb-approved-side-task-card::before {
   content: "";
   position: absolute;
@@ -1957,20 +1959,55 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   height: calc(100% - 28px);
   padding: 3px 9px 4px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .sb-approved-side-task-card .sb-side-task-summary-row {
+  flex: 0 0 13px;
+  min-height: 0;
   grid-template-columns: 13px minmax(0, 1fr) auto;
   border: 0;
   font-size: 9px;
+  line-height: 1.1;
 }
 
 .sb-side-task-summary-overflow {
+  flex: 0 0 10px;
   display: flex;
   align-items: center;
   color: #5b21b6;
   font-size: 9px;
   font-weight: 800;
+}
+
+.sb-side-task-summary-blank-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+
+.sb-side-task-summary-blank-row {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+}
+
+.sb-side-task-summary-blank-bullet {
+  color: #5b21b6;
+  font-size: 8px;
+  line-height: 1;
+  text-align: center;
+}
+
+.sb-side-task-summary-blank-line {
+  height: 1px;
+  align-self: end;
+  margin-bottom: 3px;
+  background: #d1d5db;
 }
 
 .sb-approved-side-task-card .sb-side-task-summary-number {
@@ -1979,11 +2016,12 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-approved-side-task-card .sb-side-task-summary-assignee {
   max-width: 68px;
-  padding: 3px 6px;
+  padding: 1px 5px;
   border-radius: 5px;
   color: #4b5563;
   background: #f3f4f6;
   font-size: 8px;
+  line-height: 1.15;
 }
 
 .sb-approved-side-task-card .sb-side-task-summary-assignee:empty {

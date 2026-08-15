@@ -215,7 +215,7 @@ describe("official zone row layout", () => {
     });
   });
 
-  it("reserves two compact rows for four auxiliary cards", () => {
+  it("reserves two writable-height rows for a multi-row auxiliary grid", () => {
     const tracks = solveOfficialDeploymentTracks({
       zoneRows: [
         Array.from({ length: 5 }, () => emptyCard),
@@ -229,7 +229,7 @@ describe("official zone row layout", () => {
       auxiliaryRows: 2,
     });
 
-    expect(tracks.auxiliary).toBeGreaterThanOrEqual(125);
+    expect(tracks.auxiliary).toBeGreaterThanOrEqual(137);
     expect(tracks.zones + tracks.restrooms + tracks.auxiliary).toBe(689);
   });
 });
