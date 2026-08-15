@@ -6,12 +6,13 @@ import {
 } from "@/app/shiftbuilder/print/OfficialGravesPrintPages";
 
 describe("official AUX print layout", () => {
-  it("keeps configured AUX cards in a compact three-column grid", () => {
+  it("fits up to five configured AUX cards in one row beside Side Tasks", () => {
     const auxDefs: AuxDef[] = [
       { key: "AUX1", role: "admin", label: "ADMIN", locations: ["Floor Admin"] },
       { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: ["Z9 Smoking Room"] },
       { key: "AUX3", role: "blank", label: "TRAINING", locations: [] },
       { key: "AUX4", role: "job_coach", label: "JOB COACH", locations: ["Job Coach"] },
+      { key: "AUX5", role: "support", label: "SUPPORT 1", locations: ["Support"] },
     ];
 
     const configured = configuredOfficialAuxDefs(auxDefs);
@@ -21,9 +22,17 @@ describe("official AUX print layout", () => {
       "AUX2",
       "AUX3",
       "AUX4",
+      "AUX5",
     ]);
     expect(officialAuxCardGridShape(configured.length)).toEqual({
-      columns: 3,
+      columns: 5,
+      rows: 1,
+    });
+  });
+
+  it("wraps additional configured AUX cards after the five-column row", () => {
+    expect(officialAuxCardGridShape(6)).toEqual({
+      columns: 5,
       rows: 2,
     });
   });

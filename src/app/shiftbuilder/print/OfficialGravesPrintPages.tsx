@@ -56,7 +56,10 @@ export function officialAuxCardGridShape(auxCardCount: number): {
   columns: number;
   rows: number;
 } {
-  const columns = Math.max(1, Math.min(3, auxCardCount));
+  // The AUX rail owns the three tracks immediately beside Side Tasks. Keep up
+  // to five configured cards on one full-width row so they meet that panel
+  // instead of wrapping early and leaving a blank pocket between sections.
+  const columns = Math.max(1, Math.min(5, auxCardCount));
   return {
     columns,
     rows: Math.max(1, Math.ceil(auxCardCount / columns)),
