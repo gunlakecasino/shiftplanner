@@ -1,11 +1,17 @@
+import React from "react";
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
+import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import { buildDayDefs } from "@/lib/shiftbuilder/dateUtils";
 import {
   configuredOfficialAuxDefs,
+  OfficialGravesDeploymentPage,
   officialAuxCardGridShape,
 } from "@/app/shiftbuilder/print/OfficialGravesPrintPages";
+import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
 
 describe("official AUX print layout", () => {
   it("fits up to five configured AUX cards in one row beside Side Tasks", () => {
@@ -54,6 +60,64 @@ describe("official AUX print layout", () => {
       );
       expect(css).toMatch(
         /\.sb-approved-side-task-card\s*\{[^}]*grid-column:\s*2;/s,
+      );
+    });
+  });
+
+  it("centers AUX names on the right and omits AUX task text", () => {
+    const friday = new Date(2026, 7, 14);
+    const days = buildDayDefs(friday, friday);
+    const auxTask: NightSlotTask = {
+      id: "aux-task",
+      nightId: "night-1",
+      slotKey: "AUX1",
+      slotType: "aux",
+      rrSide: null,
+      taskLabel: "THIS AUX TASK MUST NOT PRINT",
+      catalogTaskId: null,
+      sortOrder: 0,
+      color: null,
+      isCoverage: false,
+    };
+    const snapshot: PrintDaySnapshot = {
+      dayIndex: 0,
+      day: days[0],
+      assignments: {
+        AUX1: { tmId: "tm_zoey", tmName: "Zoey", breakGroup: 2 },
+      },
+      tasksBySlot: { AUX1: [auxTask] },
+      auxDefs: [
+        { key: "AUX1", role: "support", label: "SUPPORT 1", locations: [] },
+      ],
+      amOverlapDayName: "Saturday",
+      amOverlapDateNum: 15,
+      nextDayColor: days[1].color,
+      breakCounts: { 1: 0, 2: 1, 3: 0, 4: 0 },
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(OfficialGravesDeploymentPage, {
+        snapshot,
+        weekDayDefs: days,
+        includeTimestamp: false,
+      }),
+    );
+
+    expect(html).toContain('data-pdf-slot-key="AUX1"');
+    expect(html).toContain('data-pdf-text-align="right"');
+    expect(html).toContain("<span>Zoey</span>");
+    expect(html).not.toContain("THIS AUX TASK MUST NOT PRINT");
+
+    [
+      join(process.cwd(), "src/app/shiftbuilder/print/printPreview.css"),
+      join(process.cwd(), "public/shiftbuilder-print-preview.css"),
+    ].forEach((path) => {
+      const css = readFileSync(path, "utf8");
+      expect(css).toMatch(
+        /\.sb-approved-assignment-card\.is-aux-mini \.sb-approved-card-body\s*\{[^}]*align-items:\s*center;/s,
+      );
+      expect(css).toMatch(
+        /\.sb-approved-assignment-card\.is-aux-mini \.sb-approved-card-names\s*\{[^}]*text-align:\s*right;/s,
       );
     });
   });

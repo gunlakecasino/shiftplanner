@@ -263,6 +263,7 @@ function ApprovedAssignmentCard({
   coverageTargets = [],
   compact = false,
   auxMini = false,
+  hideTasks = false,
   blankWhenEmpty = true,
 }: {
   slotKey: string;
@@ -273,6 +274,7 @@ function ApprovedAssignmentCard({
   coverageTargets?: string[];
   compact?: boolean;
   auxMini?: boolean;
+  hideTasks?: boolean;
   blankWhenEmpty?: boolean;
 }) {
   const assignment = snapshot.assignments[slotKey] ?? {};
@@ -296,7 +298,7 @@ function ApprovedAssignmentCard({
     : coveredBy.length === 1
       ? snapshot.assignments[coveredBy[0].sourceKey]?.breakGroup
       : 0;
-  const tasks = taskLabels(snapshot, slotKey);
+  const tasks = hideTasks ? [] : taskLabels(snapshot, slotKey);
   const empty = names.length === 0;
   const showOpenWork = empty && !blankWhenEmpty && tasks.length > 0;
   const footer = coverageTargets.join(" / ");
@@ -338,8 +340,15 @@ function ApprovedAssignmentCard({
             slotKey={slotKey}
             value={assignedName}
             fontSizePx={auxMini ? 12 : compact ? 18 : 19}
+            textAlign={auxMini ? "right" : "left"}
             style={auxMini
-              ? { left: 7, right: 7, top: 2, height: 16 }
+              ? {
+                  left: 7,
+                  right: 7,
+                  top: "50%",
+                  height: 16,
+                  transform: "translateY(-50%)",
+                }
               : { left: 9, right: 9, top: 4, height: compact ? 21 : 23 }}
           />
         ) : null}
@@ -500,7 +509,7 @@ export function OfficialGravesDeploymentPage({
         names: assignedName
           ? [assignedName]
           : coveredBy.map((entry) => entry.tmName),
-        tasks: taskLabels(snapshot, def.key),
+        tasks: [],
         hasFooter: (coverageTargetsBySource[def.key]?.length ?? 0) > 0,
         compact: true,
       };
@@ -596,6 +605,7 @@ export function OfficialGravesDeploymentPage({
                   coverageTargets={coverageTargetsBySource[def.key]}
                   compact
                   auxMini
+                  hideTasks
                   blankWhenEmpty={def.role === "admin" || def.role === "z9sr"}
                 />
               ))}

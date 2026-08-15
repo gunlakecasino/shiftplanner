@@ -1882,9 +1882,14 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .sb-approved-assignment-card.is-aux-mini .sb-approved-card-body {
   top: 20px;
   padding: 2px 7px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .sb-approved-assignment-card.is-aux-mini .sb-approved-card-names {
+  width: 100%;
+  text-align: right;
   font-size: 12px;
   letter-spacing: -0.1px;
 }

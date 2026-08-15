@@ -20,6 +20,7 @@ export type EditablePdfTmField = {
   heightPx: number;
   fontSizePx: number;
   color: string;
+  textAlign: "left" | "right";
 };
 
 export type PdfImagePlacement = {
@@ -42,12 +43,14 @@ export function EditablePdfTmFieldAnchor({
   value,
   fontSizePx,
   color = "#111111",
+  textAlign = "left",
   style,
 }: {
   slotKey: string;
   value?: string | null;
   fontSizePx: number;
   color?: string;
+  textAlign?: "left" | "right";
   style: React.CSSProperties;
 }) {
   return (
@@ -58,6 +61,7 @@ export function EditablePdfTmFieldAnchor({
       data-pdf-value={value?.trim() ?? ""}
       data-pdf-font-size={fontSizePx}
       data-pdf-color={color}
+      data-pdf-text-align={textAlign}
       style={{
         position: "absolute",
         display: "block",
@@ -117,6 +121,7 @@ export function collectAndSuppressEditableTmFields(
           16,
         ),
         color: element.dataset.pdfColor?.trim() || "#111111",
+        textAlign: element.dataset.pdfTextAlign === "right" ? "right" : "left",
       };
     })
     .filter((field): field is EditablePdfTmField => field !== null);
@@ -183,7 +188,7 @@ export function addEditableTmFieldsToPdf(
     field.fontSize = mapped.fontSize;
     field.maxFontSize = mapped.fontSize;
     field.color = definition.color;
-    field.textAlign = "left";
+    field.textAlign = definition.textAlign;
     field.maxLength = 48;
     field.doNotSpellCheck = true;
     field.doNotScroll = true;

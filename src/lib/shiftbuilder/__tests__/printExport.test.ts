@@ -104,6 +104,7 @@ describe("editable TM PDF fields", () => {
     heightPx: 40.8,
     fontSizePx: 16,
     color: "#111111",
+    textAlign: "left",
   };
 
   it("maps Golden artboard rectangles into the placed PDF image", () => {
