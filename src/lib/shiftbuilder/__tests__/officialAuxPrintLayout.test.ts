@@ -64,7 +64,7 @@ describe("official AUX print layout", () => {
     });
   });
 
-  it("centers AUX names on the right and omits AUX task text", () => {
+  it("centers AUX names on the left and omits AUX task text", () => {
     const friday = new Date(2026, 7, 14);
     const days = buildDayDefs(friday, friday);
     const auxTask: NightSlotTask = {
@@ -104,7 +104,7 @@ describe("official AUX print layout", () => {
     );
 
     expect(html).toContain('data-pdf-slot-key="AUX1"');
-    expect(html).toContain('data-pdf-text-align="right"');
+    expect(html).toContain('data-pdf-text-align="left"');
     expect(html).toContain("<span>Zoey</span>");
     expect(html).not.toContain("THIS AUX TASK MUST NOT PRINT");
 
@@ -117,7 +117,7 @@ describe("official AUX print layout", () => {
         /\.sb-approved-assignment-card\.is-aux-mini \.sb-approved-card-body\s*\{[^}]*align-items:\s*center;/s,
       );
       expect(css).toMatch(
-        /\.sb-approved-assignment-card\.is-aux-mini \.sb-approved-card-names\s*\{[^}]*text-align:\s*right;/s,
+        /\.sb-approved-assignment-card\.is-aux-mini \.sb-approved-card-names\s*\{[^}]*text-align:\s*left;/s,
       );
     });
   });

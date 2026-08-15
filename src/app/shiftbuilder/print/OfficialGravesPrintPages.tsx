@@ -340,7 +340,7 @@ function ApprovedAssignmentCard({
             slotKey={slotKey}
             value={assignedName}
             fontSizePx={auxMini ? 12 : compact ? 18 : 19}
-            textAlign={auxMini ? "right" : "left"}
+            textAlign="left"
             style={auxMini
               ? {
                   left: 7,
