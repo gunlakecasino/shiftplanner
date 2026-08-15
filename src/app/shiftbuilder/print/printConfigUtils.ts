@@ -167,6 +167,14 @@ export function tonightPlanningPrintConfig(selectedDayIndex: number): PrintConfi
   return tonightPrintConfig(selectedDayIndex, "planning");
 }
 
+/** Sudo admins default to a clean header but can turn the timestamp back on. */
+export function applyPrintRoleDefaults(
+  config: PrintConfig,
+  canAccessSudo: boolean,
+): PrintConfig {
+  return canAccessSudo ? { ...config, includeTimestamp: false } : config;
+}
+
 export function fullWeekPrintConfig(): PrintConfig {
   return {
     days: Array.from({ length: 7 }, (_, i) => ({

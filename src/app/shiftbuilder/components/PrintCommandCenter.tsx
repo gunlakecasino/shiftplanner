@@ -22,6 +22,7 @@ import {
   estimatePrintSeconds,
   tonightPrintConfig,
   tonightPlanningPrintConfig,
+  applyPrintRoleDefaults,
 } from "../print/printConfigUtils";
 
 
@@ -367,13 +368,19 @@ export function PrintCommandCenter({
     if (!open) return;
     const defaultVariant: PrintVariant =
       currentNightStatus !== "published" ? "planning" : "official";
-    applyConfig(
+    const baseConfig =
       defaultVariant === "planning"
         ? tonightPlanningPrintConfig(selectedDayIndex)
-        : tonightPrintConfig(selectedDayIndex, defaultVariant),
-    );
+        : tonightPrintConfig(selectedDayIndex, defaultVariant);
+    applyConfig(applyPrintRoleDefaults(baseConfig, canAccessSudo));
     setShowAdvanced(false);
-  }, [open, selectedDayIndex, applyConfig, currentNightStatus]);
+  }, [
+    open,
+    selectedDayIndex,
+    applyConfig,
+    currentNightStatus,
+    canAccessSudo,
+  ]);
 
   // Fetch publish status for queued nights (for defaults + official confirm)
   useEffect(() => {

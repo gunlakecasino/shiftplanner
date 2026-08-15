@@ -3,6 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PrintPreviewPage } from "@/app/shiftbuilder/print/PrintPreviewPage";
 import { hydratePrintPlacementTrails } from "@/app/shiftbuilder/print/buildPrintDaySnapshot";
+import {
+  applyPrintRoleDefaults,
+  tonightPlanningPrintConfig,
+} from "@/app/shiftbuilder/print/printConfigUtils";
 import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
@@ -82,8 +86,19 @@ describe("planning worksheet print", () => {
         printVariant: "planning",
       }),
     );
+    const secondPageHtml = renderToStaticMarkup(
+      React.createElement(PrintPreviewPage, {
+        view: "breaks",
+        snapshot: snapshot(),
+        weekDayDefs: [day],
+        printVariant: "planning",
+      }),
+    );
 
     expect(html).not.toContain("Not For Floor Distribution");
+    expect(secondPageHtml).not.toContain("Shift Planning Notes");
+    expect(secondPageHtml).not.toContain("golden-planning-notes-panel-title");
+    expect(secondPageHtml).toContain(">Notes<");
     expect(html).toContain("sb-golden-placement-trail");
     expect(html).toContain("Z4");
     expect(html).toContain("RR8M");
@@ -92,6 +107,13 @@ describe("planning worksheet print", () => {
     expect(html).toContain("Red Tray Carts");
     expect(html).toContain("Vacuum");
     expect(html).toContain("Trash");
+  });
+
+  it("defaults sudo-admin print commands to no timestamp", () => {
+    const base = tonightPlanningPrintConfig(0);
+
+    expect(applyPrintRoleDefaults(base, true).includeTimestamp).toBe(false);
+    expect(applyPrintRoleDefaults(base, false).includeTimestamp).toBe(true);
   });
 
   it("anchors the history read to the planned night and keeps three newest placements", async () => {
