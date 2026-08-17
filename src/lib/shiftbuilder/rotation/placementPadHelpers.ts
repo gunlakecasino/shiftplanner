@@ -187,8 +187,13 @@ export const LAST5_SOFT_TRAIL_COUNT = 5;
  */
 export function placementRepeatKey(ui: string): string {
   if (!ui) return ui;
-  const rr = ui.match(/^(?:M|W)?RR(\d+)$/i);
-  if (rr) return `RR${rr[1]}`;
+  // UI slot keys use MRR8/WRR8 while history/trail labels use RR8M/RR8W.
+  // Both identify the same physical restroom and must collapse before any
+  // spread, prior-N, Last 5, or Intel comparison.
+  const rrPrefix = ui.match(/^(?:M|W)?RR(\d+)$/i);
+  if (rrPrefix) return `RR${rrPrefix[1]}`;
+  const rrSuffix = ui.match(/^RR(\d+)(?:M|W)$/i);
+  if (rrSuffix) return `RR${rrSuffix[1]}`;
   // Fungible OL seats within AM/PM band (UI, band, and DB forms).
   const olUi = ui.match(/^OL-(PM|AM)(?:-\d+)?$/i);
   if (olUi) return `OL-${olUi[1].toUpperCase()}`;
@@ -202,6 +207,8 @@ export function placementSideFamilyRepeatKey(ui: string): string | null {
   if (!ui) return null;
   if (/^WRR\d+$/i.test(ui)) return "WRR";
   if (/^MRR\d+$/i.test(ui)) return "MRR";
+  if (/^RR\d+W$/i.test(ui)) return "WRR";
+  if (/^RR\d+M$/i.test(ui)) return "MRR";
   return null;
 }
 
@@ -231,6 +238,17 @@ export function spreadCountForRepeatKey(
     if (placementRepeatKey(ui) === target) total += n;
   }
   return total;
+}
+
+/** True when a spread-key collection contains the same physical placement area. */
+export function spreadHasRepeatKey(
+  keys: Iterable<string>,
+  slotKey: string,
+): boolean {
+  for (const ui of keys) {
+    if (placementRepeatKeysMatch(ui, slotKey)) return true;
+  }
+  return false;
 }
 
 /** Card name trail — last N graves before tonight (newest first). */
@@ -365,7 +383,12 @@ export function collectPlacementTrailEvents(
 ): Array<{ ui: string; d: string }> {
   const events: Array<{ ui: string; d: string }> = [];
 
-  if (history?.zoneDates) {
+  if (history?.primaryPlacementByNight) {
+    for (const [d, ui] of Object.entries(history.primaryPlacementByNight)) {
+      if (beforeIso && d >= beforeIso) continue;
+      events.push({ ui: normalizePlacementIdentity(ui), d });
+    }
+  } else if (history?.zoneDates) {
     for (const [ui, ds] of Object.entries(history.zoneDates)) {
       for (const d of ds || []) {
         if (beforeIso && d >= beforeIso) continue;
@@ -420,15 +443,26 @@ export function collectPlacementTrailEvents(
       if (!slotKey) continue;
       if (beforeIso && nightDate >= beforeIso) continue;
       const stable = normalizePlacementIdentity(slotKey);
-      // Skip week AUX3 if we already have STEP (or any non-AUX) for that night.
-      const already = merged.find((e) => e.d === nightDate);
-      if (already) {
+      // The in-app week plan is the newest live-board state. If it disagrees
+      // with the fetched snapshot for this night, replace the snapshot event;
+      // never show two different primary placements for one TM/night.
+      const sameNightIndexes = merged
+        .map((e, index) => (e.d === nightDate ? index : -1))
+        .filter((index) => index >= 0);
+      if (sameNightIndexes.length > 0) {
+        const already = merged[sameNightIndexes[0]];
         if (/^AUX\d+$/i.test(stable) && !/^AUX\d+$/i.test(already.ui)) continue;
-        if (!/^AUX\d+$/i.test(stable) && /^AUX\d+$/i.test(already.ui)) {
-          already.ui = stable;
+        if (
+          sameNightIndexes.length === 1 &&
+          placementRepeatKeysMatch(already.ui, stable)
+        ) {
           continue;
         }
-        if (already.ui === stable) continue;
+        for (let index = sameNightIndexes.length - 1; index >= 0; index -= 1) {
+          const prior = merged[sameNightIndexes[index]];
+          seen.delete(`${prior.d}|${prior.ui}`);
+          merged.splice(sameNightIndexes[index], 1);
+        }
       }
       const key = `${nightDate}|${stable}`;
       if (seen.has(key)) continue;
@@ -572,17 +606,9 @@ export function getLastPlacementSequence(
   n: number,
   beforeIso?: string,
 ): string[] {
-  if (!h?.zoneDates) return [];
-  const events: Array<{ ui: string; d: string }> = [];
-  for (const [ui, ds] of Object.entries(h.zoneDates)) {
-    for (const d of ds || []) {
-      if (beforeIso && d >= beforeIso) continue;
-      // Normalize so LAST 5 shows STEP / SUP1, never raw SP1 or STEPUP.
-      events.push({ ui: normalizePlacementIdentity(ui), d });
-    }
-  }
-  events.sort((a, b) => b.d.localeCompare(a.d));
-  return events.slice(0, n).map((e) => e.ui);
+  return collectPlacementTrailEvents(h, beforeIso)
+    .slice(0, n)
+    .map((e) => e.ui);
 }
 
 /** Matrix keys shown in the placement pad spread for a given TM. */
@@ -690,7 +716,9 @@ export function computePlacementRotationBasics(
     getSpreadPlacementKeys(tmHistory, nightCount, beforeIso),
   );
 
-  const notRecentlyPlaced = matrixSlotKeys.filter((k) => !spreadKeys.has(k));
+  const notRecentlyPlaced = matrixSlotKeys.filter(
+    (k) => !spreadHasRepeatKey(spreadKeys, k),
+  );
 
   const crossPatterns: PlacementCrossPattern[] = [];
   const highlightGapKeys = new Set(notRecentlyPlaced);
@@ -716,11 +744,14 @@ export function computePlacementRotationBasics(
       continue;
     }
 
-    const tmMissingFromTheirSlot = !spreadKeys.has(theirSlotKey);
+    const tmMissingFromTheirSlot = !spreadHasRepeatKey(spreadKeys, theirSlotKey);
     const otherSpread = new Set(
       getSpreadPlacementKeys(otherHistories[row.tmId] ?? null, nightCount, beforeIso),
     );
-    const otherMissingFromCurrentSlot = !otherSpread.has(currentSlotKey);
+    const otherMissingFromCurrentSlot = !spreadHasRepeatKey(
+      otherSpread,
+      currentSlotKey,
+    );
 
     if (tmMissingFromTheirSlot || otherMissingFromCurrentSlot) {
       crossPatterns.push({

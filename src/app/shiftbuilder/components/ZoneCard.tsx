@@ -12,7 +12,7 @@ import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
-import { TmNameBlock } from "./assignmentCardChrome";
+import { TmPlacementTrail } from "./assignmentCardChrome";
 import { UnassignedDropHint } from "./builderPrimitives";
 import { UnassignedInvite } from "./assignmentCardChrome";
 import {
@@ -330,6 +330,11 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
               tmId={slotTm.tmId}
               slotKey={`zone_${zoneNumber}`}
             />
+          ) : undefined
+        }
+        nameMeta={
+          hasTM ? (
+            <TmPlacementTrail labels={placementTrail} matchSlotKey={def.key} />
           ) : undefined
         }
         taskContent={packageTaskContent}

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   placementRepeatKey,
   placementRepeatKeysMatch,
+  placementSideFamilyRepeatKey,
+  spreadCountForRepeatKey,
+  spreadHasRepeatKey,
   formatCardPlacementTrailLabel,
   trailLabelMatchesSlotKey,
   normalizePlacementIdentity,
@@ -31,6 +34,30 @@ describe("placementRepeatKey", () => {
     expect(placementRepeatKey("MRR8")).toBe("RR8");
     expect(placementRepeatKey("WRR8")).toBe("RR8");
     expect(placementRepeatKey("Z3")).toBe("Z3");
+  });
+
+  it("collapses displayed RR suffix labels to the same physical area", () => {
+    expect(placementRepeatKey("RR8M")).toBe("RR8");
+    expect(placementRepeatKey("RR8W")).toBe("RR8");
+    expect(placementRepeatKeysMatch("RR8W", "WRR8")).toBe(true);
+    expect(placementRepeatKeysMatch("RR8M", "MRR8")).toBe(true);
+  });
+
+  it("preserves restroom side-family identity for displayed trail labels", () => {
+    expect(placementSideFamilyRepeatKey("RR6W")).toBe("WRR");
+    expect(placementSideFamilyRepeatKey("RR6M")).toBe("MRR");
+  });
+
+  it("counts suffix-form history against prefix-form UI slots", () => {
+    const counts = new Map([
+      ["RR6W", 3],
+      ["WRR6", 2],
+      ["RR8W", 1],
+    ]);
+    expect(spreadCountForRepeatKey(counts, "WRR6")).toBe(5);
+    expect(spreadCountForRepeatKey(counts, "WRR8")).toBe(1);
+    expect(spreadHasRepeatKey(counts.keys(), "WRR6")).toBe(true);
+    expect(spreadHasRepeatKey(counts.keys(), "WRR7")).toBe(false);
   });
 });
 

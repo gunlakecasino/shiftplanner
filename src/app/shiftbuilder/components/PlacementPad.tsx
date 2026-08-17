@@ -41,7 +41,7 @@ import {
   MATRIX_SPREAD_TWICE,
   MATRIX_SPREAD_THRICE_PLUS,
   MATRIX_SPREAD_NONE,
-  getLastPlacementSequence,
+  getMergedPlacementSequence,
   getDaysSinceForKey,
   formatPlacementUiLabel,
   nightIsoFromDate,
@@ -49,7 +49,9 @@ import {
   computePlacementRotationBasics,
   formatPlacementRotationDisplay,
   formatRotationBriefForAnalyst,
+  placementRepeatKey,
   spreadCountForRepeatKey,
+  weekEntriesForTm,
   type PlacementRotationBasics,
   type PlacementRotationDisplay,
   type PlacementTmProfile,
@@ -752,6 +754,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
           body: JSON.stringify({
             tmIds: [fetchTmId],
             days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+            throughDate: currentIso,
           }),
         });
         if (!res.ok) throw new Error(`history ${res.status}`);
@@ -774,7 +777,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     return () => {
       cancelled = true;
     };
-  }, [slotKey, a.tmId, isOverlapSlot]);
+  }, [slotKey, a.tmId, isOverlapSlot, currentIso]);
 
   // Phase C — overlap task insight (standing pool + recent assignees / TM tasks).
   const tonightChipSig = React.useMemo(() => {
@@ -848,10 +851,14 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       PLACEMENT_SPREAD_NIGHTS,
       currentIso,
     );
-    const last5Sequence = getLastPlacementSequence(
+    const weekEntries = a.tmId
+      ? weekEntriesForTm(weeklyRecentHistory, a.tmId, currentIso)
+      : undefined;
+    const last5Sequence = getMergedPlacementSequence(
       safePadHistory,
       LAST5_COUNT,
       currentIso,
+      weekEntries,
     );
     return {
       spreadCounts,
@@ -859,9 +866,10 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       last5Sequence,
       slotSpread: spreadCountForRepeatKey(spreadCounts, slotKey),
     };
-  }, [safePadHistory, currentIso, slotKey]);
+  }, [safePadHistory, currentIso, slotKey, a.tmId, weeklyRecentHistory]);
 
-  const spreadCountFor = (ui: string) => padMatrixFacts.spreadCounts.get(ui) ?? 0;
+  const spreadCountFor = (ui: string) =>
+    spreadCountForRepeatKey(padMatrixFacts.spreadCounts, ui);
   const last5Sequence = padMatrixFacts.last5Sequence;
   const spreadKeys = padMatrixFacts.spreadKeys;
 
@@ -1206,7 +1214,11 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     { label: "Sweep 9/10/SR", full: "Sweep 9/10/SR" },
   ];
 
-  const rrWorkedCount = spreadKeys.filter((k) => k.startsWith("MRR") || k.startsWith("WRR")).length;
+  const rrWorkedCount = new Set(
+    spreadKeys
+      .filter((k) => /^(?:[MW]RR\d+|RR\d+[MW])$/i.test(k))
+      .map((k) => placementRepeatKey(k)),
+  ).size;
   const zoneWorkedCount = spreadKeys.filter((k) => /^Z\d+$/.test(k)).length;
   const z9Days = getDaysSinceForKey(safePadHistory, "Z9", currentIso);
   const z9srDays = getDaysSinceForKey(safePadHistory, "Z9SR", currentIso);

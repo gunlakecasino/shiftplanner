@@ -38,6 +38,7 @@ import {
   placementRepeatKeysMatch,
   shouldShowPlacementFitChip,
   spreadCountForRepeatKey,
+  spreadHasRepeatKey,
   weekEntriesForTm,
 } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
 import type { PrerenderedPlacementFit } from "@/lib/shiftbuilder/rotation/placementFitScore";
@@ -708,7 +709,10 @@ function daysSinceLastPlacementInSlot(
   slotKey: string,
   beforeIso: string,
 ): number | null {
-  const dates = (history?.zoneDates?.[slotKey] || []).filter((d) => d < beforeIso);
+  const dates = Object.entries(history?.zoneDates ?? {})
+    .filter(([historyKey]) => placementRepeatKeysMatch(historyKey, slotKey))
+    .flatMap(([, values]) => values)
+    .filter((d) => d < beforeIso);
   if (dates.length === 0) return null;
   const latest = dates.reduce((a, b) => (a > b ? a : b));
   const d1 = new Date(`${beforeIso}T12:00:00`);
@@ -805,13 +809,13 @@ export function computeCandidatePickerHealthPoints(
     score += Math.min(11, daysSince * 0.12);
   }
 
-  if (!spreadKeys.has(slotKey) && gapCount > 0) {
+  if (!spreadHasRepeatKey(spreadKeys, slotKey) && gapCount > 0) {
     score += Math.min(3.5, 1.2 + gapCount * 0.25);
   }
 
   let maxSpreadElsewhere = 0;
   for (const [key, count] of spreadCounts.entries()) {
-    if (key === slotKey) continue;
+    if (placementRepeatKeysMatch(key, slotKey)) continue;
     if (count > maxSpreadElsewhere) maxSpreadElsewhere = count;
   }
   if (timesInSpread > maxSpreadElsewhere) {
@@ -1054,7 +1058,11 @@ export function previewCandidateRotationFit(
     shouldShowPlacementFitChip(k),
   );
   const topGaps = matrixKeys
-    .filter((k) => !spreadKeys.has(k) && k !== slotKey)
+    .filter(
+      (k) =>
+        !spreadHasRepeatKey(spreadKeys, k) &&
+        !placementRepeatKeysMatch(k, slotKey),
+    )
     .slice(0, 4);
 
   const weekRepeat = getTmWeekRepeatForSlotThroughNight(
@@ -1073,7 +1081,9 @@ export function previewCandidateRotationFit(
 
   const daysSinceInSlot = daysSinceLastPlacementInSlot(history, slotKey, tonightIso);
   const gapCount = matrixKeys.filter(
-    (k) => !spreadKeys.has(k) && k !== slotKey,
+    (k) =>
+      !spreadHasRepeatKey(spreadKeys, k) &&
+      !placementRepeatKeysMatch(k, slotKey),
   ).length;
   const { weekNightsWorked, weekUniqueSlots } = graveWeekWorkload(
     scopedWeek,

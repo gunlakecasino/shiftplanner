@@ -6,6 +6,7 @@ import {
   buildPlacementTrailLabels,
   canonicalizeAuxSlotKeyForTrail,
   getLastPlacementSequence,
+  getSpreadPlacementCounts,
   normalizePlacementIdentity,
 } from "../placementPadHelpers";
 import { normalizeHistoryUiKey } from "../../constants";
@@ -171,6 +172,30 @@ describe("buildPlacementTrailLabels", () => {
     expect(labels).not.toContain("AUX3");
     expect(labels.filter((l) => l === "STEP").length).toBe(1);
   });
+
+  it("lets the current week board replace a stale fetched placement for the same night", () => {
+    const history = {
+      tmId: "t1",
+      tmName: "Amanda",
+      zoneDates: {
+        RR6W: ["2026-08-21"],
+        Z4: ["2026-08-20"],
+      },
+      zoneCounts: {},
+      totalAssignments: 2,
+      totalNights: 2,
+      lastDate: "2026-08-21",
+    };
+
+    expect(
+      buildPlacementTrailLabels(
+        history as any,
+        "2026-08-22",
+        3,
+        [{ nightDate: "2026-08-21", slotKey: "WRR8" }],
+      ),
+    ).toEqual(["RR8W", "Z4"]);
+  });
 });
 
 describe("formatPlacementUiLabel (pad matrix + LAST 5)", () => {
@@ -224,6 +249,38 @@ describe("normalizeHistoryUiKey / pad LAST 5 sequence", () => {
     expect(seq).toContain("SUP1");
     expect(seq).not.toContain("SP1");
     expect(seq).not.toContain("step_up");
+  });
+
+  it("counts additional serviced areas in spread without replacing the primary trail", () => {
+    const history = {
+      tmId: "t1",
+      tmName: "Amanda",
+      zoneDates: {
+        RR6W: ["2026-08-20"],
+        Z6: ["2026-08-20"],
+        Z4: ["2026-08-19"],
+      },
+      primaryPlacementByNight: {
+        "2026-08-20": "RR6W",
+        "2026-08-19": "Z4",
+      },
+      zoneCounts: {},
+      totalAssignments: 3,
+      totalNights: 2,
+      lastDate: "2026-08-20",
+    };
+
+    expect(getLastPlacementSequence(history as any, 3, "2026-08-21")).toEqual([
+      "RR6W",
+      "Z4",
+    ]);
+    expect(getSpreadPlacementCounts(history as any, 30, "2026-08-21")).toEqual(
+      new Map([
+        ["RR6W", 1],
+        ["Z6", 1],
+        ["Z4", 1],
+      ]),
+    );
   });
 });
 

@@ -83,8 +83,9 @@ export function usePlacementFitMap({
     return [...ids].sort().join(",");
   }, [trailSource, isDraftMode, draftAssignments]);
 
-  // Ref guard: histories are per-TM (30-night spread) and relatively stable.
-  // We only need to (re)fetch when the *set of TMs* on the current board/draft actually changes.
+  // Ref guard: histories are per-TM and anchored to the viewed night. A future
+  // planning night must include earlier built boards after today, so the date is
+  // part of the cache identity as well as the TM set.
   // Using a ref prevents re-dispatching the same request even if parent re-renders cause the
   // effect to re-evaluate (new assignments refs from zustand, live bumps, fit consumers re-rendering, etc.).
   const lastFetchedKeyRef = useRef<string | null>(null);
@@ -117,12 +118,13 @@ export function usePlacementFitMap({
       return;
     }
 
-    if (lastFetchedKeyRef.current === tmIdsKey) {
+    const historyRequestKey = `${currentIso}|${tmIdsKey}`;
+    if (lastFetchedKeyRef.current === historyRequestKey) {
       // Already fetched (or in-flight) for exactly this set of TMs. No need to hit the API again.
       return;
     }
     // Mark in-flight only; clear on failure so the next render can retry.
-    lastFetchedKeyRef.current = tmIdsKey;
+    lastFetchedKeyRef.current = historyRequestKey;
 
     const tmIds = tmIdsKey.split(",").filter(Boolean);
     const tmIdSet = new Set(tmIds);
@@ -151,6 +153,7 @@ export function usePlacementFitMap({
             body: JSON.stringify({
               tmIds: chunk,
               days: PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
+              throughDate: currentIso,
             }),
           });
           if (!res.ok) throw new Error(`placement-histories ${res.status}`);
@@ -187,7 +190,7 @@ export function usePlacementFitMap({
     return () => {
       cancelled = true;
     };
-  }, [shouldFetchHistories, tmIdsKey, historyRefreshEpoch]);
+  }, [shouldFetchHistories, tmIdsKey, currentIso, historyRefreshEpoch]);
 
   const otherTmProfiles = useMemo(() => {
     const out: Record<string, PlacementTmProfile | null> = {};

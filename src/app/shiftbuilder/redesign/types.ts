@@ -17,6 +17,8 @@ export interface ShiftCardProps {
   coverage?: CoverageEntry[];
   /** Builder-only dated project pills, placed between the slot label and TM name. */
   projectPills?: ReactNode;
+  /** Quiet metadata rendered directly below the assigned TM name. */
+  nameMeta?: ReactNode;
   taskContent?: ReactNode;
   /** Optional in-flow footer used by live coverage banners. */
   footer?: ReactNode;

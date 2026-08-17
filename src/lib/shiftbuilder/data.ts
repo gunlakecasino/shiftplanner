@@ -2846,9 +2846,11 @@ export interface ZoneDetailEntry {
   tmName: string;
   /** zone key → dates sorted newest-first */
   zoneDates: Record<string, string[]>;
+  /** night date → primary assignment key; coverage areas remain in zoneDates only */
+  primaryPlacementByNight?: Record<string, string>;
   /** zone key → count (derived from zoneDates) */
   zoneCounts: Record<string, number>;
-  /** total zone placements in window */
+  /** total physical-area exposures in window */
   totalAssignments: number;
   /** distinct nights with any zone assignment */
   totalNights: number;
@@ -3049,7 +3051,7 @@ export async function getTmPlacementHistory(
     const chunk = nightIds.slice(i, i + NIGHT_CHUNK);
     const { data: batch, error } = await client
       .from("zone_assignments")
-      .select("night_id, slot_key, slot_type, rr_side")
+      .select("night_id, slot_key, slot_type, rr_side, additional_coverage_slots")
       .in("night_id", chunk)
       .eq("tm_id", tmId)
       .not("slot_type", "eq", "overlap");
@@ -3063,6 +3065,7 @@ export async function getTmPlacementHistory(
   if (!rows.length) return null;
 
   const zoneDates: Record<string, string[]> = {};
+  const primaryPlacementByNight: Record<string, string> = {};
   const nightDates = new Set<string>();
   let lastDate = "";
 
@@ -3077,8 +3080,18 @@ export async function getTmPlacementHistory(
       nightIdToLayout.get(row.night_id) ?? null,
     );
     if (!z || z.startsWith("UNK:")) continue;
-    if (!zoneDates[z]) zoneDates[z] = [];
-    zoneDates[z].push(d);
+    if (!primaryPlacementByNight[d]) primaryPlacementByNight[d] = z;
+
+    const physicalAreas = [
+      z,
+      ...((row.additional_coverage_slots as string[] | null | undefined) ?? [])
+        .map((key) => normalizeHistoryUiKey(key))
+        .filter(Boolean),
+    ];
+    for (const area of new Set(physicalAreas)) {
+      if (!zoneDates[area]) zoneDates[area] = [];
+      if (!zoneDates[area].includes(d)) zoneDates[area].push(d);
+    }
     nightDates.add(d);
     if (d > lastDate) lastDate = d;
   }
@@ -3106,6 +3119,7 @@ export async function getTmPlacementHistory(
     tmId,
     tmName: (profile as any)?.display_name || (profile as any)?.full_name || tmId,
     zoneDates,
+    primaryPlacementByNight,
     zoneCounts,
     totalAssignments,
     totalNights: nightDates.size,
