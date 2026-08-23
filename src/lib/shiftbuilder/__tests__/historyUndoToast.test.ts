@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const toastMock = vi.fn();
-const dismissMock = vi.fn();
+const { toastMock, dismissMock } = vi.hoisted(() => ({
+  toastMock: vi.fn(),
+  dismissMock: vi.fn(),
+}));
 
 vi.mock("sonner", () => ({
   toast: Object.assign(toastMock, { dismiss: dismissMock }),
