@@ -11,6 +11,7 @@ import {
   saveLastPrintConfig,
   tonightPrintConfig,
   fullWeekPrintConfig,
+  dayHasPrintPages,
 } from "../print/printConfigUtils";
 import { generatePrintPreviewGoldenPages } from "../print/printPreviewPipeline";
 import type { LiveBoardOverlay } from "../print/mergePrintSnapshot";
@@ -88,7 +89,7 @@ export interface UsePrintManagerReturn {
   handlePrintWithConfig: (config: PrintConfig, options?: { exportMode?: boolean }) => Promise<void>;
   handlePreviewSheet: (args: {
     dayIndex: number;
-    view: "deployment" | "breaks";
+    view: "deployment" | "breaks" | "planner";
     label: string;
     printVariant: PrintVariant;
     includeShiftNotes: boolean;
@@ -226,7 +227,7 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
           setTimeout(check, 60);
         });
 
-      const activeDays = config.days.filter((d) => d.printDeploy || d.printBreaks);
+      const activeDays = config.days.filter(dayHasPrintPages);
 
       if (activeDays.length === 0) {
         showToast(exportMode ? "Nothing to export. (no pages selected)" : "No pages selected to print.", "error");
@@ -415,7 +416,7 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
   const handlePreviewSheet = useCallback(
     (args: {
       dayIndex: number;
-      view: "deployment" | "breaks";
+      view: "deployment" | "breaks" | "planner";
       label: string;
       printVariant: PrintVariant;
       includeShiftNotes: boolean;
@@ -443,7 +444,12 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
         config.customQueueOrder ?? null,
       ).map((item) => item.id);
 
-      const queuePageId = args.view === "breaks" ? `${args.dayIndex}-b` : `${args.dayIndex}-d`;
+      const queuePageId =
+        args.view === "planner"
+          ? `${args.dayIndex}-p`
+          : args.view === "breaks"
+            ? `${args.dayIndex}-b`
+            : `${args.dayIndex}-d`;
 
       setIsPrintCenterOpen(false);
       flushSync(() => {
@@ -458,7 +464,7 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
         });
         setCanvasMode("print-preview");
         changeDay(args.dayIndex);
-        setCurrentView(args.view);
+        setCurrentView(args.view === "planner" ? "deployment" : args.view);
       });
       showToast(`Preview: ${args.label}`, "info");
     },
@@ -494,8 +500,13 @@ export function usePrintManager(params: UsePrintManagerParams): UsePrintManagerR
 
   // Re-computed live values (some are passed through for layout)
   const printPreviewSheetCountMemo = printPreviewFocus === "duplex" ? 2 : 1;
-  const printPreviewContentWidthMemo = printPreviewSheetCountMemo === 2 ? 2112 : 1056; // matches prior
-  const printPreviewContentHeightMemo = 816;
+  const isPlannerPreview = printPreviewFocus === "planner";
+  const printPreviewContentWidthMemo = isPlannerPreview
+    ? 816
+    : printPreviewSheetCountMemo === 2
+      ? 2112
+      : 1056;
+  const printPreviewContentHeightMemo = isPlannerPreview ? 1056 : 816;
 
   return {
     isPrintCenterOpen,

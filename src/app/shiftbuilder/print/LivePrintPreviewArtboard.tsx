@@ -6,9 +6,11 @@ import type { ActiveBreakGroupFilter } from "@/lib/shiftbuilder/constants";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
 import { postProcessOfficialDeploymentArtboard } from "./deploymentPrintLayout";
 import { PrintPreviewPage } from "./PrintPreviewPage";
+import { PortraitPlannerPage } from "./PortraitPlannerPage";
+import { buildPortraitPlannerPages } from "./buildPortraitPlannerModel";
 import type { PrintDaySnapshot, PrintPreviewView, PrintVariant } from "./printPreviewTypes";
 
-export type PrintPreviewFocus = "duplex" | "deployment" | "breaks";
+export type PrintPreviewFocus = "duplex" | "deployment" | "breaks" | "planner";
 
 export type LivePrintPreviewArtboardProps = {
   view: PrintPreviewView;
@@ -50,6 +52,7 @@ export function LivePrintPreviewArtboard({
       const artboard = hostRef.current.querySelector(".print-artboard");
       if (!artboard) return;
       if (artboard.classList.contains("sb-graves-sheet")) return;
+      if (view === "planner") return;
       if (view === "breaks") {
         postProcessBreaksArtboard(artboard);
       } else if (printVariant === "official") {
@@ -61,6 +64,15 @@ export function LivePrintPreviewArtboard({
       cancelled = true;
     };
   }, [view, snapshot, printVariant]);
+
+  if (view === "planner") {
+    const plannerPage = buildPortraitPlannerPages(snapshot)[0];
+    return (
+      <div ref={hostRef}>
+        {plannerPage ? <PortraitPlannerPage model={plannerPage} /> : null}
+      </div>
+    );
+  }
 
   return (
     <div ref={hostRef}>

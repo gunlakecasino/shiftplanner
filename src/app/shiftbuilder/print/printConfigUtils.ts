@@ -1,7 +1,7 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { PrintConfig, PrintDayConfig, PageOrder, PrintVariant } from "../components/PrintCommandCenter";
 
-export type PrintQueueItemType = "deploy" | "breaks";
+export type PrintQueueItemType = "deploy" | "breaks" | "planner";
 
 export interface PrintQueueItem {
   id: string;
@@ -16,17 +16,25 @@ export function defaultPrintDays(todayIndex: number): PrintDayConfig[] {
     dayIndex: i,
     printDeploy: i === todayIndex,
     printBreaks: i === todayIndex,
+    printPlanner: false,
     inOverview: false,
   }));
 }
 
+export function dayHasPrintPages(d: PrintDayConfig): boolean {
+  return Boolean(d.printDeploy || d.printBreaks || d.printPlanner);
+}
+
 export function countPrintPages(days: PrintDayConfig[]): number {
-  return days.reduce((s, d) => s + (d.printDeploy ? 1 : 0) + (d.printBreaks ? 1 : 0), 0);
+  return days.reduce(
+    (s, d) => s + (d.printDeploy ? 1 : 0) + (d.printBreaks ? 1 : 0) + (d.printPlanner ? 1 : 0),
+    0,
+  );
 }
 
 export function estimatePrintSeconds(days: PrintDayConfig[]): number {
-  const deployBreaks = new Set(days.filter((d) => d.printDeploy || d.printBreaks).map((d) => d.dayIndex));
-  return deployBreaks.size * 4;
+  const active = new Set(days.filter(dayHasPrintPages).map((d) => d.dayIndex));
+  return active.size * 4;
 }
 
 function sheetSuffix(printVariant: PrintVariant): string {
@@ -55,7 +63,7 @@ export function buildPrintQueue(
   printVariant: PrintVariant = "official",
 ): PrintQueueItem[] {
   const items: PrintQueueItem[] = [];
-  const active = days.filter((d) => d.printDeploy || d.printBreaks);
+  const active = days.filter(dayHasPrintPages);
 
   for (const d of active) {
     const def = dayDefs[d.dayIndex];
@@ -74,6 +82,15 @@ export function buildPrintQueue(
         id: `${d.dayIndex}-b`,
         label: breaksLabel(def.short, printVariant),
         type: "breaks",
+        color: def.color,
+        dayIndex: d.dayIndex,
+      });
+    }
+    if (d.printPlanner) {
+      items.push({
+        id: `${d.dayIndex}-p`,
+        label: `${def.short} Planner sheet`,
+        type: "planner",
         color: def.color,
         dayIndex: d.dayIndex,
       });
@@ -145,8 +162,8 @@ export function tonightPrintConfig(
   return {
     days: defaultPrintDays(selectedDayIndex).map((d) =>
       d.dayIndex === selectedDayIndex
-        ? { ...d, printDeploy: true, printBreaks: true }
-        : { ...d, printDeploy: false, printBreaks: false },
+        ? { ...d, printDeploy: true, printBreaks: true, printPlanner: false }
+        : { ...d, printDeploy: false, printBreaks: false, printPlanner: false },
     ),
     pageOrder: "paired",
     margins: "narrow",
@@ -181,6 +198,7 @@ export function fullWeekPrintConfig(): PrintConfig {
       dayIndex: i,
       printDeploy: true,
       printBreaks: true,
+      printPlanner: false,
       inOverview: false,
     })),
     pageOrder: "paired",
@@ -212,6 +230,7 @@ export function loadLastPrintConfig(selectedDayIndex: number): PrintConfig | nul
         dayIndex: d.dayIndex,
         printDeploy: Boolean(d.printDeploy),
         printBreaks: Boolean(d.printBreaks),
+        printPlanner: Boolean((d as PrintDayConfig).printPlanner),
         inOverview: false,
       })),
       pageOrder: "paired",

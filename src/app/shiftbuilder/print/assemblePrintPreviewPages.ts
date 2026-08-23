@@ -13,7 +13,12 @@ import { renderPrintPreviewHtml } from "./renderPrintPreviewHtml";
 import { assembleGoldenPrintPages, type GoldenPrintPage } from "./assemblePages";
 import type { DraftAssignmentRow } from "../components/placementFitForSlot";
 
-export type PrintPreviewCaptured = Map<number, { deployHTML?: string; breaksHTML?: string }>;
+import { renderPortraitPlannerHtmlPages } from "./renderPortraitPlannerHtml";
+
+export type PrintPreviewCaptured = Map<
+  number,
+  { deployHTML?: string; breaksHTML?: string; plannerHTML?: string[] }
+>;
 
 export type LiveBoardOverlaysByDay = Map<number, LiveBoardOverlay>;
 
@@ -71,7 +76,7 @@ export async function capturePrintPreviewPages(args: {
     if (printVariant === "planning") {
       snapshot = await hydratePrintPlacementTrails(snapshot);
     }
-    const entry: { deployHTML?: string; breaksHTML?: string } = {};
+    const entry: { deployHTML?: string; breaksHTML?: string; plannerHTML?: string[] } = {};
 
     if (dayConf.printDeploy) {
       onProgress?.(`Rendering ${def.name} assignments…`);
@@ -98,6 +103,10 @@ export async function capturePrintPreviewPages(args: {
         printedAt,
         includeTimestamp: config.includeTimestamp ?? true,
       });
+    }
+    if (dayConf.printPlanner) {
+      onProgress?.(`Rendering ${def.name} planner sheet…`);
+      entry.plannerHTML = renderPortraitPlannerHtmlPages(snapshot);
     }
 
     captured.set(dayIdx, entry);

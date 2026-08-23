@@ -1,0 +1,229 @@
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { PortraitPlannerPage } from "@/app/shiftbuilder/print/PortraitPlannerPage";
+import {
+  buildPlannerRoster,
+  buildPortraitPlannerPages,
+  paginatePlannerRoster,
+  plannerRosterBand,
+} from "@/app/shiftbuilder/print/buildPortraitPlannerModel";
+import { assembleGoldenPrintPages } from "@/app/shiftbuilder/print/assemblePages";
+import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "@/app/shiftbuilder/print/goldenConstants";
+import { LETTER_PORTRAIT_PT, PLANNER_ROSTER_PER_PAGE, PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "@/app/shiftbuilder/print/portraitConstants";
+import { printArtboardSizePx, printPageOrientation } from "@/app/shiftbuilder/print/printPageGeometry";
+import {
+  buildPrintQueue,
+  countPrintPages,
+  dayHasPrintPages,
+} from "@/app/shiftbuilder/print/printConfigUtils";
+import type { PrintConfig } from "@/app/shiftbuilder/components/PrintCommandCenter";
+import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
+import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
+
+const day: DayDef = {
+  index: 0,
+  name: "Friday",
+  short: "Fri",
+  dateNum: 14,
+  monthYear: "August 2026",
+  color: "#c43b18",
+  meta: "11p – 7a",
+  date: new Date(2026, 7, 14, 12),
+  isToday: false,
+};
+
+function snapshot(over: Partial<PrintDaySnapshot> = {}): PrintDaySnapshot {
+  return {
+    dayIndex: 0,
+    day,
+    assignments: {
+      Z1: { tmId: "tm-jordan", tmName: "Jordan", breakGroup: 1 },
+      MRR1: { tmId: "tm-morgan", tmName: "Morgan", breakGroup: 2 },
+      AUX1: { tmId: "tm-admin", tmName: "Reese", breakGroup: 1 },
+      "OL-PM-0": { tmId: "tm-alex", tmName: "Alex", breakGroup: 4 },
+    },
+    tasksBySlot: {},
+    auxDefs: [
+      { key: "AUX1", role: "admin", label: "ADMIN", locations: ["Floor Admin"] },
+      { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: ["Z9 Smoking Room"] },
+      { key: "AUX3", role: "blank", label: "", locations: [] },
+    ],
+    amOverlapDayName: "Saturday",
+    amOverlapDateNum: 15,
+    nextDayColor: "#006ec8",
+    breakCounts: { 1: 2, 2: 1, 3: 0, 4: 1 },
+    scheduledRoster: [
+      { tmId: "tm-jordan", name: "Jordan", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
+      { tmId: "tm-alex", name: "Alex", isFullGrave: false, isPMOverlap: true, isAMOverlap: false },
+      { tmId: "tm-sam", name: "Sam", isFullGrave: false, isPMOverlap: false, isAMOverlap: true },
+      { tmId: "tm-morgan", name: "Morgan", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
+      { tmId: "tm-admin", name: "Reese", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
+    ],
+    ...over,
+  };
+}
+
+describe("portrait planner model", () => {
+  it("keeps Golden landscape metrics untouched", () => {
+    expect(GOLDEN_WIDTH_PX).toBe(1056);
+    expect(GOLDEN_HEIGHT_PX).toBe(816);
+    expect(PORTRAIT_WIDTH_PX).toBe(816);
+    expect(PORTRAIT_HEIGHT_PX).toBe(1056);
+    expect(LETTER_PORTRAIT_PT).toEqual({ width: 612, height: 792 });
+    expect(printArtboardSizePx("deploy")).toEqual({ width: 1056, height: 816 });
+    expect(printArtboardSizePx("planner")).toEqual({ width: 816, height: 1056 });
+    expect(printPageOrientation("deploy")).toBe("landscape");
+    expect(printPageOrientation("planner")).toBe("portrait");
+  });
+
+  it("marks overlaps quietly and leaves full-grave unmarked", () => {
+    expect(plannerRosterBand({ isFullGrave: true })).toBe("grave");
+    expect(plannerRosterBand({ isPMOverlap: true })).toBe("pm");
+    expect(plannerRosterBand({ isAMOverlap: true })).toBe("am");
+  });
+
+  it("builds a GDS roster and marks who is already placed", () => {
+    const roster = buildPlannerRoster(snapshot());
+    expect(roster.map((row) => row.name)).toEqual(["Alex", "Jordan", "Morgan", "Reese", "Sam"]);
+    expect(roster.find((row) => row.name === "Alex")?.band).toBe("pm");
+    expect(roster.find((row) => row.name === "Sam")?.band).toBe("am");
+    expect(roster.find((row) => row.name === "Sam")?.placed).toBe(false);
+    expect(roster.find((row) => row.name === "Jordan")?.placed).toBe(true);
+  });
+
+  it("paginates a long roster instead of crushing type", () => {
+    const names = Array.from({ length: PLANNER_ROSTER_PER_PAGE + 3 }, (_, i) => `TM ${String(i + 1).padStart(2, "0")}`);
+    const pages = paginatePlannerRoster(names);
+    expect(pages).toHaveLength(2);
+    expect(pages[0]).toHaveLength(PLANNER_ROSTER_PER_PAGE);
+    expect(pages[1]).toHaveLength(3);
+
+    const longRoster = names.map((name, i) => ({
+      tmId: `tm-${i}`,
+      name,
+      isFullGrave: true,
+      isPMOverlap: false,
+      isAMOverlap: false,
+    }));
+    const models = buildPortraitPlannerPages(snapshot({ scheduledRoster: longRoster }));
+    expect(models).toHaveLength(2);
+    expect(models[1].rosterContinued).toBe(true);
+    expect(models[1].zones).toHaveLength(10);
+  });
+
+  it("keeps empty zone / RR / aux / overlap slots as open boxes", () => {
+    const model = buildPortraitPlannerPages(snapshot())[0];
+    expect(model.zones).toHaveLength(10);
+    expect(model.restrooms).toHaveLength(10);
+    expect(model.aux).toHaveLength(3);
+    expect(model.overlaps.flatMap((row) => row.slots)).toHaveLength(12);
+    expect(model.zones.filter((card) => card.empty).length).toBeGreaterThan(0);
+    expect(model.aux.find((card) => card.key === "AUX3")?.empty).toBe(true);
+    expect(model.zones.find((card) => card.key === "Z1")?.tmName).toBe("Jordan");
+  });
+});
+
+describe("portrait planner page", () => {
+  it("renders roster on the left and placement grids on the right", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortraitPlannerPage, {
+        model: buildPortraitPlannerPages(snapshot())[0],
+      }),
+    );
+
+    expect(html).toContain('data-print-view="planner"');
+    expect(html).toContain("sb-planner-roster");
+    expect(html).toContain("Jordan");
+    expect(html).toContain("Sam");
+    expect(html).toContain(">PM<");
+    expect(html).toContain(">AM<");
+    expect(html).toContain("Restrooms");
+    expect(html).toContain("Zones");
+    expect(html).toContain("Auxiliary");
+    expect(html).toContain("Overlaps");
+    expect(html).toContain("sb-planner-slot-open");
+    expect(html).not.toContain("Break");
+    expect(html).not.toContain("WAVE");
+  });
+});
+
+describe("planner print queue", () => {
+  const days = Array.from({ length: 7 }, (_, i) => ({
+    index: i,
+    name: `Day${i}`,
+    short: `D${i}`,
+    dateNum: 10 + i,
+    monthYear: "Aug 2026",
+    color: "#000",
+    meta: "11p – 7a",
+    date: new Date(2026, 7, 10 + i),
+    isToday: false,
+  })) as DayDef[];
+
+  const config = (): PrintConfig => ({
+    days: Array.from({ length: 7 }, (_, i) => ({
+      dayIndex: i,
+      printDeploy: i === 0,
+      printBreaks: i === 0,
+      printPlanner: i === 0,
+      inOverview: false,
+    })),
+    pageOrder: "paired",
+    margins: "narrow",
+    includeOverview: false,
+    overviewPosition: "last",
+    includeCoverPage: false,
+    coverPagePosition: "first",
+    customQueueOrder: null,
+    printVariant: "official",
+    includeShiftNotes: true,
+    planningBlankSlate: false,
+    includeTimestamp: true,
+    editableTmNames: false,
+  });
+
+  it("counts the planner as an optional page beside Golden", () => {
+    const cfg = config();
+    expect(countPrintPages(cfg.days)).toBe(3);
+    expect(dayHasPrintPages(cfg.days[0])).toBe(true);
+    const queue = buildPrintQueue(
+      cfg.days,
+      cfg.pageOrder,
+      days,
+      false,
+      "last",
+      false,
+      "first",
+      "official",
+    );
+    expect(queue.map((item) => item.id)).toEqual(["0-d", "0-b", "0-p"]);
+    expect(queue[2].label).toContain("Planner");
+  });
+
+  it("assembles planner HTML after Golden pages for the night", () => {
+    const cfg = config();
+    const pages = assembleGoldenPrintPages({
+      config: cfg,
+      dayDefs: days,
+      capturedPages: new Map([
+        [
+          0,
+          {
+            deployHTML: '<div class="print-artboard">D</div>',
+            breaksHTML: '<div class="print-artboard">B</div>',
+            plannerHTML: [
+              '<div class="print-artboard sb-planner-sheet">P1</div>',
+              '<div class="print-artboard sb-planner-sheet">P2</div>',
+            ],
+          },
+        ],
+      ]),
+      activeDays: cfg.days.filter(dayHasPrintPages),
+      coverHTML: null,
+      overviewHTML: null,
+    });
+    expect(pages.map((page) => page.key)).toEqual(["0-d", "0-b", "0-p", "0-p2"]);
+    expect(pages.map((page) => page.kind)).toEqual(["deploy", "breaks", "planner", "planner"]);
+  });
+});

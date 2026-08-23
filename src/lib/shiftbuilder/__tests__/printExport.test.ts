@@ -199,6 +199,36 @@ describe("assembleGoldenPrintPages", () => {
     });
     expect(pages.map((p) => p.key)).toEqual(["0-d"]);
   });
+
+  it("can append a portrait planner page beside Golden", () => {
+    const config = baseConfig({
+      days: Array.from({ length: 7 }, (_, i) => ({
+        dayIndex: i,
+        printDeploy: i === 0,
+        printBreaks: false,
+        printPlanner: i === 0,
+        inOverview: false,
+      })),
+    });
+    const pages = assembleGoldenPrintPages({
+      config,
+      dayDefs,
+      capturedPages: new Map([
+        [
+          0,
+          {
+            deployHTML: '<div class="print-artboard">D</div>',
+            plannerHTML: ['<div class="print-artboard sb-planner-sheet">P</div>'],
+          },
+        ],
+      ]),
+      activeDays: config.days.filter((d) => d.printDeploy || d.printPlanner),
+      coverHTML: null,
+      overviewHTML: null,
+    });
+    expect(pages.map((p) => p.key)).toEqual(["0-d", "0-p"]);
+    expect(pages.map((p) => p.kind)).toEqual(["deploy", "planner"]);
+  });
 });
 
 describe("goldenRasterScale", () => {

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "./goldenConstants";
+import { PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "./portraitConstants";
 
 export const PRINT_PREVIEW_SHEET_SCALE = 0.46;
 
@@ -11,6 +12,8 @@ const SCALED_H = Math.round(GOLDEN_HEIGHT_PX * PRINT_PREVIEW_SHEET_SCALE);
 export type PrintPreviewScaledSheetProps = {
   label: string;
   children: React.ReactNode;
+  artboardWidth?: number;
+  artboardHeight?: number;
 };
 
 /**
@@ -18,14 +21,21 @@ export type PrintPreviewScaledSheetProps = {
  * layout footprint equal to the scaled dimensions (transform does not reserve
  * full artboard width in the flex row).
  */
-export function PrintPreviewScaledSheet({ label, children }: PrintPreviewScaledSheetProps) {
+export function PrintPreviewScaledSheet({
+  label,
+  children,
+  artboardWidth = GOLDEN_WIDTH_PX,
+  artboardHeight = GOLDEN_HEIGHT_PX,
+}: PrintPreviewScaledSheetProps) {
+  const scaledW = Math.round(artboardWidth * PRINT_PREVIEW_SHEET_SCALE);
+  const scaledH = Math.round(artboardHeight * PRINT_PREVIEW_SHEET_SCALE);
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        width: SCALED_W,
+        width: scaledW,
         flexShrink: 0,
       }}
     >
@@ -44,8 +54,8 @@ export function PrintPreviewScaledSheet({ label, children }: PrintPreviewScaledS
       </div>
       <div
         style={{
-          width: SCALED_W,
-          height: SCALED_H,
+          width: scaledW,
+          height: scaledH,
           overflow: "hidden",
           border: "1px solid var(--ios-gray-6)",
           borderRadius: 2,
@@ -57,8 +67,8 @@ export function PrintPreviewScaledSheet({ label, children }: PrintPreviewScaledS
       >
         <div
           style={{
-            width: GOLDEN_WIDTH_PX,
-            height: GOLDEN_HEIGHT_PX,
+            width: artboardWidth,
+            height: artboardHeight,
             transform: `scale(${PRINT_PREVIEW_SHEET_SCALE})`,
             transformOrigin: "top left",
             position: "absolute",
@@ -73,10 +83,17 @@ export function PrintPreviewScaledSheet({ label, children }: PrintPreviewScaledS
   );
 }
 
-export function printPreviewStageWidth(sheetCount: 1 | 2, gapPx = 20): number {
-  return sheetCount === 2 ? SCALED_W * 2 + gapPx : SCALED_W;
+export function printPreviewStageWidth(
+  sheetCount: 1 | 2,
+  gapPx = 20,
+  artboardWidth = GOLDEN_WIDTH_PX,
+): number {
+  const scaledW = Math.round(artboardWidth * PRINT_PREVIEW_SHEET_SCALE);
+  return sheetCount === 2 ? scaledW * 2 + gapPx : scaledW;
 }
 
-export function printPreviewStageHeight(): number {
-  return SCALED_H + 24;
+export function printPreviewStageHeight(artboardHeight = GOLDEN_HEIGHT_PX): number {
+  return Math.round(artboardHeight * PRINT_PREVIEW_SHEET_SCALE) + 24;
 }
+
+export { PORTRAIT_WIDTH_PX, PORTRAIT_HEIGHT_PX };

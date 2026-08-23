@@ -1,6 +1,8 @@
 import type { PrintConfig } from "../components/PrintCommandCenter";
 import { MARGIN_VALUES, MARGIN_ZOOM } from "../components/PrintCommandCenter";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "./goldenConstants";
+import { LETTER_PORTRAIT_PT, PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "./portraitConstants";
+import { printArtboardSizePx, printPageOrientation } from "./printPageGeometry";
 import { postProcessBreaksArtboard } from "./breaksArtboard";
 import { postProcessOfficialDeploymentArtboard } from "./deploymentPrintLayout";
 import { PRINT_PREVIEW_STYLESHEET_HREF } from "./printStylesheetHref";
@@ -88,10 +90,10 @@ async function waitForIframeAssets(doc: Document): Promise<void> {
 
 function buildWrappedPagesHtml(pages: GoldenPrintPage[]): string {
   return pages
-    .map(
-      (p) =>
-        `<div class="print-page-wrapper" data-print-key="${p.key}">${p.html}</div>`,
-    )
+    .map((p) => {
+      const orientation = printPageOrientation(p.kind);
+      return `<div class="print-page-wrapper" data-print-key="${p.key}" data-print-kind="${p.kind}" data-orientation="${orientation}">${p.html}</div>`;
+    })
     .join("");
 }
 
@@ -114,7 +116,7 @@ function prepareMountedArtboards(
     const el = ab as HTMLElement;
     el.setAttribute(
       "data-print-view",
-      page.kind === "breaks" ? "breaks" : "deployment",
+      page.kind === "breaks" ? "breaks" : page.kind === "planner" ? "planner" : "deployment",
     );
     applyGoldenArtboardContract(el, page);
   });
@@ -124,19 +126,21 @@ function applyGoldenArtboardContract(
   artboard: HTMLElement,
   page: GoldenPrintPage,
 ): void {
+  const size = printArtboardSizePx(page.kind);
   artboard.style.margin = "0";
   artboard.style.boxShadow = "none";
   artboard.style.boxSizing = "border-box";
-  artboard.style.width = `${GOLDEN_WIDTH_PX}px`;
-  artboard.style.height = `${GOLDEN_HEIGHT_PX}px`;
-  artboard.style.minHeight = `${GOLDEN_HEIGHT_PX}px`;
-  artboard.style.maxHeight = `${GOLDEN_HEIGHT_PX}px`;
+  artboard.style.width = `${size.width}px`;
+  artboard.style.height = `${size.height}px`;
+  artboard.style.minHeight = `${size.height}px`;
+  artboard.style.maxHeight = `${size.height}px`;
   artboard.style.overflow = "hidden";
   artboard.style.zoom = "1";
   artboard.style.transform = "none";
   artboard.style.display = "flex";
   artboard.style.flexDirection = "column";
 
+  if (page.kind === "planner") return;
   if (artboard.classList.contains("sb-graves-sheet")) return;
 
   if (page.kind === "breaks" && artboard.getAttribute("data-print-view") === "breaks") {
@@ -154,8 +158,10 @@ function buildIframePrintOverrides(config: PrintConfig): string {
   const marginValue = MARGIN_VALUES[config.margins];
   const zoomValue = MARGIN_ZOOM[config.margins];
   const scaledHeight = GOLDEN_HEIGHT_PX * zoomValue;
+  const portraitScaledHeight = PORTRAIT_HEIGHT_PX * zoomValue;
   return `
     @page { size: letter landscape; margin: ${marginValue} !important; }
+    @page planner-sheet { size: letter portrait; margin: ${marginValue} !important; }
     html, body {
       margin: 0 !important;
       padding: 0 !important;
@@ -194,6 +200,17 @@ function buildIframePrintOverrides(config: PrintConfig): string {
       page-break-after: auto !important;
       break-after: auto !important;
     }
+    .print-page-wrapper[data-orientation="portrait"] {
+      page: planner-sheet;
+      height: ${portraitScaledHeight}px !important;
+    }
+    .print-page-wrapper[data-orientation="portrait"] > .print-artboard,
+    .print-page-wrapper[data-orientation="portrait"] > .print-artboard.sb-planner-sheet {
+      width: ${PORTRAIT_WIDTH_PX}px !important;
+      height: ${PORTRAIT_HEIGHT_PX}px !important;
+      min-height: ${PORTRAIT_HEIGHT_PX}px !important;
+      max-height: ${PORTRAIT_HEIGHT_PX}px !important;
+    }
     .print-page-wrapper:last-child {
       page-break-after: auto;
       break-after: auto;
@@ -228,6 +245,17 @@ function buildIframePrintOverrides(config: PrintConfig): string {
         transform: none !important;
         transform-origin: top center !important;
         contain: none !important;
+      }
+      .print-page-wrapper[data-orientation="portrait"] {
+        page: planner-sheet;
+        height: ${portraitScaledHeight}px !important;
+      }
+      .print-page-wrapper[data-orientation="portrait"] > .print-artboard,
+      .print-page-wrapper[data-orientation="portrait"] > .print-artboard.sb-planner-sheet {
+        width: ${PORTRAIT_WIDTH_PX}px !important;
+        height: ${PORTRAIT_HEIGHT_PX}px !important;
+        min-height: ${PORTRAIT_HEIGHT_PX}px !important;
+        max-height: ${PORTRAIT_HEIGHT_PX}px !important;
       }
     }
   `;
@@ -661,22 +689,31 @@ export function getPrintContentBoxPt(config: PrintConfig): {
   };
 }
 
-/** Fit an undistorted landscape-letter sheet inside the selected page margins. */
-export function getPrintImagePlacementPt(config: PrintConfig): {
+/** Fit an undistorted letter sheet inside the selected page margins. */
+export function getPrintImagePlacementPt(
+  config: PrintConfig,
+  orientation: "landscape" | "portrait" = "landscape",
+): {
   x: number;
   y: number;
   width: number;
   height: number;
 } {
-  const letterW = 792;
-  const letterH = 612;
-  const { width: boxW, height: boxH, marginX, marginY } = getPrintContentBoxPt(config);
+  const letterW = orientation === "portrait" ? LETTER_PORTRAIT_PT.width : 792;
+  const letterH = orientation === "portrait" ? LETTER_PORTRAIT_PT.height : 612;
+  const marginPt = (() => {
+    const raw = MARGIN_VALUES[config.margins];
+    if (raw === "0in") return 0;
+    return parseFloat(raw) * 72;
+  })();
+  const boxW = letterW - 2 * marginPt;
+  const boxH = letterH - 2 * marginPt;
   const fit = Math.min(boxW / letterW, boxH / letterH);
   const width = letterW * fit;
   const height = letterH * fit;
   return {
-    x: marginX + (boxW - width) / 2,
-    y: marginY + (boxH - height) / 2,
+    x: marginPt + (boxW - width) / 2,
+    y: marginPt + (boxH - height) / 2,
     width,
     height,
   };

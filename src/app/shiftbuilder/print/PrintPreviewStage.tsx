@@ -27,6 +27,7 @@ import { usePrintPreviewSnapshot } from "./usePrintPreviewSnapshot";
 const SHEET_LABELS: Record<PrintPreviewView, { duplex: string; single: string }> = {
   deployment: { duplex: "FRONT — DEPLOYMENT", single: "DEPLOYMENT" },
   breaks: { duplex: "BACK — BREAKS", single: "BREAKS" },
+  planner: { duplex: "PLANNER SHEET", single: "PLANNER SHEET" },
 };
 
 export type PrintPreviewStageProps = {
@@ -56,6 +57,7 @@ export type PrintPreviewStageProps = {
 
 function viewsForFocus(focus: PrintPreviewFocus): PrintPreviewView[] {
   if (focus === "duplex") return ["deployment", "breaks"];
+  if (focus === "planner") return ["planner"];
   return [focus === "breaks" ? "breaks" : "deployment"];
 }
 
@@ -73,7 +75,11 @@ function pageLabelForView(
           ? `${selectedDayIndex}-d`
           : `${selectedDayIndex}-b`
         : queuePageId ??
-          (view === "deployment" ? `${selectedDayIndex}-d` : `${selectedDayIndex}-b`);
+          (view === "planner"
+            ? `${selectedDayIndex}-p`
+            : view === "deployment"
+              ? `${selectedDayIndex}-d`
+              : `${selectedDayIndex}-b`);
     if (queueIds.includes(id)) {
       return pageLabelForQueueId(queueIds, id);
     }
@@ -102,8 +108,13 @@ export function PrintPreviewStage({
   liveNotes,
 }: PrintPreviewStageProps) {
   const views = useMemo(() => viewsForFocus(focus), [focus]);
-  const stageW = printPreviewStageWidth(views.length === 2 ? 2 : 1);
-  const stageH = printPreviewStageHeight();
+  const isPlanner = focus === "planner";
+  const stageW = printPreviewStageWidth(
+    views.length === 2 ? 2 : 1,
+    20,
+    isPlanner ? 816 : 1056,
+  );
+  const stageH = printPreviewStageHeight(isPlanner ? 1056 : 816);
 
   const liveBoard = useMemo((): LiveBoardOverlay | null => {
     if (
@@ -172,7 +183,12 @@ export function PrintPreviewStage({
         const sheetChromeLabel = focus === "duplex" ? chrome.duplex : chrome.single;
 
         return (
-          <PrintPreviewScaledSheet key={view} label={sheetChromeLabel}>
+          <PrintPreviewScaledSheet
+            key={view}
+            label={sheetChromeLabel}
+            artboardWidth={view === "planner" ? 816 : 1056}
+            artboardHeight={view === "planner" ? 1056 : 816}
+          >
             <LivePrintPreviewArtboard
               view={view}
               snapshot={snapshot}

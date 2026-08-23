@@ -180,6 +180,19 @@ export async function buildPrintDaySnapshot(
     notes: secondary.notes ?? "",
     sideTasks: secondary.sideTasks ?? [],
     nightStatus,
+    scheduledRoster: (core.gravesScheduleRoster ?? []).map((row: {
+      id?: string;
+      name?: string;
+      isFullGrave?: boolean;
+      isPMOverlap?: boolean;
+      isAMOverlap?: boolean;
+    }) => ({
+      tmId: String(row.id ?? ""),
+      name: String(row.name ?? ""),
+      isFullGrave: Boolean(row.isFullGrave),
+      isPMOverlap: Boolean(row.isPMOverlap),
+      isAMOverlap: Boolean(row.isAMOverlap),
+    })).filter((row) => row.tmId && row.name),
   };
 
   return options.includePlacementTrails
