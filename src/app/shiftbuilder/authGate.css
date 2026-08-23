@@ -313,81 +313,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px 40px;
+  padding: 0;
   overflow: hidden;
   background: #F4F6FA;
 }
 
-.sb-auth-preview {
-  position: relative;
-  z-index: 1;
-  width: min(440px, 100%);
-  border-radius: 24px;
-  background: #ffffff;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 24px 48px -28px rgba(15, 23, 42, 0.28);
-  padding: 22px 22px 18px;
-}
-
-.sb-auth-preview__bar {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.sb-auth-visual__eyebrow {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-  color: #0F172A;
-}
-
-.sb-auth-visual__kicker {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 650;
-  color: #64748B;
-}
-
-.sb-auth-floor {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.sb-auth-floor__cell {
-  position: relative;
-  min-height: 68px;
-  border-radius: 14px;
-  background: #F4F6FA;
-  overflow: hidden;
-}
-
-.sb-auth-floor__rail {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 5px;
-  background: var(--floor-rail, #007aff);
-}
-
-.sb-auth-floor__num {
-  position: absolute;
-  right: 8px;
-  bottom: 7px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #94A3B8;
-}
-
-.sb-auth-visual__foot {
-  margin: 16px 0 0;
-  font-size: 12px;
-  color: #64748B;
+.sb-auth-visual__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
 }
 
 @media (max-width: 860px) {

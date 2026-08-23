@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -51,7 +51,9 @@ describe("PinGate — modern lightweight ops console", () => {
   it("does not paint skeleton, blur, or dusty beige behind the PIN form", () => {
     expect(opsAuthGate).toContain("sb-auth-split");
     expect(opsAuthGate).toContain("sb-auth-visual");
-    expect(opsAuthGate).toContain("Night board");
+    expect(opsAuthGate).toContain("sb-auth-visual__art");
+    expect(opsAuthGate).toContain("/sheetbuilder/auth-gate-side.png");
+    expect(opsAuthGate).not.toContain("Night board");
     expect(opsAuthGate).not.toContain("BuilderLoadingShell");
     expect(opsAuthGate).not.toContain("backdropFilter");
     expect(opsAuthGate).not.toContain("WebkitBackdropFilter");
@@ -64,7 +66,7 @@ describe("PinGate — modern lightweight ops console", () => {
     expect(opsAuthGate).not.toContain("Sign In");
     expect(opsAuthGate).not.toContain("Signup");
     expect(authCss).toContain("grid-template-columns: minmax(360px, 44%) minmax(0, 1fr)");
-    expect(authCss).toContain("sb-auth-preview");
+    expect(authCss).toContain("object-fit: contain");
     expect(authCss).toContain("background: #007AFF");
     expect(authCss).not.toContain("#E8E0D2");
     expect(authCss).not.toContain("#FBF7F0");
@@ -122,14 +124,19 @@ describe("PinGate — modern lightweight ops console", () => {
     expect(authCss).not.toContain("SIGNED IN");
   });
 
-  it("keeps the right panel as a quiet graves floor, not product marketing", () => {
-    expect(opsAuthGate).toContain("#ffcc00");
-    expect(opsAuthGate).toContain("#ff3b30");
-    expect(opsAuthGate).toContain("#007aff");
-    expect(opsAuthGate).toContain("#34c759");
+  it("keeps the right panel as Imagine side art, not a live zone grid", () => {
+    expect(existsSync(resolve(process.cwd(), "public/sheetbuilder/auth-gate-side.png"))).toBe(true);
+    expect(opsAuthGate).toContain('alt=""');
+    expect(opsAuthGate).toContain('aria-hidden="true"');
+    expect(opsAuthGate).not.toContain("GRAVES_FLOOR_ZONES");
+    expect(opsAuthGate).not.toContain("sb-auth-floor");
+    expect(opsAuthGate).not.toContain("sb-auth-preview");
     expect(opsAuthGate).not.toContain("SmartSave");
     expect(opsAuthGate).not.toContain("Continue With");
-    expect(authCss).toContain("sb-auth-floor");
+    expect(authCss).toContain("sb-auth-visual__art");
+    expect(authCss).toContain("object-fit: contain");
+    expect(authCss).not.toContain("sb-auth-floor");
+    expect(authCss).not.toContain("sb-auth-preview");
     expect(authCss).toContain("display: none");
   });
 });

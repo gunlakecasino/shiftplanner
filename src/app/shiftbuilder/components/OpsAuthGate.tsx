@@ -8,20 +8,6 @@ import { cn } from "@/lib/utils";
 
 const AUTH_EXIT_MS = 160;
 
-/** Uniform-code zone rails — same colors as the live desk. Quiet abstract only. */
-const GRAVES_FLOOR_ZONES: ReadonlyArray<{ n: number; c: string }> = [
-  { n: 1, c: "#ffcc00" },
-  { n: 2, c: "#ffcc00" },
-  { n: 3, c: "#ff3b30" },
-  { n: 4, c: "#ff3b30" },
-  { n: 5, c: "#ff3b30" },
-  { n: 6, c: "#C05A98" },
-  { n: 7, c: "#007aff" },
-  { n: 8, c: "#a2845e" },
-  { n: 9, c: "#ff3b30" },
-  { n: 10, c: "#34c759" },
-];
-
 type Props = {
   children: React.ReactNode;
   loadingLabel?: string;
@@ -71,25 +57,12 @@ function PinSessionError({
 function AuthFloorVisual() {
   return (
     <aside className="sb-auth-visual" aria-hidden="true">
-      <div className="sb-auth-preview">
-        <div className="sb-auth-preview__bar">
-          <p className="sb-auth-visual__eyebrow">Night board</p>
-          <p className="sb-auth-visual__kicker">Zones 1–10</p>
-        </div>
-        <div className="sb-auth-floor">
-          {GRAVES_FLOOR_ZONES.map((zone) => (
-            <div
-              key={zone.n}
-              className="sb-auth-floor__cell"
-              style={{ ["--floor-rail" as string]: zone.c }}
-            >
-              <span className="sb-auth-floor__rail" />
-              <span className="sb-auth-floor__num">{zone.n}</span>
-            </div>
-          ))}
-        </div>
-        <p className="sb-auth-visual__foot">Gun Lake graves</p>
-      </div>
+      <img
+        className="sb-auth-visual__art"
+        src="/sheetbuilder/auth-gate-side.png"
+        alt=""
+        draggable={false}
+      />
     </aside>
   );
 }
