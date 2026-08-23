@@ -280,7 +280,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     name: entry.tmName,
   }));
   const packageCoverageFooter = zoneCoverageTasks.length > 0 ? (
-    <div className="sb-coverage-footer shrink-0">
+    <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
       {zoneCoverageTasks.map((task) => (
         <CoverageBar
           key={task.id}
@@ -312,7 +312,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       {...(!isLocked ? attributes : {})}
       data-slot-key={def.key}
       data-has-draft={draftActive ? "true" : undefined}
-      className={`assignment-card sb-package-card-wrapper relative h-full min-h-[172px] rounded-xl ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${isTodayKiosk ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`assignment-card sb-package-card-wrapper relative h-full min-h-0 rounded-xl ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${isTodayKiosk ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),

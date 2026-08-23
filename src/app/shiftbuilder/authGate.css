@@ -29,13 +29,14 @@
   position: absolute;
   inset: 0;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity var(--sb-dur-mid) var(--sb-spring-gentle);
 }
 
 .sb-auth-gate-behind--visible {
   position: relative;
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 
@@ -51,373 +52,197 @@
   pointer-events: none;
 }
 
-.sb-auth-pin-scrim {
-  position: fixed;
+.sb-auth-waiting {
+  margin: 0;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: #111827;
+}
+
+.sb-auth-split {
+  position: absolute;
   inset: 0;
-  z-index: 9998;
-  background: rgba(250, 250, 248, 0.42);
-  pointer-events: none;
-  /* backdrop-filter is applied inline in OpsAuthGate.tsx — a class-level
-     backdrop-filter is stripped by this app's build (see the glass-backdrop
-     memory note); only the background/pointer-events belong here. */
+  display: grid;
+  grid-template-columns: minmax(360px, 44%) minmax(0, 1fr);
+  background: #ffffff;
+}
+
+.sb-auth-split__form {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 48px 56px;
+  background: #ffffff;
 }
 
 .sb-auth-gate-modal-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 380px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 1rem;
+  justify-content: flex-start;
   pointer-events: none;
 }
 
 .sb-auth-gate-modal-layer > * {
   pointer-events: auto;
+  width: 100%;
 }
 
-/* ── Auth cards (PinGate, PinChangeGate) — off-white paper ── */
-.sb-auth-card {
+/* ── Auth form — modern lightweight ops console ── */
+.sb-auth-form {
   position: relative;
   width: 100%;
-  max-width: 400px;
-  border-radius: 1.25rem;
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  background: linear-gradient(
-    168deg,
-    #fdfcf9 0%,
-    #f7f6f2 42%,
-    #f3f2ee 100%
-  );
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 20px 44px -14px rgba(0, 0, 0, 0.18);
-  overflow: hidden;
+  max-width: 380px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
-.sb-auth-card--wide {
-  max-width: 420px;
+.sb-auth-form--wide {
+  max-width: 380px;
 }
 
-.sb-auth-card--access {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 20px 44px -14px rgba(0, 0, 0, 0.18),
-    0 0 72px -28px rgba(239, 68, 68, 0.22);
-}
-
-.sb-auth-card--setup {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 20px 44px -14px rgba(0, 0, 0, 0.18),
-    0 0 72px -28px rgba(16, 185, 129, 0.2);
-}
-
-.sb-auth-card--warn {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 20px 44px -14px rgba(0, 0, 0, 0.18),
-    0 0 72px -28px rgba(245, 158, 11, 0.22);
-}
-
-.sb-auth-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(rgba(0, 0, 0, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.028) 1px, transparent 1px);
-  background-size: 20px 20px;
-  opacity: 0.45;
-}
-
+.sb-auth-form::before,
+.sb-auth-form::after,
+.sb-auth-card::before,
 .sb-auth-card::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: calc(1.25rem - 1px);
-  pointer-events: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  content: none !important;
 }
 
-.sb-auth-card--access::before {
-  background:
-    radial-gradient(ellipse 120% 70% at 50% -15%, rgba(239, 68, 68, 0.07), transparent 58%),
-    linear-gradient(rgba(0, 0, 0, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.028) 1px, transparent 1px);
-  background-size: auto, 20px 20px, 20px 20px;
+.sb-auth-form__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.sb-auth-card--setup::before {
-  background:
-    radial-gradient(ellipse 120% 70% at 50% -15%, rgba(16, 185, 129, 0.08), transparent 58%),
-    linear-gradient(rgba(0, 0, 0, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.028) 1px, transparent 1px);
-  background-size: auto, 20px 20px, 20px 20px;
-}
-
-.sb-auth-accent {
-  position: relative;
-  height: 3px;
-  overflow: hidden;
-}
-
-/* A whisper-thin highlight that drifts across the accent bar on a slow loop —
-   like light catching brushed metal. Idle-screen ambience; never distracting. */
-.sb-auth-accent::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 40%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.55) 50%,
-    transparent 100%
-  );
-  transform: translateX(-150%);
-  animation: sb-accent-drift-kf 4.5s ease-in-out infinite;
-  animation-delay: 0.6s;
-}
-
-@keyframes sb-accent-drift-kf {
-  0%, 8% { transform: translateX(-150%); }
-  55%, 100% { transform: translateX(350%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-accent::after {
-    display: none;
-  }
-}
-
-.sb-auth-card--access .sb-auth-accent {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(239, 68, 68, 0.12) 12%,
-    rgba(220, 38, 38, 0.72) 50%,
-    rgba(239, 68, 68, 0.12) 88%,
-    transparent 100%
-  );
-}
-
-.sb-auth-card--setup .sb-auth-accent {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(16, 185, 129, 0.12) 12%,
-    rgba(5, 150, 105, 0.72) 50%,
-    rgba(16, 185, 129, 0.12) 88%,
-    transparent 100%
-  );
-}
-
-.sb-auth-card--warn .sb-auth-accent {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(245, 158, 11, 0.12) 12%,
-    rgba(217, 119, 6, 0.72) 50%,
-    rgba(245, 158, 11, 0.12) 88%,
-    transparent 100%
-  );
-}
-
-.sb-auth-icon {
+.sb-auth-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 0.875rem;
-  flex-shrink: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  gap: 10px;
+  margin-bottom: 36px;
 }
 
-.sb-auth-card--access .sb-auth-icon {
-  background: linear-gradient(145deg, #fff5f5, #fee2e2);
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  color: #dc2626;
-  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
-  --sb-icon-glow: rgba(239, 68, 68, 0.32);
+.sb-auth-mark {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #0F172A;
 }
 
-.sb-auth-card--setup .sb-auth-icon {
-  background: linear-gradient(145deg, #ecfdf5, #d1fae5);
-  border: 1px solid rgba(52, 211, 153, 0.35);
-  color: #059669;
-  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
-  --sb-icon-glow: rgba(16, 185, 129, 0.3);
-}
-
-.sb-auth-card--warn .sb-auth-icon {
-  background: linear-gradient(145deg, #fffbeb, #fef3c7);
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  color: #d97706;
-  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
-  --sb-icon-glow: rgba(245, 158, 11, 0.32);
-}
-
-/* Quiet ambient life for an otherwise static screen — a slow breathing glow,
-   not a pulse you'd consciously clock. */
-@keyframes sb-icon-breathe-kf {
-  0%, 100% {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 0 0 var(--sb-icon-glow, transparent);
-  }
-  50% {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 14px 1px var(--sb-icon-glow, transparent);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-card--access .sb-auth-icon,
-  .sb-auth-card--setup .sb-auth-icon,
-  .sb-auth-card--warn .sb-auth-icon {
-    animation: none;
-  }
+.sb-auth-mark::after {
+  content: "";
+  position: absolute;
+  inset: 9px 8px auto 8px;
+  height: 13px;
+  background:
+    linear-gradient(#ffffff, #ffffff) 0 0 / 100% 2px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 0 5.5px / 100% 2px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 0 11px / 64% 2px no-repeat;
+  opacity: 0.92;
 }
 
 .sb-auth-title {
-  font-size: 1.35rem;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  color: #18181b;
+  margin: 0;
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+  color: #0F172A;
 }
 
+.sb-auth-lead,
 .sb-auth-subtitle {
-  font-size: 0.8125rem;
+  margin: 0 0 32px;
+  font-size: 15px;
   line-height: 1.5;
-  color: #6b7280;
+  color: #64748B;
 }
 
-.sb-auth-label {
+.sb-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 16px;
+  border: 1px solid #E6EAF0;
+  background: #F8FAFC;
+  padding: 10px 16px 12px;
+}
+
+.sb-auth-field + .sb-auth-field {
+  margin-top: 12px;
+}
+
+.sb-auth-field-label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #9ca3af;
-}
-
-.sb-auth-input-wrap {
-  position: relative;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #64748B;
 }
 
 .sb-auth-input {
   width: 100%;
-  border-radius: 0.875rem;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.92);
-  padding: 1.05rem 1rem;
-  text-align: center;
-  font-family: var(--font-jetbrains, var(--font-geist-mono)), monospace;
-  font-size: 2rem;
-  letter-spacing: 0.72em;
-  padding-right: calc(1rem - 0.72em);
-  color: #18181b;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  padding: 2px 0 0;
+  text-align: left;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  font-size: 22px;
+  letter-spacing: 0.22em;
+  color: #0F172A;
+  box-shadow: none;
 }
 
-.sb-auth-input--compact {
-  padding: 0.8rem 0.85rem;
-  font-size: 1.45rem;
-  letter-spacing: 0.58em;
-  padding-right: calc(0.85rem - 0.58em);
-}
-
-.sb-auth-input::placeholder {
-  color: #d4d4d8;
-  letter-spacing: inherit;
-}
-
-.sb-auth-card--access .sb-auth-input:focus {
+.sb-auth-form .sb-auth-input:focus {
   outline: none;
-  border-color: rgba(248, 113, 113, 0.65);
-  box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, 0.05),
-    0 0 0 3px rgba(239, 68, 68, 0.12);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
-.sb-auth-card--setup .sb-auth-input:focus {
-  outline: none;
-  border-color: rgba(52, 211, 153, 0.65);
-  box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, 0.05),
-    0 0 0 3px rgba(16, 185, 129, 0.12);
+.sb-auth-field:focus-within {
+  border-color: #007AFF;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
 }
 
-.sb-auth-card--access .sb-auth-input--error {
-  border-color: rgba(248, 113, 113, 0.75);
-  box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, 0.05),
-    0 0 0 3px rgba(239, 68, 68, 0.14);
+.sb-auth-form .sb-auth-input--error,
+.sb-auth-field:has(.sb-auth-input--error) {
+  border-color: #EF4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
 }
 
-.sb-auth-slots {
+.sb-auth-actions {
   display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-top: 0.85rem;
-}
-
-.sb-auth-input--compact + .sb-auth-slots {
-  margin-top: 0.55rem;
-  margin-bottom: 0.15rem;
-}
-
-.sb-auth-slot {
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 9999px;
-  background: #e4e4e7;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  transition:
-    transform 0.18s var(--sb-spring-gentle),
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.sb-auth-card--access .sb-auth-slot--filled {
-  background: linear-gradient(145deg, #f87171, #ef4444);
-  border-color: rgba(220, 38, 38, 0.35);
-  box-shadow: 0 0 8px -2px rgba(239, 68, 68, 0.45);
-  transform: scale(1.15);
-}
-
-.sb-auth-card--setup .sb-auth-slot--filled {
-  background: linear-gradient(145deg, #34d399, #10b981);
-  border-color: rgba(5, 150, 105, 0.35);
-  box-shadow: 0 0 8px -2px rgba(16, 185, 129, 0.4);
-  transform: scale(1.15);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding-top: 22px;
 }
 
 .sb-auth-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  border-radius: 0.875rem;
-  padding: 0.8rem 1rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  transition:
-    background 0.2s ease,
-    transform 0.12s ease,
-    box-shadow 0.2s ease;
+  gap: 6px;
+  border: 0;
+  border-radius: 16px;
+  padding: 15px 16px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 .sb-auth-primary--block {
@@ -425,109 +250,105 @@
 }
 
 .sb-auth-primary--grow {
-  flex: 1;
+  width: 100%;
 }
 
 .sb-auth-primary--active {
-  color: #fafafa;
-  background: linear-gradient(180deg, #3f3f46 0%, #18181b 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 8px 18px -8px rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  background: #007AFF;
 }
 
 .sb-auth-primary--active:hover {
-  background: linear-gradient(180deg, #52525b 0%, #27272a 100%);
-}
-
-.sb-auth-primary--active:active {
-  transform: scale(0.985);
+  background: #0066D6;
 }
 
 .sb-auth-primary--disabled {
-  color: #a1a1aa;
-  background: #e4e4e7;
+  color: #ffffff;
+  background: #007AFF;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
-.sb-auth-primary--success {
-  color: #fafafa;
-  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.2) inset,
-    0 8px 18px -8px rgba(5, 150, 105, 0.45);
-}
-
-.sb-auth-primary__icon-pop {
-  display: inline-flex;
-  animation: sb-icon-pop-kf 0.36s var(--sb-spring-gentle) both;
-}
-
-@keyframes sb-icon-pop-kf {
-  from {
-    opacity: 0;
-    transform: scale(0.4) rotate(-12deg);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-primary__icon-pop {
-    animation: none;
-  }
-}
-
 .sb-auth-secondary {
-  border-radius: 0.875rem;
-  padding: 0.8rem 1.1rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #6b7280;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 550;
+  color: #6B7280;
+  background: transparent;
+  border: 0;
 }
 
 .sb-auth-secondary:hover:not(:disabled) {
-  color: #374151;
-  border-color: rgba(0, 0, 0, 0.16);
-  background: #ffffff;
+  color: #111827;
+  background: #F8FAFC;
 }
 
 .sb-auth-secondary--ghost {
   width: 100%;
-  padding: 0.55rem 1rem;
+  padding: 8px 12px;
   background: transparent;
   border: none;
-  color: #9ca3af;
+  color: #6B7280;
 }
 
 .sb-auth-secondary--ghost:hover:not(:disabled) {
-  color: #4b5563;
+  color: #111827;
   background: transparent;
 }
 
 .sb-auth-error {
-  font-size: 0.75rem;
-  line-height: 1.45;
-  color: #b91c1c;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 0.75rem;
-  padding: 0.65rem 0.85rem;
-  animation: sb-error-enter-kf 0.28s var(--sb-spring-gentle) both;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #B91C1C;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
-@keyframes sb-error-enter-kf {
+.sb-auth-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+  background: #F4F6FA;
+}
+
+.sb-auth-visual__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 860px) {
+  .sb-auth-split {
+    grid-template-columns: 1fr;
+  }
+
+  .sb-auth-visual {
+    display: none;
+  }
+
+  .sb-auth-split__form {
+    min-height: 100%;
+    justify-content: center;
+    padding: 32px 24px;
+    background: #F4F6FA;
+  }
+}
+
+@keyframes sb-modal-enter-kf {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -535,90 +356,12 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-error {
-    animation: none;
-  }
-}
-
-/* Modal enter / exit — a hair of blur-in on top of the lift so the card
-   feels like it's materializing out of the scrim rather than just sliding
-   up. Barely perceptible on its own; that's the point. */
-@keyframes sb-modal-enter-kf {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.985);
-    filter: blur(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-
 .sb-modal-enter {
-  animation: sb-modal-enter-kf 0.34s var(--sb-spring-gentle) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-modal-enter {
-    animation-duration: 0.01ms;
-  }
+  animation: sb-modal-enter-kf 0.2s ease both;
 }
 
 .sb-modal-exit {
-  animation: sb-modal-enter-kf 0.18s var(--sb-spring-gentle) reverse both;
-}
-
-@keyframes sb-shake-kf {
-  0%,
-  100% {
-    transform: translateX(0) rotate(0deg);
-  }
-  20% {
-    transform: translateX(-7px) rotate(-0.4deg);
-  }
-  40% {
-    transform: translateX(7px) rotate(0.4deg);
-  }
-  60% {
-    transform: translateX(-4px) rotate(-0.2deg);
-  }
-  80% {
-    transform: translateX(4px) rotate(0.2deg);
-  }
-}
-
-.animate-shake {
-  animation: sb-shake-kf 0.42s ease;
-}
-
-/* Dots flash red in place, then the PIN clears — a beat of "that was wrong"
-   instead of the slots just snapping back to empty. */
-@keyframes sb-slot-error-flash-kf {
-  0%, 100% {
-    background: #e4e4e7;
-    border-color: rgba(0, 0, 0, 0.06);
-    transform: scale(1);
-  }
-  30% {
-    background: linear-gradient(145deg, #f87171, #ef4444);
-    border-color: rgba(220, 38, 38, 0.4);
-    transform: scale(1.15);
-  }
-}
-
-.sb-auth-slot--error-flash {
-  animation: sb-slot-error-flash-kf 0.5s ease;
-  animation-delay: calc(var(--sb-slot-i, 0) * 22ms);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-shake,
-  .sb-auth-slot--error-flash {
-    animation: none;
-  }
+  animation: sb-modal-enter-kf 0.14s ease reverse both;
 }
 
 @keyframes sb-content-enter-kf {

@@ -1,14 +1,14 @@
 export const ZONE_COLORS: Record<number, { border: string; bg: string; chip: string; label: string }> = {
-  1:  { border: "border-l-[#C8960C]", bg: "bg-[#C8960C]", chip: "bg-[#fef3d0] text-[#8a6300]", label: "#C8960C" },
-  2:  { border: "border-l-[#C8960C]", bg: "bg-[#C8960C]", chip: "bg-[#fef3d0] text-[#8a6300]", label: "#C8960C" },
-  3:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
-  4:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
-  5:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
+  1:  { border: "border-l-[#ffcc00]", bg: "bg-[#ffcc00]", chip: "bg-[#fef3d0] text-[#8a6300]", label: "#ffcc00" },
+  2:  { border: "border-l-[#ffcc00]", bg: "bg-[#ffcc00]", chip: "bg-[#fef3d0] text-[#8a6300]", label: "#ffcc00" },
+  3:  { border: "border-l-[#ff3b30]", bg: "bg-[#ff3b30]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#ff3b30" },
+  4:  { border: "border-l-[#ff3b30]", bg: "bg-[#ff3b30]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#ff3b30" },
+  5:  { border: "border-l-[#ff3b30]", bg: "bg-[#ff3b30]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#ff3b30" },
   6:  { border: "border-l-[#C05A98]", bg: "bg-[#C05A98]", chip: "bg-[#f3e2ec] text-[#7D3A68]", label: "#C05A98" },
-  7:  { border: "border-l-[#4B7BE8]", bg: "bg-[#4B7BE8]", chip: "bg-[#e6edfc] text-[#2449a8]", label: "#4B7BE8" },
-  8:  { border: "border-l-[#9B6A45]", bg: "bg-[#9B6A45]", chip: "bg-[#f5ebe0] text-[#6b3e1e]", label: "#9B6A45" },
-  9:  { border: "border-l-[#D93838]", bg: "bg-[#D93838]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#D93838" },
-  10: { border: "border-l-[#4CAF7D]", bg: "bg-[#4CAF7D]", chip: "bg-[#e2f5ec] text-[#2d7d55]", label: "#4CAF7D" },
+  7:  { border: "border-l-[#007aff]", bg: "bg-[#007aff]", chip: "bg-[#e6edfc] text-[#2449a8]", label: "#007aff" },
+  8:  { border: "border-l-[#a2845e]", bg: "bg-[#a2845e]", chip: "bg-[#f5ebe0] text-[#6b3e1e]", label: "#a2845e" },
+  9:  { border: "border-l-[#ff3b30]", bg: "bg-[#ff3b30]", chip: "bg-[#fde8e8] text-[#a01e1e]", label: "#ff3b30" },
+  10: { border: "border-l-[#34c759]", bg: "bg-[#34c759]", chip: "bg-[#e2f5ec] text-[#2d7d55]", label: "#34c759" },
 };
 
 export const ZONE_STATUS: Record<number, string> = {

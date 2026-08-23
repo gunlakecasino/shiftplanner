@@ -146,12 +146,52 @@ export function formatCanvasTrailChip(code: string): { label: string; title: str
   return { label: titleCaseWords(raw.replace(/[_-]+/g, " ")), title: raw };
 }
 
+export type CoverageChipTone = {
+  surface: string;
+  ink: string;
+  border: string;
+};
+
+/**
+ * Inset covering-chip colors for the live desk.
+ * Saturated zone accents stay on the left rail; chips use a tinted paper
+ * surface and dark same-family ink so yellow never fails as pale-on-white.
+ */
+const COVERAGE_CHIP_TONES: Record<string, CoverageChipTone> = {
+  "#ffcc00": { surface: "#F3E4B0", ink: "#6B4E00", border: "rgba(107, 78, 0, 0.22)" },
+  "#ffdb4d": { surface: "#F3E4B0", ink: "#6B4E00", border: "rgba(107, 78, 0, 0.22)" },
+  "#c8960c": { surface: "#F3E4B0", ink: "#6B4E00", border: "rgba(107, 78, 0, 0.22)" },
+  "#d4a800": { surface: "#F3E4B0", ink: "#6B4E00", border: "rgba(107, 78, 0, 0.22)" },
+  "#ff3b30": { surface: "#F6D4D1", ink: "#8A1C16", border: "rgba(138, 28, 22, 0.20)" },
+  "#d93838": { surface: "#F6D4D1", ink: "#8A1C16", border: "rgba(138, 28, 22, 0.20)" },
+  "#ff2d55": { surface: "#F6D2DD", ink: "#8A1238", border: "rgba(138, 18, 56, 0.20)" },
+  "#c05a98": { surface: "#F3E2EC", ink: "#7D3A68", border: "rgba(125, 58, 104, 0.22)" },
+  "#007aff": { surface: "#D7E8FF", ink: "#004A9E", border: "rgba(0, 74, 158, 0.20)" },
+  "#4b7be8": { surface: "#D7E8FF", ink: "#2449A8", border: "rgba(36, 73, 168, 0.20)" },
+  "#a2845e": { surface: "#EDE4D6", ink: "#5C4330", border: "rgba(92, 67, 48, 0.22)" },
+  "#9b6a45": { surface: "#EDE4D6", ink: "#5C4330", border: "rgba(92, 67, 48, 0.22)" },
+  "#34c759": { surface: "#E3EBE4", ink: "#3D5344", border: "rgba(61, 83, 68, 0.20)" },
+  "#4caf7d": { surface: "#E3EBE4", ink: "#3D5344", border: "rgba(61, 83, 68, 0.20)" },
+};
+
+export function coverageChipTone(accent: string): CoverageChipTone {
+  const key = accent.trim().toLowerCase();
+  if (COVERAGE_CHIP_TONES[key]) return COVERAGE_CHIP_TONES[key];
+  return {
+    surface: `color-mix(in srgb, ${accent} 16%, #F4F6F8)`,
+    ink: `color-mix(in srgb, ${accent} 74%, #111827)`,
+    border: `color-mix(in srgb, ${accent} 26%, transparent)`,
+  };
+}
+
 /** Coverage footer copy — "And Zone 9" / "+ ZONE 6" → "Covering Zone 9". */
 export function formatCanvasCoverageChip(taskLabel: string): string {
   const body = taskLabel
     .replace(/^\+\s*/, "")
     .replace(/^AND\s+/i, "")
     .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(covering\s+)+/i, "")
     .trim();
   if (!body) return "Covering";
 

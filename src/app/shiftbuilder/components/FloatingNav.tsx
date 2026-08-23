@@ -10,7 +10,6 @@ import {
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
 import { MiniCalendar } from "../redesign/components/MiniCalendar";
-import { velvetGlassPillStyle } from "./canvasPillGlass";
 import {
   ChevronDown,
   ChevronLeft,
@@ -25,7 +24,6 @@ import {
   Eraser,
   CalendarDays,
   RefreshCw,
-  Bell,
   ClipboardList,
 } from "lucide-react";
 
@@ -137,31 +135,35 @@ const MONTHS = MONTH_LONG;
 const SHORT_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 function nightActionClusterStyle(): CSSProperties {
-  return velvetGlassPillStyle({
+  return {
     height: 32,
     padding: 2,
     borderRadius: 8,
     display: "inline-flex",
     alignItems: "center",
-    gap: 0,
-    boxShadow: "inset 0 1px 0 var(--sb-glass-highlight)",
-  });
+    gap: 2,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    boxShadow: "none",
+  };
 }
 
 function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
   return {
     height: 28,
-    padding: "0 10px",
+    minWidth: 68,
+    padding: "0 12px",
     borderRadius: 6,
     border: 0,
     background: "transparent",
-    color: "var(--sb-text-2, #3C3C43)",
+    color: "rgba(244,244,245,0.92)",
     fontSize: 12,
-    fontWeight: 600,
+    fontWeight: 650,
     letterSpacing: "-0.01em",
     fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
     cursor: "pointer",
     whiteSpace: "nowrap",
@@ -179,13 +181,10 @@ function SheetBuilderMark({ className }: { className?: string }) {
       aria-label="SheetBuilder"
       focusable="false"
     >
-      <rect width="32" height="32" rx="7" fill="#1e1e28" />
-      <rect x="5" y="5" width="6.5" height="9" rx="1.5" fill="#C8960C" />
-      <rect x="12.75" y="5" width="6.5" height="9" rx="1.5" fill="#D93838" />
-      <rect x="20.5" y="5" width="6.5" height="9" rx="1.5" fill="#4B7BE8" />
-      <rect x="5" y="15.5" width="6.5" height="9" rx="1.5" fill="#D96B9A" />
-      <rect x="12.75" y="15.5" width="6.5" height="9" rx="1.5" fill="#4CAF7D" />
-      <rect x="20.5" y="15.5" width="6.5" height="9" rx="1.5" fill="#9B6A45" />
+      <rect width="32" height="32" rx="4" fill="#2A2B32" />
+      <rect x="6" y="8" width="20" height="2" fill="#C8C4BA" />
+      <rect x="6" y="15" width="20" height="2" fill="#C8C4BA" opacity="0.65" />
+      <rect x="6" y="22" width="13" height="2" fill="#C8C4BA" opacity="0.4" />
     </svg>
   );
 }
@@ -258,7 +257,6 @@ export default function FloatingNav(props: FloatingNavProps) {
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const selectedDay = days.find((d) => d.id === selectedDayId);
-  const activeColor = "#22c55e";
   const chromeText = "#f4f4f5";
   const mutedChromeText = "rgba(244,244,245,0.66)";
   const chromeDivider = "rgba(255,255,255,0.12)";
@@ -270,7 +268,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     `Roster · ${rosterPlacedCount}/${rosterScheduledCount} placed` +
     (rosterOpenCount > 0 ? ` · ${rosterOpenCount} open` : "") +
     (rosterCalledOffCount > 0 ? ` · ${rosterCalledOffCount} marked off` : "");
-  const notificationCount = rosterCalledOffCount;
 
   const firstDay = days[0]?.date || new Date();
   const monthLabel = `${MONTHS[firstDay.getMonth()]} ${firstDay.getFullYear()}`;
@@ -343,13 +340,11 @@ export default function FloatingNav(props: FloatingNavProps) {
           right: 0,
           width: "100%",
           minWidth: 0,
-          background: "linear-gradient(180deg, #343340 0%, #292933 100%)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
+          background: "#1E1F24",
           borderRadius: 0,
           border: "none",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 16px 40px -28px rgba(0,0,0,0.8)",
+          boxShadow: "none",
           boxSizing: "border-box",
           height: 54,
           maxHeight: 54,
@@ -394,13 +389,13 @@ export default function FloatingNav(props: FloatingNavProps) {
             <div
               role="menu"
               aria-label="SheetBuilder launchpad"
-              className="sb-sheetbuilder-launchpad absolute left-0 top-full z-[90] mt-2 overflow-hidden rounded-[26px] border border-white/10 bg-[#252532] p-5 text-zinc-100 shadow-2xl"
+              className="sb-sheetbuilder-launchpad absolute left-0 top-full z-[90] mt-1.5 overflow-hidden rounded-md border border-white/10 bg-[#1E1F24] p-1 text-zinc-100"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="sb-sheetbuilder-launchpad-grid grid grid-cols-2 gap-5">
+              <div className="sb-sheetbuilder-launchpad-grid flex flex-col">
                 <Link href={APP_BASE_PATH} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
                   <span className="sb-sheetbuilder-launchpad-card-icon">
-                    <Home size={28} strokeWidth={2} />
+                    <Home size={15} strokeWidth={2} />
                   </span>
                   <strong>Home</strong>
                 </Link>
@@ -408,7 +403,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 {showTeamLink && (
                   <Link href={`${APP_BASE_PATH}/team`} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
                     <span className="sb-sheetbuilder-launchpad-card-icon">
-                      <Users size={28} strokeWidth={2} />
+                      <Users size={15} strokeWidth={2} />
                     </span>
                     <strong>Team</strong>
                   </Link>
@@ -425,7 +420,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     }}
                   >
                     <span className="sb-sheetbuilder-launchpad-card-icon">
-                      <Settings size={28} strokeWidth={2} />
+                      <Settings size={15} strokeWidth={2} />
                     </span>
                     <strong>Settings</strong>
                   </button>
@@ -444,7 +439,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             className="icon-btn sb-interactive flex items-center gap-1 rounded-full px-2.5 py-1.5"
             style={{
               fontSize: 13,
-              fontWeight: 850,
+              fontWeight: 600,
               color: chromeText,
               letterSpacing: "-0.02em",
             }}
@@ -525,33 +520,33 @@ export default function FloatingNav(props: FloatingNavProps) {
                     key={day.id}
                     type="button"
                     onClick={() => onDaySelect(day.id, day.date || new Date())}
-                    className="sb-day-strip-btn sb-day-strip-btn--active flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
+                    className="sb-day-strip-btn sb-day-strip-btn--active flex flex-col items-center justify-center shrink-0"
                     style={{
-                      background: activeColor,
-                      borderRadius: 999,
-                      width: 42,
-                      height: 42,
-                      gap: 0,
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.16)",
+                      background: "transparent",
+                      borderRadius: 0,
+                      width: 36,
+                      height: 44,
+                      gap: 3,
+                      boxShadow: "none",
+                      borderBottom: "1px solid rgba(244,244,245,0.88)",
                     }}
                   >
                     <span
                       style={{
-	                        fontSize: 8,
-	                        fontWeight: 900,
-                        color: "rgba(255,255,255,0.76)",
+                        fontSize: 9,
+                        fontWeight: 850,
+                        color: "rgba(244,244,245,0.72)",
                         letterSpacing: "0.08em",
                         lineHeight: 1,
-                        marginBottom: 2,
                       }}
                     >
                       {day.shortLabel || SHORT_MONTHS[day.date?.getMonth() ?? 0]}
                     </span>
                     <span
                       style={{
-	                        fontSize: 18,
-	                        fontWeight: 950,
-                        color: "#fff",
+                        fontSize: 14,
+                        fontWeight: 850,
+                        color: "#f4f4f5",
                         lineHeight: 1,
                         letterSpacing: "0",
                       }}
@@ -700,30 +695,6 @@ export default function FloatingNav(props: FloatingNavProps) {
             )}
           </div>
 
-          <button
-            type="button"
-            className="sb-topbar-notification-btn icon-btn sb-interactive flex items-center justify-center rounded-full"
-            style={{
-              color: mutedChromeText,
-              background: "rgba(255,255,255,0.04)",
-            }}
-            title={
-              notificationCount > 0
-                ? `${notificationCount} roster notifications`
-                : "No roster notifications"
-            }
-            aria-label={
-              notificationCount > 0
-                ? `${notificationCount} roster notifications`
-                : "No roster notifications"
-            }
-          >
-            <Bell size={15} strokeWidth={2} />
-            {notificationCount > 0 && (
-              <span className="sb-topbar-notification-badge">{notificationCount}</span>
-            )}
-          </button>
-
           <div className="relative" ref={rosterMenuRef}>
             <button
               type="button"
@@ -760,51 +731,21 @@ export default function FloatingNav(props: FloatingNavProps) {
 
           </div>
 
-          {onViewChange && (
-            <button
-              type="button"
-              className="icon-btn sb-interactive flex items-center justify-center w-7 h-7 rounded-full"
-              style={{
-                color: currentView === "breaks" ? "#fff" : mutedChromeText,
-                background:
-                  currentView === "breaks"
-                    ? `${activeColor}66`
-                    : undefined,
-              }}
-              onClick={() => onViewChange(currentView === "breaks" ? "deployment" : "breaks")}
-              title={currentView === "breaks" ? "Deployment board" : "Overlap sheet"}
-              aria-label={currentView === "breaks" ? "Back to deployment board" : "Open overlap sheet"}
-              aria-pressed={currentView === "breaks"}
-            >
-              <Layers size={14} strokeWidth={1.8} />
-            </button>
-          )}
-
           {showPublishControls ? (
             <button
               type="button"
-              className="sb-topbar-publish icon-btn sb-interactive flex items-center gap-1.5 rounded-full px-2.5 py-1"
-              style={{ fontSize: 10, fontWeight: 700, color: chromeText, letterSpacing: "0.06em" }}
+              className="sb-topbar-publish icon-btn sb-interactive flex items-center rounded-full px-2 py-1"
+              style={{ fontSize: 11, fontWeight: 550, color: mutedChromeText, letterSpacing: "0.01em" }}
               onClick={onToggleDayPublished}
               disabled={!canPublishDay || publishDayBusy}
               aria-busy={publishDayBusy}
               title={isDayPublished ? "Unpublish this day" : "Publish this day"}
             >
-              <span
-                className="live-dot shrink-0"
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: isDayPublished ? "#22c55e" : "#f59e0b",
-                  display: "inline-block",
-                }}
-              />
-              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
+              {isDayPublished ? "Published" : "Unpublished"}
             </button>
           ) : (
             <span
-              className="sb-topbar-publish flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
+              className="sb-topbar-publish flex items-center rounded-full px-2 py-1 text-[11px] font-medium tracking-normal opacity-80"
               style={{ color: mutedChromeText }}
               title={
                 isDayPublished
@@ -812,17 +753,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   : "Unpublished — floor viewers cannot open this night"
               }
             >
-              <span
-                className="shrink-0"
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: isDayPublished ? "#22c55e" : "#f59e0b",
-                  display: "inline-block",
-                }}
-              />
-              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
+              {isDayPublished ? "Published" : "Unpublished"}
             </span>
           )}
 
@@ -915,6 +846,19 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {onViewChange && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onViewChange(currentView === "breaks" ? "deployment" : "breaks");
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Layers size={14} />
+                    {currentView === "breaks" ? "Deployment board" : "Overlap sheet"}
+                  </button>
+                )}
                 <div
                   className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
                 >

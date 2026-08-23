@@ -33,17 +33,15 @@ function getPillShellStyles(): string {
     bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
     right: max(10px, env(safe-area-inset-right, 0px)) !important;
     z-index: ${OPS_PILL_Z} !important;
-    font-family: var(--font-atkinson, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important;
-    font-size: 9.5px !important;
+    font-family: var(--font-ui, var(--font-inter-tight), system-ui, sans-serif) !important;
+    font-size: 10px !important;
     line-height: 1.25 !important;
-    background: rgba(28,28,30,0.82) !important;
-    color: #fff !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    border-radius: 10px !important;
+    background: #FFFFFF !important;
+    color: #64748B !important;
+    border: 1px solid #E6EAF0 !important;
+    border-radius: 999px !important;
     pointer-events: auto !important;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.75) !important;
-    backdrop-filter: blur(12px) saturate(145%) !important;
-    -webkit-backdrop-filter: blur(12px) saturate(145%) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
     user-select: none !important;
     display: flex !important;
     flex-direction: row !important;
@@ -102,7 +100,7 @@ function readTelemetry(): {
   const latencyText = lat != null ? `${lat}ms` : "—";
 
   const rtColor =
-    rt === "LIVE" ? "#22c55e" : rt === "SYNCING" ? "#eab308" : "#ef4444";
+    rt === "LIVE" ? "#6B7A6A" : rt === "SYNCING" ? "#8A8378" : "#8A1C16";
 
   let ai30Tokens = 0;
   let ai30Cost = 0;
@@ -180,7 +178,7 @@ export function updateOpsStatusBarContent(): void {
   if (rtLabelEl) rtLabelEl.textContent = pollLabel(t.rt);
   if (dotEl) {
     dotEl.style.background = t.rtColor;
-    dotEl.style.boxShadow = `0 0 4px ${t.rtColor}`;
+    dotEl.style.boxShadow = "none";
   }
 
   pill.title = `Board poll (~20s): ${pollLabel(t.rt)} · day switch ${t.perfText} · server ${t.latencyText} · xAI 30d ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(4)}, ${t.ai30Calls} calls) · session ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(4)}, ${t.sessionCalls} calls)`;

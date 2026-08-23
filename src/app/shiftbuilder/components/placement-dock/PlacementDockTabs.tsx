@@ -18,7 +18,7 @@ export function PlacementDockTabs({
 }) {
   return (
     <div
-      className="placement-dock-tabs flex shrink-0 gap-1 border-b border-black/[0.06] px-3 py-2"
+      className="placement-dock-tabs flex shrink-0 px-3"
       role="tablist"
       aria-label="Placement dock"
     >
@@ -30,10 +30,8 @@ export function PlacementDockTabs({
           aria-selected={active === tab.id}
           onClick={() => onChange(tab.id)}
           className={cn(
-            "sb-interactive min-h-11 flex-1 rounded-xl px-3 text-[14px] font-semibold tracking-tight transition-colors",
-            active === tab.id
-              ? "bg-[#1C1C1E] text-white shadow-sm"
-              : "bg-black/[0.04] text-neutral-600 hover:bg-black/[0.07]",
+            "sb-dock-tab sb-interactive flex-1 px-2 text-[13px] font-semibold tracking-tight",
+            active === tab.id ? "sb-dock-tab--active" : "sb-dock-tab--idle",
           )}
         >
           {tab.label}

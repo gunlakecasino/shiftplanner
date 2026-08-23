@@ -4,12 +4,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
 import { PinGate } from "./PinGate";
 import { PinChangeGate } from "./PinChangeGate";
-import { BuilderLoadingShell } from "./builderPrimitives";
 import { cn } from "@/lib/utils";
 
-// Long enough for PinGate's success checkmark to register before the board
-// reveals — a deliberate hold, not just an animation-timing accident.
-const AUTH_EXIT_MS = 420;
+const AUTH_EXIT_MS = 160;
 
 type Props = {
   children: React.ReactNode;
@@ -32,26 +29,19 @@ function PinSessionError({
       aria-modal="true"
       aria-labelledby="pin-session-error-title"
       aria-describedby="pin-session-error-desc"
-      className="sb-modal-enter sb-auth-card sb-auth-card--warn"
-      style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+      className="sb-auth-form"
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <div className="sb-auth-accent" aria-hidden="true" />
-      <div className="relative px-7 py-7 space-y-5">
-        <div className="flex items-start gap-4">
-          <div className="sb-auth-icon" aria-hidden="true">
-            <span className="ms" style={{ fontSize: 22 }}>
-              warning
-            </span>
-          </div>
-          <div className="min-w-0">
-            <h2 id="pin-session-error-title" className="sb-auth-title text-[1.15rem]">
-              {title}
-            </h2>
-            <p id="pin-session-error-desc" className="sb-auth-subtitle mt-2">
-              {message}
-            </p>
-          </div>
+      <div className="sb-auth-form__body">
+        <div className="sb-auth-brand">
+          <span className="sb-auth-mark" aria-hidden="true" />
+          <h2 id="pin-session-error-title" className="sb-auth-title">
+            {title}
+          </h2>
         </div>
+        <p id="pin-session-error-desc" className="sb-auth-lead">
+          {message}
+        </p>
         <button
           type="button"
           onClick={() => void onLogout()}
@@ -64,14 +54,25 @@ function PinSessionError({
   );
 }
 
+function AuthFloorVisual() {
+  return (
+    <aside className="sb-auth-visual" aria-hidden="true">
+      <img
+        className="sb-auth-visual__art"
+        src="/sheetbuilder/auth-gate-side.png"
+        alt=""
+        draggable={false}
+      />
+    </aside>
+  );
+}
+
 /**
- * Auth gate — artboard skeleton stays mounted; PIN / PIN-change modals overlay it.
- * Children load behind the gate so route chunks hydrate without extra loading flashes.
+ * Auth gate — split ops console. No skeleton board, no blur theater.
+ * Children stay mounted behind so route chunks hydrate without extra flashes.
  */
 export function OpsAuthGate({
   children,
-  loadingLabel = "LOADING OPS SESSION",
-  loadingSublabel = "Preparing computer context",
 }: Props) {
   const { isAuthenticated, isLoading, user, pinChangeToken, logout } = useOpsAuth();
   const [exiting, setExiting] = useState(false);
@@ -88,9 +89,6 @@ export function OpsAuthGate({
     !revealed &&
     (isLoading || needsPin || needsPinChange || pinChangeBlocked || exiting);
 
-  // Remember which modal was up so it keeps rendering (and fading out) through
-  // the `exiting` window, instead of unmounting the instant auth succeeds and
-  // leaving a blank overlay for the rest of the exit transition.
   const lastModalKindRef = useRef<"pin" | "pinChange" | "blocked" | null>(null);
   if (needsPin) lastModalKindRef.current = "pin";
   else if (needsPinChange) lastModalKindRef.current = "pinChange";
@@ -127,7 +125,7 @@ export function OpsAuthGate({
       <div
         className={cn(
           "sb-auth-gate-behind",
-          revealed && "sb-auth-gate-behind--visible sb-content-enter",
+          revealed && "sb-auth-gate-behind--visible",
         )}
         aria-hidden={!revealed}
       >
@@ -142,36 +140,27 @@ export function OpsAuthGate({
           )}
           aria-hidden={exiting}
         >
-          <BuilderLoadingShell
-            label={loadingLabel}
-            sublabel={loadingSublabel ?? (needsPin ? "Awaiting ops PIN" : undefined)}
-          />
-
-          {ready && modalKind ? (
-            <>
-              <div
-                className="sb-auth-pin-scrim"
-                aria-hidden="true"
-                style={{
-                  backdropFilter: "blur(6px)",
-                  WebkitBackdropFilter: "blur(6px)",
-                }}
-              />
+          <div className="sb-auth-split">
+            <div className="sb-auth-split__form">
               <div className="sb-auth-gate-modal-layer">
-                {modalKind === "pin" ? <PinGate /> : null}
-                {modalKind === "pinChange" && user ? (
+                {ready && modalKind === "pin" ? <PinGate /> : null}
+                {ready && modalKind === "pinChange" && user ? (
                   <PinChangeGate operatorName={user.full_name || user.username} />
                 ) : null}
-                {modalKind === "blocked" ? (
+                {ready && modalKind === "blocked" ? (
                   <PinSessionError
                     title="PIN setup unavailable"
                     message="Your session couldn't be prepared for a PIN change. Sign out and try again, or contact your supervisor."
                     onLogout={logout}
                   />
                 ) : null}
+                {!ready ? (
+                  <p className="sb-auth-waiting">SheetBuilder</p>
+                ) : null}
               </div>
-            </>
-          ) : null}
+            </div>
+            <AuthFloorVisual />
+          </div>
         </div>
       ) : null}
     </div>

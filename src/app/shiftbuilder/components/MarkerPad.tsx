@@ -20,9 +20,25 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import {
   fitVerdictLabel,
-  fitVerdictStyles,
   type PlacementFitVerdict,
 } from "@/lib/shiftbuilder/placementPadInsightSchema";
+
+function pickerFitChip(verdict: PlacementFitVerdict): { bg: string; text: string } {
+  switch (verdict) {
+    case "strong_fit":
+      return { bg: "#E8F7EE", text: "#147A45" };
+    case "acceptable":
+      return { bg: "#EEF4FF", text: "#007AFF" };
+    case "questionable":
+      return { bg: "#F4F6FA", text: "#64748B" };
+    case "critical_repeat":
+    case "poor_fit":
+    case "needs_swap":
+      return { bg: "#FFF5F5", text: "#B91C1C" };
+    default:
+      return { bg: "#F4F6FA", text: "#64748B" };
+  }
+}
 import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 
 export interface TmEntry {
@@ -72,22 +88,12 @@ function TmPickerRow({
   tm,
   enableDragAssign,
   allowListScroll = false,
-  isTablet,
-  accent,
-  rowBg,
-  rowBorder,
-  textPrimary,
   rotationFit,
   onPick,
 }: {
   tm: TmEntry;
   enableDragAssign: boolean;
   allowListScroll?: boolean;
-  isTablet: boolean;
-  accent: string;
-  rowBg: string;
-  rowBorder: string;
-  textPrimary: string;
   rotationFit?: PickerTmRotationFit;
   onPick: (tm: TmEntry) => void;
 }) {
@@ -97,8 +103,8 @@ function TmPickerRow({
     disabled: !enableDragAssign,
   });
   const initial = tm.tmName.charAt(0).toUpperCase();
-  const fitStyles = rotationFit
-    ? fitVerdictStyles(rotationFit.fitVerdict as PlacementFitVerdict)
+  const fitChip = rotationFit
+    ? pickerFitChip(rotationFit.fitVerdict as PlacementFitVerdict)
     : null;
 
   return (
@@ -111,97 +117,25 @@ function TmPickerRow({
         onPick(tm);
       }}
       onPointerDown={allowListScroll ? undefined : (e) => e.stopPropagation()}
-      className="sb-list-row sb-interactive"
+      className="sb-list-row sb-interactive sb-tm-picker-row"
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: isTablet ? 12 : 8,
-        padding: isTablet ? "12px 14px" : "7px 10px",
-        borderRadius: isTablet ? 12 : 10,
-        minHeight: isTablet ? 56 : undefined,
-        background: rowBg,
-        border: `1px solid ${rowBorder}`,
-        cursor: enableDragAssign ? "grab" : "pointer",
-        textAlign: "left",
-        width: "100%",
         opacity: isDragging ? 0.45 : 1,
+        cursor: enableDragAssign ? "grab" : "pointer",
         touchAction: allowListScroll ? "pan-y" : enableDragAssign ? "none" : "manipulation",
       }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.background = `${accent}22`;
-        (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.background = rowBg;
-        (e.currentTarget as HTMLElement).style.borderColor = rowBorder;
-      }}
     >
-      <span
-        style={{
-          width: isTablet ? 40 : 22,
-          height: isTablet ? 40 : 22,
-          borderRadius: "50%",
-          flexShrink: 0,
-          background: `${accent}22`,
-          border: `1px solid ${accent}66`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: isTablet ? 17 : 10,
-          fontWeight: 800,
-          color: accent,
-          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-        }}
-      >
-        {initial}
-      </span>
-      <span
-        style={{
-          flex: 1,
-          minWidth: 0,
-          fontSize: isTablet ? 20 : 12.5,
-          fontWeight: 600,
-          color: textPrimary,
-          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-          letterSpacing: "-0.15px",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {tm.tmName}
-      </span>
-      {rotationFit && fitStyles && (
+      <span className="sb-tm-picker-avatar">{initial}</span>
+      <span className="sb-tm-picker-name">{tm.tmName}</span>
+      {rotationFit && fitChip && (
         <span
+          className="sb-tm-picker-score"
           title={[
             `${fitVerdictLabel(rotationFit.fitVerdict as PlacementFitVerdict)} · ${rotationFit.healthPoints.toFixed(1)}pt`,
             rotationFit.fitFactLine,
             rotationFit.fitSummary,
           ].filter(Boolean).join("\n")}
-          style={{
-            flexShrink: 0,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            padding: isTablet ? "4px 8px" : "2px 6px",
-            borderRadius: 999,
-            background: fitStyles.bg,
-            color: fitStyles.text,
-            fontSize: isTablet ? 12 : 9,
-            fontWeight: 700,
-            fontFamily: "var(--font-jetbrains, monospace)",
-            letterSpacing: "0.02em",
-          }}
+          style={{ background: fitChip.bg, color: fitChip.text }}
         >
-          <span
-            style={{
-              width: isTablet ? 7 : 5,
-              height: isTablet ? 7 : 5,
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.92)",
-              flexShrink: 0,
-            }}
-          />
           {rotationFit.healthPoints.toFixed(1)}
         </span>
       )}
@@ -266,12 +200,7 @@ export const TmPicker: React.FC<{
       ? searchPool
       : tms;
 
-  const textPrimary = isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.80)";
-  const textMuted   = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)";
-  const rowBg       = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)";
-  const rowBorder   = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.10)";
-  const inputBg     = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
-  const inputBorder = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.14)";
+  const textPrimary = isDark ? "rgba(255,255,255,0.85)" : "#111827";
 
   const unavailableReasons = [
     { status: 'called_off', label: 'Called off' },
@@ -293,59 +222,37 @@ export const TmPicker: React.FC<{
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <span style={{ fontSize: isTablet ? 18 : 10.5, fontWeight: 700, letterSpacing: "-0.1px", color: textPrimary }}>
+    <div className="sb-tm-picker" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: 8 }}>
+      <div className="sb-tm-picker-heading">
+        <span className="sb-tm-picker-title">
           {currentTmName ? `Replace ${currentTmName}…` : "Assign TM"}
-          <span style={{ fontSize: isTablet ? 15 : 9, marginLeft: 6, opacity: 0.55 }}>
+          <span className="sb-tm-picker-meta">
             {filter.trim() ? "all eligible" : "scheduled + eligible"}
           </span>
         </span>
         {onCancel && (
           <button
             type="button"
+            className="sb-tm-picker-cancel"
             onClick={(e) => { e.stopPropagation(); onCancel(); }}
             onPointerDown={(e) => e.stopPropagation()}
-            style={{ fontSize: isTablet ? 20 : 11, color: textMuted, background: "none", border: "none", cursor: "pointer", padding: isTablet ? "6px 8px" : "2px 4px", lineHeight: 1, minWidth: isTablet ? 44 : undefined, minHeight: isTablet ? 44 : undefined }}
           >✕</button>
         )}
       </div>
 
-      {/* Filter input */}
       <input
         aria-label="Search eligible team members"
         type="text"
+        className="sb-tm-picker-search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         onKeyDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
         placeholder="Search…"
-        style={{
-          flexShrink: 0,
-          background: inputBg, border: `1px solid ${inputBorder}`,
-          borderRadius: isTablet ? 12 : 9,
-          padding: isTablet ? "12px 14px" : "6px 10px",
-          fontSize: isTablet ? 20 : 12,
-          fontWeight: 500,
-          color: textPrimary,
-          minHeight: isTablet ? 52 : undefined,
-          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-          outline: "none", caretColor: accent,
-        }}
       />
 
-      {/* Mode indicator — makes the three rules visible on screen */}
-      <div style={{
-        fontSize: isTablet ? 15 : 9,
-        fontWeight: 600,
-        letterSpacing: "0.3px",
-        color: filter.trim() || showAllEligible ? textMuted : accent,
-        padding: isTablet ? "2px 4px" : "0 4px",
-        flexShrink: 0,
-        lineHeight: 1.35,
-      }}>
+      <div className="sb-tm-picker-sort">
         {filter.trim()
           ? "Search: all eligible TMs (broad pool)"
           : showAllEligible
@@ -355,25 +262,23 @@ export const TmPicker: React.FC<{
             : "Default: Graves Default Schedule + on-call (unassigned)"}
       </div>
 
-      {/* TM list — single scroll region; explicit max-height for Safari */}
       <div
         className={allowListScroll ? "sb-tm-picker-scroll" : "no-scrollbar"}
         style={{
           overflowY: allowListScroll ? "scroll" : "auto",
-          flex: allowListScroll ? undefined : 1,
-          flexShrink: allowListScroll ? undefined : undefined,
+          flex: 1,
           minHeight: 0,
-          maxHeight: listScrollMaxHeight ?? (allowListScroll ? 240 : undefined),
+          maxHeight: listScrollMaxHeight,
           display: "flex",
           flexDirection: "column",
-          gap: 3,
+          gap: 2,
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
           touchAction: allowListScroll ? "pan-y" : enableDragAssign ? "none" : "pan-y",
         }}
       >
         {filtered.length === 0 ? (
-          <div style={{ fontSize: isTablet ? 17 : 11, color: textMuted, textAlign: "center", paddingTop: 12 }}>
+          <div className="sb-tm-picker-empty">
             {filter.trim() ? "No eligible team member matches that search" : "Everyone scheduled is already placed"}
             {!filter.trim() && tms.length === 0 && allTms && allTms.length > 0 && (
               <button
@@ -382,8 +287,7 @@ export const TmPicker: React.FC<{
                   event.stopPropagation();
                   setShowAllEligible(true);
                 }}
-                className="sb-tablet-touch-target mx-auto mt-3 block rounded-xl border px-3 py-2 font-semibold"
-                style={{ borderColor: inputBorder, color: accent, background: rowBg }}
+                className="sb-tm-picker-link"
               >
                 Show eligible on-call candidates
               </button>
@@ -394,98 +298,63 @@ export const TmPicker: React.FC<{
           const showOnCall =
             (filter.trim() || showAllEligible) && onAddOnCall && !inDefaultList;
           return (
-            <div
-              key={tm.tmId}
-              style={{
-                display: "flex", flexDirection: "column", gap: 4, flexShrink: 0,
-              }}
-            >
+            <div key={tm.tmId} className="sb-tm-picker-item">
               <TmPickerRow
                 tm={tm}
                 enableDragAssign={enableDragAssign}
                 allowListScroll={allowListScroll}
-                isTablet={isTablet}
-                accent={accent}
-                rowBg={rowBg}
-                rowBorder={rowBorder}
-                textPrimary={textPrimary}
                 rotationFit={!filter.trim() ? fitByTmId?.[tm.tmId] : undefined}
                 onPick={onPick}
               />
-              {showOnCall && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddOnCall(tm);
-                  }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  style={{
-                    fontSize: isTablet ? 16 : 10, fontWeight: 600, color: accent,
-                    background: `${accent}14`, border: `1px dashed ${accent}55`,
-                    borderRadius: isTablet ? 10 : 8,
-                    padding: isTablet ? "8px 12px" : "4px 8px",
-                    cursor: "pointer",
-                    minHeight: isTablet ? 44 : undefined,
-                    textAlign: "left",
-                  }}
-                >
-                  Add on-call for tonight
-                </button>
-              )}
-
               {onMarkUnavailable && unavailableFor !== tm.tmId && (
                 <button
                   type="button"
+                  className="sb-tm-picker-unavail"
                   onClick={(e) => {
                     e.stopPropagation();
                     setUnavailableFor(tm.tmId);
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  style={{
-                    fontSize: isTablet ? 15 : 9, fontWeight: 600, color: "#b45309",
-                    background: "rgba(245,158,11,0.08)", border: `1px dashed rgba(245,158,11,0.4)`,
-                    borderRadius: isTablet ? 10 : 8,
-                    padding: isTablet ? "6px 10px" : "3px 6px",
-                    cursor: "pointer",
-                    minHeight: isTablet ? 40 : undefined,
-                    textAlign: "left",
-                  }}
                 >
-                  Mark unavailable tonight
+                  Off
+                </button>
+              )}
+              {showOnCall && (
+                <button
+                  type="button"
+                  className="sb-tm-picker-link sb-tm-picker-item-extra"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddOnCall(tm);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  Add on-call for tonight
                 </button>
               )}
 
               {onMarkUnavailable && unavailableFor === tm.tmId && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: isTablet ? 8 : 4, paddingLeft: isTablet ? 4 : 2 }}>
+                <div className="sb-tm-picker-reasons">
                   {unavailableReasons.map(r => (
                     <button
                       key={r.status}
                       type="button"
+                      className="sb-tm-picker-reason"
                       onClick={(e) => {
                         e.stopPropagation();
                         void onMarkUnavailable(tm, r.status);
                         setUnavailableFor(null);
                       }}
                       onPointerDown={(e) => e.stopPropagation()}
-                      style={{
-                        fontSize: isTablet ? 12 : 9, fontWeight: 600,
-                        color: "#92400e",
-                        background: "rgba(245,158,11,0.12)",
-                        border: `1px solid rgba(245,158,11,0.3)`,
-                        borderRadius: isTablet ? 8 : 6,
-                        padding: isTablet ? "6px 10px" : "2px 6px",
-                        cursor: "pointer",
-                      }}
                     >
                       {r.label}
                     </button>
                   ))}
                   <button
                     type="button"
+                    className="sb-tm-picker-link"
                     onClick={(e) => { e.stopPropagation(); setUnavailableFor(null); }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    style={{ fontSize: isTablet ? 12 : 9, color: textMuted, padding: "2px 4px" }}
                   >
                     Cancel
                   </button>

@@ -8,12 +8,15 @@ import {
   COVERAGE_BAR_H,
   isGoldAccent,
 } from "@/lib/shiftbuilder/constants";
-import { formatCanvasCoverageChip } from "@/lib/shiftbuilder/canvasPrideLabels";
+import {
+  coverageChipTone,
+  formatCanvasCoverageChip,
+} from "@/lib/shiftbuilder/canvasPrideLabels";
 
 /**
- * CoverageBar — rendered at the very bottom of a zone or RR card to show
- * that the TM is pulling double duty covering another slot.
- * Background is the accent color of the SOURCE slot.
+ * CoverageBar — source-slot coverage.
+ * Print / preview keeps the full-strength banner (Golden metrics).
+ * Live builder (`builderCalm`) uses a quiet inset chip: same info, less alarm.
  */
 const CoverageBar = React.memo(function CoverageBar({
   task,
@@ -34,16 +37,64 @@ const CoverageBar = React.memo(function CoverageBar({
   const [hovered, setHovered] = React.useState(false);
   const accent = task.color || "#6B7280";
   const goldBanner = isGoldAccent(accent);
+  const chipTone = coverageChipTone(accent);
+  const label = builderCalm ? formatCanvasCoverageChip(task.taskLabel) : task.taskLabel;
+
+  if (builderCalm) {
+    return (
+      <div
+        className={`sb-coverage-bar sb-coverage-bar--chip sb-coverage-chip group inline-flex items-center max-w-full select-none ${goldBanner ? "sb-coverage-bar--gold-accent" : ""}`}
+        style={{
+          background: goldBanner ? "var(--sb-gold-surface)" : chipTone.surface,
+          color: goldBanner ? "var(--sb-gold-ink)" : chipTone.ink,
+          border: `1px solid ${goldBanner ? "var(--sb-gold-border)" : chipTone.border}`,
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        title={task.taskLabel}
+      >
+        <span
+          className="sb-coverage-bar-label font-semibold leading-none truncate"
+          style={{
+            fontSize: 9,
+            fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+            letterSpacing: "0.01em",
+          }}
+        >
+          {label}
+        </span>
+        {onRemoveTask && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemoveTask(slotKey, task.taskLabel, task.id);
+            }}
+            className="sb-interactive ml-0.5 leading-none font-bold flex-shrink-0 transition-opacity sb-tablet-touch-target"
+            style={{
+              color: "inherit",
+              fontSize: 13,
+              opacity: hovered ? 0.9 : 0.45,
+              padding: "1px 4px",
+              minWidth: 22,
+              minHeight: 22,
+              borderRadius: 4,
+            }}
+            title="Remove coverage"
+            aria-label={`Remove coverage: ${task.taskLabel}`}
+          >
+            <X size={11} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
-      className={`sb-coverage-bar group flex items-center justify-between px-2 select-none ${builderCalm ? "sb-coverage-bar--builder-calm" : ""} ${goldBanner ? "sb-coverage-bar--gold-accent" : ""}`}
+      className={`sb-coverage-bar group flex items-center justify-between px-2 select-none ${goldBanner ? "sb-coverage-bar--gold-accent" : ""}`}
       style={{
-        background: goldBanner
-          ? "var(--sb-gold-surface)"
-          : builderCalm
-            ? `color-mix(in srgb, ${accent} 55%, var(--ios-background-secondary))`
-            : accent,
+        background: goldBanner ? "var(--sb-gold-surface)" : accent,
         borderRadius: "0 0 6px 6px",
         paddingTop: 2,
         paddingBottom: 2,
@@ -53,7 +104,6 @@ const CoverageBar = React.memo(function CoverageBar({
         borderTop: goldBanner
           ? "1px solid var(--sb-gold-border)"
           : "1px solid rgba(0,0,0,0.06)",
-        boxShadow: builderCalm ? "none" : undefined,
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -65,10 +115,10 @@ const CoverageBar = React.memo(function CoverageBar({
           fontSize: COVERAGE_BAR_FONT_SIZE,
           fontFamily: "var(--font-atkinson)",
           color: goldBanner ? "var(--sb-gold-ink)" : "#ffffff",
-          opacity: builderCalm ? 0.75 : 0.95,
+          opacity: 0.95,
         }}
       >
-        {builderCalm ? formatCanvasCoverageChip(task.taskLabel) : task.taskLabel}
+        {task.taskLabel}
       </span>
       {onRemoveTask && (
         <button

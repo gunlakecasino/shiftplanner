@@ -190,11 +190,11 @@ export type UnassignedInviteSize = "zone" | "rr" | "aux";
 
 const INVITE_CONFIG: Record<
   UnassignedInviteSize,
-  { minH: number; maxH: number; plusSize: number; labelSize: number; padding: string }
+  { plusSize: number; labelSize: number; padding: string }
 > = {
-  zone: { minH: 110, maxH: 130, plusSize: 28, labelSize: 11, padding: "py-4 px-4" },
-  rr: { minH: 72, maxH: 84, plusSize: 22, labelSize: 9, padding: "py-2 px-3" },
-  aux: { minH: 64, maxH: 76, plusSize: 20, labelSize: 9, padding: "py-2 px-3" },
+  zone: { plusSize: 16, labelSize: 11, padding: "py-1" },
+  rr: { plusSize: 14, labelSize: 10, padding: "py-1" },
+  aux: { plusSize: 13, labelSize: 10, padding: "py-0.5" },
 };
 
 export function coverageBodyPadding(
@@ -326,14 +326,9 @@ export function UnassignedInvite({
   return (
     <motion.div
       key="unassigned-invite"
-      className={`flex flex-col items-center justify-center text-[#9CA3AF] tracking-[0.15px] rounded-[5px] cursor-pointer w-full ${cfg.padding}`}
+      className={`sb-unassigned-invite flex flex-col items-start justify-center text-[#94A3B8] tracking-[0.15px] rounded-[8px] cursor-pointer w-full flex-1 min-h-0 ${cfg.padding}`}
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
-        minHeight: cfg.minH,
-        maxHeight: cfg.maxH,
-        border: "1px dashed rgba(0,0,0,0.06)",
-        background: "color-mix(in srgb, var(--ios-background-secondary) 35%, transparent)",
-        boxShadow: "0 1px 1px rgba(0,0,0,0.015)",
       }}
       initial={false}
       animate={{ opacity: 1 }}
@@ -343,22 +338,19 @@ export function UnassignedInvite({
       title={title}
     >
       <span
-        className="leading-none opacity-25"
-        style={{ fontSize: cfg.plusSize }}
+        className="leading-none text-[#CBD5E1]"
+        style={{ fontSize: cfg.plusSize, fontWeight: 400 }}
       >
         +
       </span>
       <span
-        className="font-semibold tracking-[0.35px] text-[#9CA3AF] mt-1"
-        style={{ fontSize: cfg.labelSize, opacity: 0.85 }}
+        className="font-semibold tracking-[0.02em] text-[#64748B] mt-1"
+        style={{ fontSize: cfg.labelSize, opacity: 1 }}
       >
-        ASSIGN TM
+        Assign TM
       </span>
       {size === "zone" ? (
-        <>
-          <span className="no-print text-[7.5px] text-[#9CA3AF] opacity-45 mt-0.5">Tap to assign</span>
-          <span className="no-print text-[6.5px] text-[#9CA3AF] opacity-35 mt-0.5">or drop to assign</span>
-        </>
+        <span className="no-print text-[10px] text-[#94A3B8] mt-0.5">Drop to assign</span>
       ) : (
         <UnassignedDropHint className="mt-0.5" />
       )}
@@ -589,7 +581,7 @@ function CoveredByNamesRow({
   const namesLine = formatCoveredByNames(coveredByNamesFromEntries(resolved));
   return (
     <span
-      className="sb-covered-by-names font-semibold tracking-[-0.28px] px-1 py-[1px] inline-block leading-tight text-center text-[var(--ios-label-tertiary)] w-full"
+      className="sb-covered-by-names font-semibold tracking-[-0.28px] px-1 py-[1px] inline-block leading-tight text-[var(--ios-label-tertiary)] w-full"
       style={{
         fontSize: rowFontSize,
         lineHeight: 1.12,
@@ -627,10 +619,10 @@ function CoveredByBlock({
 
   return (
     <div
-      className={`sb-covered-by-block sb-covered-by-block--${scale} flex flex-col items-center min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
+      className={`sb-covered-by-block sb-covered-by-block--${scale} flex flex-col min-w-0 w-full ${showDigitalAssists ? "items-start text-left" : "items-center sb-covered-by-print"}`}
     >
       <span
-        className="sb-covered-by-label font-semibold uppercase tracking-[0.18em] px-1 py-[1px] inline-block text-center text-[var(--ios-label-tertiary)]"
+        className={`sb-covered-by-label font-semibold uppercase tracking-[0.18em] px-1 py-[1px] inline-block text-[var(--ios-label-tertiary)] ${showDigitalAssists ? "text-left" : "text-center"}`}
         style={{
           fontSize: labelFontSize,
           fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",

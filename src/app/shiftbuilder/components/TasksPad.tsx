@@ -422,10 +422,10 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
   const refinedCard = (
     <div
-      className={`w-full bg-white flex flex-col min-h-0 flex-1 overflow-hidden ${
+      className={`sb-sheetbuilder-tasks-pad w-full bg-white flex flex-col min-h-0 flex-1 overflow-hidden ${
         isDock
-          ? "rounded-none shadow-none"
-          : "rounded-2xl shadow-[0_8px_28px_rgba(0,0,0,0.10),0_1px_3px_rgba(0,0,0,0.04)]"
+          ? "rounded-none shadow-none border-0"
+          : ""
       }`}
       style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
     >
