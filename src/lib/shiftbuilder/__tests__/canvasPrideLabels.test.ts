@@ -63,9 +63,9 @@ describe("formatCanvasTrailChip", () => {
 
   it("keeps WRR coverage language on the women's half", () => {
     expect(formatCanvasTrailChip("WRR7").label).toBe("Women's 7");
-    expect(formatCanvasTrailChip("WRR7").label).not.toMatch(/Men/i);
+    expect(formatCanvasTrailChip("WRR7").label.startsWith("Men's")).toBe(false);
     expect(formatCanvasTrailChip("MRR7").label).toBe("Men's 7");
-    expect(formatCanvasTrailChip("MRR7").label).not.toMatch(/Women/i);
+    expect(formatCanvasTrailChip("MRR7").label.startsWith("Women's")).toBe(false);
   });
 });
 
@@ -85,7 +85,7 @@ describe("formatCanvasCoverageChip", () => {
     expect(formatCanvasCoverageChip("And Women's Restroom 6")).toBe(
       "Covering Women's 6",
     );
-    expect(formatCanvasCoverageChip("And Women's Restroom 6")).not.toMatch(/Men/i);
+    expect(formatCanvasCoverageChip("And Women's Restroom 6").startsWith("Covering Men's")).toBe(false);
   });
 });
 
