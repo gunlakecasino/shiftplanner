@@ -25,7 +25,6 @@ import {
   Eraser,
   CalendarDays,
   RefreshCw,
-  Bell,
   ClipboardList,
 } from "lucide-react";
 
@@ -135,7 +134,6 @@ export interface FloatingNavProps {
 }
 
 const MONTHS = MONTH_LONG;
-const SHORT_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 function nightActionClusterStyle(): CSSProperties {
   return velvetGlassPillStyle({
@@ -180,13 +178,8 @@ function SheetBuilderMark({ className }: { className?: string }) {
       aria-label="SheetBuilder"
       focusable="false"
     >
-      <rect width="32" height="32" rx="7" fill="#1e1e28" />
-      <rect x="5" y="5" width="6.5" height="9" rx="1.5" fill="#C8960C" />
-      <rect x="12.75" y="5" width="6.5" height="9" rx="1.5" fill="#D93838" />
-      <rect x="20.5" y="5" width="6.5" height="9" rx="1.5" fill="#4B7BE8" />
-      <rect x="5" y="15.5" width="6.5" height="9" rx="1.5" fill="#D96B9A" />
-      <rect x="12.75" y="15.5" width="6.5" height="9" rx="1.5" fill="#4CAF7D" />
-      <rect x="20.5" y="15.5" width="6.5" height="9" rx="1.5" fill="#9B6A45" />
+      <rect x="7" y="5" width="18" height="22" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M11 12.5h10M11 16.5h10M11 20.5h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
@@ -248,21 +241,17 @@ export default function FloatingNav(props: FloatingNavProps) {
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
-  const [rosterMenuOpen, setRosterMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const launchpadRef = useRef<HTMLDivElement>(null);
-  const rosterMenuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const selectedDay = days.find((d) => d.id === selectedDayId);
-  const activeColor = "#22c55e";
   const chromeText = "#f4f4f5";
-  const mutedChromeText = "rgba(244,244,245,0.66)";
-  const chromeDivider = "rgba(255,255,255,0.12)";
+  const mutedChromeText = "rgba(244,244,245,0.62)";
   const rosterScheduledCount = rosterSummary?.scheduledCount ?? 0;
   const rosterPlacedCount = rosterSummary?.placedCount ?? 0;
   const rosterOpenCount = rosterSummary?.openCount ?? 0;
@@ -271,14 +260,12 @@ export default function FloatingNav(props: FloatingNavProps) {
     `Roster · ${rosterPlacedCount}/${rosterScheduledCount} placed` +
     (rosterOpenCount > 0 ? ` · ${rosterOpenCount} open` : "") +
     (rosterCalledOffCount > 0 ? ` · ${rosterCalledOffCount} marked off` : "");
-  const notificationCount = rosterCalledOffCount;
 
   const firstDay = days[0]?.date || new Date();
   const monthLabel = `${MONTHS[firstDay.getMonth()]} ${firstDay.getFullYear()}`;
 
   const closeAllMenus = () => {
     setLaunchpadOpen(false);
-    setRosterMenuOpen(false);
     setMoreOpen(false);
     setProfileOpen(false);
     setCalendarOpen(false);
@@ -288,7 +275,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (launchpadRef.current && !launchpadRef.current.contains(target)) setLaunchpadOpen(false);
-      if (rosterMenuRef.current && !rosterMenuRef.current.contains(target)) setRosterMenuOpen(false);
       if (moreRef.current && !moreRef.current.contains(target)) setMoreOpen(false);
       if (profileRef.current && !profileRef.current.contains(target)) setProfileOpen(false);
       if (calendarRef.current && !calendarRef.current.contains(target)) setCalendarOpen(false);
@@ -307,7 +293,6 @@ export default function FloatingNav(props: FloatingNavProps) {
   const toggleCalendar = () => {
     setCalendarOpen((v) => !v);
     setLaunchpadOpen(false);
-    setRosterMenuOpen(false);
     setMoreOpen(false);
     setProfileOpen(false);
   };
@@ -359,18 +344,17 @@ export default function FloatingNav(props: FloatingNavProps) {
           userSelect: "none",
           display: "flex",
           alignItems: "center",
-          gap: 0,
+          gap: 10,
           zIndex: 40,
         }}
       >
-        {/* BRAND — SheetBuilder launchpad */}
-        <div className="sb-topbar-brand relative flex shrink-0 items-center gap-2.5 border-r border-white/10 pr-5" ref={launchpadRef}>
+        {/* Identity + month — one quiet cluster, not a competing brand stack */}
+        <div className="sb-topbar-identity relative flex shrink-0 items-center gap-2" ref={launchpadRef}>
           <button
             type="button"
-            className="sb-sheetbuilder-launch-trigger sb-interactive flex min-w-0 items-center gap-2.5 rounded-md"
+            className="sb-sheetbuilder-launch-trigger sb-interactive flex min-w-0 items-center gap-1.5 rounded-md"
             onClick={() => {
               setLaunchpadOpen((v) => !v);
-              setRosterMenuOpen(false);
               setMoreOpen(false);
               setProfileOpen(false);
               setCalendarOpen(false);
@@ -381,14 +365,12 @@ export default function FloatingNav(props: FloatingNavProps) {
             aria-expanded={launchpadOpen}
           >
             <SheetBuilderMark className="sb-sheetbuilder-brand-mark shrink-0" />
-            <div className="min-w-0 pr-1 text-left leading-none">
-              <div
-                className="truncate text-[13px] font-semibold"
-                style={{ color: chromeText, letterSpacing: "-0.025em" }}
-              >
-                SheetBuilder
-              </div>
-            </div>
+            <span
+              className="sb-topbar-wordmark truncate text-[13px] font-medium"
+              style={{ color: chromeText, letterSpacing: "-0.02em" }}
+            >
+              SheetBuilder
+            </span>
           </button>
 
           {launchpadOpen && (
@@ -436,18 +418,15 @@ export default function FloatingNav(props: FloatingNavProps) {
           )}
         </div>
 
-        <div className="shrink-0 w-4" />
-
-        {/* LEFT — month picker + go to today */}
-        <div className="sb-topbar-month relative flex items-center gap-1 shrink-0" ref={calendarRef}>
+        <div className="sb-topbar-month relative flex items-center gap-0.5 shrink-0" ref={calendarRef}>
           <button
             type="button"
-            className="icon-btn sb-interactive flex items-center gap-1 rounded-full px-2.5 py-1.5"
+            className="icon-btn sb-interactive sb-topbar-month-btn flex items-center gap-0.5 rounded-md px-1.5 py-1"
             style={{
-              fontSize: 13,
-              fontWeight: 850,
-              color: chromeText,
-              letterSpacing: "-0.02em",
+              fontSize: 12,
+              fontWeight: 500,
+              color: mutedChromeText,
+              letterSpacing: "-0.01em",
             }}
             onClick={toggleCalendar}
             title="Pick a date"
@@ -456,10 +435,10 @@ export default function FloatingNav(props: FloatingNavProps) {
           >
             {monthLabel}
             <ChevronDown
-              size={12}
-              strokeWidth={2.8}
+              size={11}
+              strokeWidth={2.4}
               style={{
-                color: mutedChromeText,
+                color: "rgba(244,244,245,0.42)",
                 marginTop: 1,
                 transform: calendarOpen ? "rotate(180deg)" : undefined,
                 transition: "transform 0.15s ease",
@@ -468,9 +447,9 @@ export default function FloatingNav(props: FloatingNavProps) {
           </button>
           <button
             type="button"
-            className="icon-btn sb-interactive sb-month-status-diamond-btn flex items-center justify-center w-6 h-6 rounded-full"
+            className="icon-btn sb-interactive sb-month-status-diamond-btn flex items-center justify-center w-6 h-6 rounded-md"
             style={{
-              opacity: isViewingToday ? 0.72 : 1,
+              opacity: isViewingToday ? 0.55 : 0.9,
             }}
             onClick={handleGoToToday}
             title={isViewingToday ? "Viewing today" : "Go to today"}
@@ -498,70 +477,25 @@ export default function FloatingNav(props: FloatingNavProps) {
           )}
         </div>
 
-        <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
-
-        {/* CENTER — day scroller */}
+        {/* Day strip — same type size as neighbors; selection is ink, not a neon pill */}
         <div className="sb-topbar-days flex items-center flex-1 min-w-0 gap-0.5">
           <button
             type="button"
             onClick={onPrevWeek}
-            className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
+            className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-6 h-6 rounded-md shrink-0"
             style={{ color: mutedChromeText }}
             title="Previous GRAVE week"
             aria-label="Previous GRAVE week"
           >
-            <ChevronLeft size={13} strokeWidth={2.8} />
+            <ChevronLeft size={13} strokeWidth={2.4} />
           </button>
 
-          <div className="sb-topbar-day-strip flex items-center justify-around flex-1 px-1">
+          <div className="sb-topbar-day-strip flex items-center justify-center flex-1 min-w-0">
             {days.map((day) => {
               const isSelected = day.id === selectedDayId;
               const isToday = !!day.isToday;
               const letter = day.dayLetter || DAY_LETTERS[(day.date?.getDay() ?? 0) % 7];
               const dateNum = day.dateNum ?? day.label;
-
-              if (isSelected) {
-                return (
-                  <button
-                    key={day.id}
-                    type="button"
-                    onClick={() => onDaySelect(day.id, day.date || new Date())}
-                    className="sb-day-strip-btn sb-day-strip-btn--active flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
-                    style={{
-                      background: activeColor,
-                      borderRadius: 999,
-                      width: 42,
-                      height: 42,
-                      gap: 0,
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.16)",
-                    }}
-                  >
-                    <span
-                      style={{
-	                        fontSize: 8,
-	                        fontWeight: 900,
-                        color: "rgba(255,255,255,0.76)",
-                        letterSpacing: "0.08em",
-                        lineHeight: 1,
-                        marginBottom: 2,
-                      }}
-                    >
-                      {day.shortLabel || SHORT_MONTHS[day.date?.getMonth() ?? 0]}
-                    </span>
-                    <span
-                      style={{
-	                        fontSize: 18,
-	                        fontWeight: 950,
-                        color: "#fff",
-                        lineHeight: 1,
-                        letterSpacing: "0",
-                      }}
-                    >
-                      {dateNum}
-                    </span>
-                  </button>
-                );
-              }
 
               return (
                 <button
@@ -569,20 +503,14 @@ export default function FloatingNav(props: FloatingNavProps) {
                   type="button"
                   onClick={() => onDaySelect(day.id, day.date || new Date())}
                   onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
-                  className="sb-interactive sb-day-strip-btn sb-day-strip-btn--inactive flex flex-col items-center justify-center shrink-0"
-                  style={{
-                    width: 36,
-                    height: 44,
-                    gap: 3,
-                    border: "1px solid transparent",
-                  }}
+                  className={`sb-interactive sb-day-strip-btn flex flex-col items-center justify-center shrink-0${
+                    isSelected ? " sb-day-strip-btn--active" : " sb-day-strip-btn--inactive"
+                  }${isToday ? " sb-day-strip-btn--today" : ""}`}
+                  aria-current={isSelected ? "date" : undefined}
+                  aria-label={`${letter} ${dateNum}${isToday ? ", today" : ""}`}
                 >
-                  <span style={{ fontSize: 9, fontWeight: 850, color: isToday ? "rgba(255,255,255,0.72)" : "rgba(244,244,245,0.46)", lineHeight: 1, letterSpacing: "0.08em" }}>
-                    {letter}
-                  </span>
-                  <span style={{ fontSize: 14, fontWeight: 850, color: isToday ? "rgba(255,255,255,0.82)" : "rgba(244,244,245,0.64)", lineHeight: 1 }}>
-                    {dateNum}
-                  </span>
+                  <span className="sb-day-strip-letter">{letter}</span>
+                  <span className="sb-day-strip-num">{dateNum}</span>
                 </button>
               );
             })}
@@ -591,19 +519,17 @@ export default function FloatingNav(props: FloatingNavProps) {
           <button
             type="button"
             onClick={onNextWeek}
-            className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
+            className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-6 h-6 rounded-md shrink-0"
             style={{ color: mutedChromeText }}
             title="Next GRAVE week"
             aria-label="Next GRAVE week"
           >
-            <ChevronRight size={13} strokeWidth={2.8} />
+            <ChevronRight size={13} strokeWidth={2.4} />
           </button>
         </div>
 
-        <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
-
-        {/* RIGHT — night actions (seen) + roster + more */}
-        <div className="sb-topbar-actions flex items-center gap-1 shrink-0">
+        {/* Engine / Draft / Print primary; Published + account secondary */}
+        <div className="sb-topbar-actions flex items-center gap-1.5 shrink-0">
           <div
             className={`sb-night-action-pills flex items-center shrink-0${isDraftMode ? " sb-night-action-pills--draft-active" : ""}`}
             role="group"
@@ -701,91 +627,11 @@ export default function FloatingNav(props: FloatingNavProps) {
             )}
           </div>
 
-          <button
-            type="button"
-            className="sb-topbar-notification-btn icon-btn sb-interactive flex items-center justify-center rounded-full"
-            style={{
-              color: mutedChromeText,
-              background: "rgba(255,255,255,0.04)",
-            }}
-            title={
-              notificationCount > 0
-                ? `${notificationCount} roster notifications`
-                : "No roster notifications"
-            }
-            aria-label={
-              notificationCount > 0
-                ? `${notificationCount} roster notifications`
-                : "No roster notifications"
-            }
-          >
-            <Bell size={15} strokeWidth={2} />
-            {notificationCount > 0 && (
-              <span className="sb-topbar-notification-badge">{notificationCount}</span>
-            )}
-          </button>
-
-          <div className="relative" ref={rosterMenuRef}>
-            <button
-              type="button"
-              className="sb-sheetbuilder-roster-toggle icon-btn sb-interactive flex items-center justify-center rounded-full"
-              style={{
-                color: rosterOpen ? "#fff" : mutedChromeText,
-                background: rosterOpen
-                  ? "rgba(255,255,255,0.13)"
-                  : "rgba(255,255,255,0.04)",
-              }}
-              onClick={() => {
-                // Opens the real RosterRail. This used to open a read-only
-                // popover listing names with no search, filters, or drag —
-                // while the functional panel was only reachable from the
-                // utility rail, which this skin hides.
-                setRosterMenuOpen(false);
-                setLaunchpadOpen(false);
-                setMoreOpen(false);
-                setProfileOpen(false);
-                setCalendarOpen(false);
-                onToggleRoster?.();
-              }}
-              title={rosterButtonTitle}
-              aria-label={rosterOpen ? "Hide roster" : "Show roster"}
-              aria-pressed={rosterOpen}
-            >
-              <ClipboardList size={16} strokeWidth={2} />
-              {rosterCalledOffCount > 0 && (
-                <span className="sb-sheetbuilder-roster-alert" title={`${rosterCalledOffCount} marked off`}>
-                  {rosterCalledOffCount}
-                </span>
-              )}
-            </button>
-
-          </div>
-
-          {onViewChange && (
-            <button
-              type="button"
-              className="icon-btn sb-interactive flex items-center justify-center w-7 h-7 rounded-full"
-              style={{
-                color: currentView === "breaks" ? "#fff" : mutedChromeText,
-                background:
-                  currentView === "breaks"
-                    ? `${activeColor}66`
-                    : undefined,
-              }}
-              onClick={() => onViewChange(currentView === "breaks" ? "deployment" : "breaks")}
-              title={currentView === "breaks" ? "Deployment board" : "Overlap sheet"}
-              aria-label={currentView === "breaks" ? "Back to deployment board" : "Open overlap sheet"}
-              aria-pressed={currentView === "breaks"}
-            >
-              <Layers size={14} strokeWidth={1.8} />
-            </button>
-          )}
-
           {showPublishControls ? (
             <button
               type="button"
-              className="sb-topbar-publish icon-btn sb-interactive flex items-center gap-1.5 rounded-full px-2.5 py-1"
-              style={{ fontSize: 10, fontWeight: 700, color: chromeText, letterSpacing: "0.06em" }}
+              className="sb-topbar-publish sb-interactive flex items-center gap-1.5 px-1.5 py-1"
+              style={{ fontSize: 11, fontWeight: 500, color: mutedChromeText, letterSpacing: "0" }}
               onClick={onToggleDayPublished}
               disabled={!canPublishDay || publishDayBusy}
               aria-busy={publishDayBusy}
@@ -794,18 +640,18 @@ export default function FloatingNav(props: FloatingNavProps) {
               <span
                 className="live-dot shrink-0"
                 style={{
-                  width: 6,
-                  height: 6,
+                  width: 5,
+                  height: 5,
                   borderRadius: "50%",
-                  background: isDayPublished ? "#22c55e" : "#f59e0b",
+                  background: isDayPublished ? "#34d399" : "#d4a800",
                   display: "inline-block",
                 }}
               />
-              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
+              {isDayPublished ? "Published" : "Unpublished"}
             </button>
           ) : (
             <span
-              className="sb-topbar-publish flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
+              className="sb-topbar-publish flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-medium"
               style={{ color: mutedChromeText }}
               title={
                 isDayPublished
@@ -816,31 +662,30 @@ export default function FloatingNav(props: FloatingNavProps) {
               <span
                 className="shrink-0"
                 style={{
-                  width: 6,
-                  height: 6,
+                  width: 5,
+                  height: 5,
                   borderRadius: "50%",
-                  background: isDayPublished ? "#22c55e" : "#f59e0b",
+                  background: isDayPublished ? "#34d399" : "#d4a800",
                   display: "inline-block",
                 }}
               />
-              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
+              {isDayPublished ? "Published" : "Unpublished"}
             </span>
           )}
 
           <div className="relative" ref={profileRef}>
             <button
               type="button"
-              className="sb-topbar-account icon-btn sb-interactive flex items-center justify-center w-7 h-7 rounded-full shrink-0"
+              className="sb-topbar-account icon-btn sb-interactive flex items-center justify-center w-6 h-6 rounded-full shrink-0"
               style={{
                 fontSize: 10,
-                fontWeight: 700,
+                fontWeight: 600,
                 letterSpacing: "0.02em",
-                color: chromeText,
-                background: "rgba(255,255,255,0.08)",
+                color: mutedChromeText,
+                background: "transparent",
               }}
             onClick={() => {
               setProfileOpen((v) => !v);
-              setRosterMenuOpen(false);
               setLaunchpadOpen(false);
               setMoreOpen(false);
               setCalendarOpen(false);
@@ -894,11 +739,10 @@ export default function FloatingNav(props: FloatingNavProps) {
           <div className="relative" ref={moreRef}>
             <button
               type="button"
-              className="sb-topbar-more icon-btn sb-interactive flex items-center justify-center w-6 h-6 rounded-full"
-              style={{ color: "#aaa" }}
+              className="sb-topbar-more icon-btn sb-interactive flex items-center justify-center w-6 h-6 rounded-md"
+              style={{ color: "rgba(244,244,245,0.48)" }}
             onClick={() => {
               setMoreOpen((v) => !v);
-              setRosterMenuOpen(false);
               setLaunchpadOpen(false);
               setProfileOpen(false);
               setCalendarOpen(false);
@@ -916,6 +760,50 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {(onToggleRoster || onViewChange) && (
+                  <>
+                    <div
+                      className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
+                    >
+                      Board
+                    </div>
+                    {onToggleRoster && (
+                      <button
+                        type="button"
+                        className={menuItemClass}
+                        onClick={() => {
+                          onToggleRoster();
+                          setMoreOpen(false);
+                        }}
+                        title={rosterButtonTitle}
+                        aria-pressed={rosterOpen}
+                      >
+                        <ClipboardList size={14} />
+                        {rosterOpen ? "Hide Roster" : "Roster"}
+                        {rosterCalledOffCount > 0 && (
+                          <span className="ml-auto text-[11px] tabular-nums opacity-60">
+                            {rosterCalledOffCount}
+                          </span>
+                        )}
+                      </button>
+                    )}
+                    {onViewChange && (
+                      <button
+                        type="button"
+                        className={menuItemClass}
+                        onClick={() => {
+                          onViewChange(currentView === "breaks" ? "deployment" : "breaks");
+                          setMoreOpen(false);
+                        }}
+                        aria-pressed={currentView === "breaks"}
+                      >
+                        <Layers size={14} />
+                        {currentView === "breaks" ? "Deployment board" : "Overlap sheet"}
+                      </button>
+                    )}
+                    <div className={menuDividerClass} />
+                  </>
+                )}
                 <div
                   className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
                 >

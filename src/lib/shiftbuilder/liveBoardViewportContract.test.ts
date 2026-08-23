@@ -248,3 +248,58 @@ describe("SheetBuilder live undo toast (PR C)", () => {
     expect(shiftBuilderClient).toContain("upsertDraftSlot(slotKey, { kind: \"clear\" })");
   });
 });
+
+describe("SheetBuilder header + card pride pass", () => {
+  const assignmentChrome = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+    "utf8",
+  );
+  const shiftCard = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+    "utf8",
+  );
+  const overlapSlot = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/OverlapSlot.tsx"),
+    "utf8",
+  );
+
+  it("keeps one identity + day row and buries the icon pile in More", () => {
+    expect(floatingNav).toContain("sb-topbar-identity");
+    expect(floatingNav).toContain("sb-topbar-wordmark");
+    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).toContain(">Draft<");
+    expect(floatingNav).toContain(">Print<");
+    expect(floatingNav).toContain("Published");
+    expect(floatingNav).not.toContain("PUBLISHED");
+    expect(floatingNav).not.toContain("sb-topbar-notification-btn");
+    expect(floatingNav).not.toContain("<Bell");
+    expect(floatingNav).toContain("Roster");
+    expect(floatingNav).toContain("Overlap sheet");
+    expect(floatingNav).toContain("Maintenance");
+  });
+
+  it("selects the day strip with type, not a neon pill", () => {
+    expect(floatingNav).toContain("sb-day-strip-btn--active");
+    expect(floatingNav).not.toContain("background: activeColor");
+    expect(floatingNav).not.toContain("width: 42");
+    expect(globalsCss).toContain(".sb-day-strip-btn--active .sb-day-strip-num");
+    expect(globalsCss).toContain("box-shadow: 0 1px 0 rgba(244, 244, 245, 0.72)");
+    expect(globalsCss).not.toMatch(/\.sb-day-strip-btn--active \{[\s\S]{0,180}#22c55e/);
+  });
+
+  it("keeps Engine / Draft / Print labeled at iPad landscape ~1024", () => {
+    expect(globalsCss).toContain("iPad landscape (~1024×768): Engine / Draft / Print stay labeled");
+    expect(globalsCss).toContain(".sb-night-action-pill__segment");
+    expect(globalsCss).toContain(".sb-night-action-pill__apply");
+  });
+
+  it("aligns covered-by names with assigned names and clarifies empty assign targets", () => {
+    expect(assignmentChrome).toContain("sb-unassigned-invite");
+    expect(assignmentChrome).toContain("Assign");
+    expect(assignmentChrome).not.toContain("ASSIGN TM");
+    expect(assignmentChrome).toContain("items-start");
+    expect(shiftCard).toContain("sb-unassigned-invite");
+    expect(shiftCard).toContain("sb-covered-by-name");
+    expect(overlapSlot).not.toContain("rgba(0,122,255,0.12)");
+  });
+});

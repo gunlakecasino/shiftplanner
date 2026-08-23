@@ -4,6 +4,31 @@
 
 ---
 
+## 2026-08-23 — Grok Build — SheetBuilder header + component pride pass
+
+**Task**: Brian live shot — top chrome still busy (mark + month + day strip + Engine/Draft/Print + icon pile + PUBLISHED + BK + …). Zone/RR names inconsistent; section headers thin; empty overlap slots weak; AUX cramped. Quiet Apple ops tool. Paper is the product. Branched from `origin/main` after de-gimmick #7 (`ee41ccb`).
+
+**Header**:
+- One identity + day row: paper-sheet mark + wordmark, month as secondary type, today diamond kept.
+- Day strip selection is ink + hairline, not a 42px green pill. No neon.
+- Engine / Draft / Print stay the primary velvet cluster (dark-bar restyle only). Apply still `onSaveAllDraft`.
+- Dead bell removed. Roster + Overlap sheet buried in More (Board). PUBLISHED → quiet “Published”. BK / … secondary.
+- iPad ~1024: night actions stay labeled; wordmark hides first, not the cluster.
+
+**Desk cards (not Golden)**:
+- Section headers: darker label + hairline + quiet count. Candy section orbs gone.
+- ShiftCard covered-by uses the same name position as assigned; empty state is Assign + Drop.
+- `UnassignedInvite` / overlap empties: dashed paper invite, no frost, no optimize-blue hover.
+- AUX rail: flatter paper, more card air. Accent bars kept.
+
+**Sacred held**: Golden print, `engine/optimizer.ts`, no production Apply, TasksPad, Marked Off, fireproof #5–#7.
+
+**Tests**: pride-pass contract in `liveBoardViewportContract.test.ts`. Version 1.253.
+
+**Status**: Ready for Dyno. Screenshots at ~1280 and ~1024.
+
+---
+
 ## 2026-08-23 — Grok — SheetBuilder de-gimmick + Projects kill
 
 **Task**: Raise the refinement bar on `/sheetbuilder`. Quiet Apple-professional ops tool — paper is the product, chrome is a desk. Kill the unused Projects product. Delete dead Timefold UI (not `engine/optimizer.ts`). Engine stays buried. No Golden print / engine rewrite / production Apply. TasksPad + `night_slot_tasks` stay.

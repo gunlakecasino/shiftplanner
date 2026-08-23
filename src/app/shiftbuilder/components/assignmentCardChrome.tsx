@@ -316,14 +316,14 @@ export function UnassignedInvite({
   return (
     <motion.div
       key="unassigned-invite"
-      className={`flex flex-col items-center justify-center text-[#9CA3AF] tracking-[0.15px] rounded-[5px] cursor-pointer w-full ${cfg.padding}`}
+      className={`sb-unassigned-invite flex flex-col items-center justify-center text-[#6b7280] tracking-[0.15px] rounded-[5px] cursor-pointer w-full ${cfg.padding}`}
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
         minHeight: cfg.minH,
         maxHeight: cfg.maxH,
-        border: "1px dashed rgba(0,0,0,0.06)",
-        background: "color-mix(in srgb, var(--ios-background-secondary) 35%, transparent)",
-        boxShadow: "0 1px 1px rgba(0,0,0,0.015)",
+        border: "1px dashed #c9ced8",
+        background: "#fafafa",
+        boxShadow: "none",
       }}
       initial={false}
       animate={{ opacity: 1 }}
@@ -333,25 +333,18 @@ export function UnassignedInvite({
       title={title}
     >
       <span
-        className="leading-none opacity-25"
+        className="sb-unassigned-invite__plus leading-none opacity-45"
         style={{ fontSize: cfg.plusSize }}
       >
         +
       </span>
       <span
-        className="font-semibold tracking-[0.35px] text-[#9CA3AF] mt-1"
-        style={{ fontSize: cfg.labelSize, opacity: 0.85 }}
+        className="sb-unassigned-invite__label font-semibold tracking-[0.04em] text-[#6b7280] mt-1"
+        style={{ fontSize: cfg.labelSize }}
       >
-        ASSIGN TM
+        Assign
       </span>
-      {size === "zone" ? (
-        <>
-          <span className="no-print text-[7.5px] text-[#9CA3AF] opacity-45 mt-0.5">Tap to assign</span>
-          <span className="no-print text-[6.5px] text-[#9CA3AF] opacity-35 mt-0.5">or drop to assign</span>
-        </>
-      ) : (
-        <UnassignedDropHint className="mt-0.5" />
-      )}
+      <UnassignedDropHint className="mt-0.5" />
     </motion.div>
   );
 }
@@ -370,9 +363,9 @@ const COVERED_LABEL_SIZE_PRINT: Record<CardNameScale, number> = {
 
 /** Covered-by row type — badge + name share one size token. */
 const COVERED_NAME_SIZE_BUILDER: Record<CardNameScale, number> = {
-  zone: 20,
+  zone: 22,
   rr: 22,
-  aux: 15,
+  aux: 18,
 };
 
 const COVERED_NAME_SIZE_PRINT: Record<CardNameScale, number> = {
@@ -579,7 +572,7 @@ function CoveredByNamesRow({
   const namesLine = formatCoveredByNames(coveredByNamesFromEntries(resolved));
   return (
     <span
-      className="sb-covered-by-names font-semibold tracking-[-0.28px] px-1 py-[1px] inline-block leading-tight text-center text-[var(--ios-label-tertiary)] w-full"
+      className="sb-covered-by-names font-semibold tracking-[-0.28px] px-0 py-[1px] inline-block leading-tight text-left text-[var(--ios-label-tertiary)] w-full"
       style={{
         fontSize: rowFontSize,
         lineHeight: 1.12,
@@ -617,10 +610,10 @@ function CoveredByBlock({
 
   return (
     <div
-      className={`sb-covered-by-block sb-covered-by-block--${scale} flex flex-col items-center min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
+      className={`sb-covered-by-block sb-covered-by-block--${scale} flex flex-col items-start min-w-0 w-full ${showDigitalAssists ? "" : "sb-covered-by-print"}`}
     >
       <span
-        className="sb-covered-by-label font-semibold uppercase tracking-[0.18em] px-1 py-[1px] inline-block text-center text-[var(--ios-label-tertiary)]"
+        className="sb-covered-by-label font-semibold uppercase tracking-[0.1em] px-0 py-[1px] inline-block text-left text-[var(--ios-label-tertiary)]"
         style={{
           fontSize: labelFontSize,
           fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",

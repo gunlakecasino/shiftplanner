@@ -141,7 +141,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       } ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
         isDimmed ? "sb-weekly-dim" : ""
       } ${isFocused ? "sb-weekly-highlight" : ""} ${
-        showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""
+        showDigitalAssists ? "transition-shadow" : ""
       }`}
       style={{ ["--card-accent" as string]: accent, fontFamily: helv }}
     >
