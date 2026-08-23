@@ -380,8 +380,28 @@ describe("SheetBuilder placement pad modern desk", () => {
     expect(placementPad).not.toContain("xAI insight");
     expect(placementPad).not.toMatch(/>\s*xAI\s*</);
     expect(placementPad).toContain("Fit details");
-    expect(dockTabs).toContain("bg-[#007AFF]");
+    expect(dockTabs).toContain("sb-dock-tab--active");
     expect(dockTabs).not.toContain("bg-[#1C1C1E]");
+    expect(dockTabs).not.toContain("bg-[#007AFF]");
+  });
+
+  it("packs the TM picker and quiets amber / saturated score chrome", () => {
+    const markerPad = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/MarkerPad.tsx"),
+      "utf8",
+    );
+    expect(markerPad).toContain("sb-tm-picker-row");
+    expect(markerPad).toContain("pickerFitChip");
+    expect(markerPad).toContain("#E8F7EE");
+    expect(markerPad).not.toContain("#b45309");
+    expect(markerPad).not.toContain("rgba(245,158,11");
+    expect(markerPad).not.toContain("minHeight: isTablet ? 56");
+    expect(globalsCss).toContain("sb-tm-picker-search");
+    expect(globalsCss).toContain("min-height: 36px");
+    expect(globalsCss).toContain("sb-placement-pad-action-emphasis");
+    expect(globalsCss).toContain("sb-placement-pad-action-clear");
+    expect(globalsCss).toContain("top: calc(var(--sb-sheet-topbar-h, 54px) + 10px)");
+    expect(padCss).toContain("font-size: 16px !important");
   });
 
   it("lights the roster drawer and SYNCED pill", () => {

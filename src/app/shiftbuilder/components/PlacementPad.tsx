@@ -1318,12 +1318,12 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       <div className="sb-placement-pad-header px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <div className="sb-placement-pad-avatar w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: a.tmName ? refinedZoneColor : "#9CA3AF" }}>
-              <span className="text-white text-[17px] font-semibold leading-none select-none">{refinedName.charAt(0)}</span>
+            <div className="sb-placement-pad-avatar w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: a.tmName ? refinedZoneColor : "#E6EAF0" }}>
+              <span className="text-[13px] font-semibold leading-none select-none" style={{ color: a.tmName ? "#fff" : "#64748B" }}>{refinedName.charAt(0)}</span>
             </div>
             <div className="min-w-0">
-              <p className="sb-placement-pad-slot text-[9px] font-bold tracking-[0.14em] uppercase mb-px" style={{ color: refinedZoneColor }}>{label}</p>
-              <h2 id={dialogTitleId} className="sb-placement-pad-name text-[18px] font-bold text-gray-900 leading-tight truncate">{refinedName}</h2>
+              <p className="sb-placement-pad-slot text-[10px] font-semibold tracking-[0.04em] uppercase mb-px">{label}</p>
+              <h2 id={dialogTitleId} className="sb-placement-pad-name text-[16px] font-semibold text-gray-900 leading-tight truncate">{refinedName}</h2>
             </div>
           </div>
 
@@ -1342,7 +1342,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
         {a.tmName && onMarkUnavailable && (
           <div className="mt-2.5">
-            <button onClick={(e) => { e.stopPropagation(); void onMarkUnavailable(a.tmId, a.tmName, "unavailable"); }} className="sb-placement-pad-warning-btn text-[10px] font-semibold px-3 py-1 rounded-lg border border-yellow-300 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 active:scale-95 transition-all">
+            <button onClick={(e) => { e.stopPropagation(); void onMarkUnavailable(a.tmId, a.tmName, "unavailable"); }} className="sb-placement-pad-warning-btn text-[11px] font-semibold px-2.5 py-1 rounded-full">
               Mark unavailable
             </button>
           </div>
@@ -1416,7 +1416,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               variant={padLarge ? "tablet" : "default"}
               enableDragAssign={false}
               allowListScroll
-              listScrollMaxHeight={padLarge ? 320 : 252}
+              listScrollMaxHeight={isDock ? undefined : 252}
             />
           </div>
         )}
@@ -1751,18 +1751,20 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
       {/* Footer - smaller */}
       {(isDock || (!showTmPicker && !coverageMode)) && (
-        <div className="sb-placement-pad-footer px-3 pb-3 pt-2 border-t border-gray-100 bg-white">
-          <div className="grid grid-cols-4 gap-1">
-            {[
-              { label: a.isLocked ? "Locked" : "Lock", onClick: () => onToggleLock?.(slotKey) },
-              { label: "Clear", onClick: () => onLiveUnassign?.(slotKey), danger: true },
-              { label: "Coverage", onClick: () => { setCoverageMode(true); onDockTabChange?.("tasks"); } },
-              { label: "Swap", onClick: () => { setAssignMode(true); onDockTabChange?.("assign"); } },
-            ].map((b, i) => (
-              <button key={i} disabled={isCurrentNightLocked} onClick={b.onClick} className={`sb-placement-pad-action py-2 rounded-2xl text-[11px] font-semibold ${ (b as any).danger ? "sb-placement-pad-action-danger text-[#FF3B30] bg-[#FFF0F0] border border-[#FFD5D5]" : "text-gray-800 bg-white border border-gray-200" }`}>
-                {b.label}
-              </button>
-            ))}
+        <div className="sb-placement-pad-footer px-3 pb-3 pt-2">
+          <div className="sb-placement-pad-footer-row">
+            <button disabled={isCurrentNightLocked} onClick={() => onToggleLock?.(slotKey)} className="sb-placement-pad-action">
+              {a.isLocked ? "Locked" : "Lock"}
+            </button>
+            <button disabled={isCurrentNightLocked} onClick={() => { setCoverageMode(true); onDockTabChange?.("tasks"); }} className="sb-placement-pad-action">
+              Coverage
+            </button>
+            <button disabled={isCurrentNightLocked} onClick={() => { setAssignMode(true); onDockTabChange?.("assign"); }} className="sb-placement-pad-action sb-placement-pad-action-emphasis">
+              Swap
+            </button>
+            <button disabled={isCurrentNightLocked} onClick={() => onLiveUnassign?.(slotKey)} className="sb-placement-pad-action-clear">
+              Clear
+            </button>
           </div>
         </div>
       )}
