@@ -51,15 +51,21 @@
   pointer-events: none;
 }
 
-.sb-auth-pin-scrim {
+.sb-auth-desk {
   position: fixed;
   inset: 0;
-  z-index: 9998;
-  background: rgba(250, 250, 248, 0.42);
+  z-index: 0;
+  background: #E8E0D2;
   pointer-events: none;
-  /* backdrop-filter is applied inline in OpsAuthGate.tsx — a class-level
-     backdrop-filter is stripped by this app's build (see the glass-backdrop
-     memory note); only the background/pointer-events belong here. */
+}
+
+.sb-auth-waiting {
+  margin: 0;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: #2F2B24;
 }
 
 .sb-auth-gate-modal-layer {
@@ -81,165 +87,37 @@
 .sb-auth-card {
   position: relative;
   width: 100%;
-  max-width: 400px;
-  border-radius: 10px;
+  max-width: 320px;
+  border-radius: 8px;
   border: 1px solid #E4DDD0;
   background: #FBF7F0;
-  box-shadow: 0 1px 2px rgba(48, 38, 22, 0.05);
+  box-shadow: 0 1px 2px rgba(48, 38, 22, 0.06);
   overflow: hidden;
 }
 
 .sb-auth-card--desk {
-  max-width: 360px;
+  max-width: 320px;
 }
 
 .sb-auth-card--wide {
-  max-width: 420px;
-}
-
-.sb-auth-card--access,
-.sb-auth-card--setup,
-.sb-auth-card--warn {
-  box-shadow: 0 1px 2px rgba(48, 38, 22, 0.05);
+  max-width: 360px;
 }
 
 .sb-auth-card::before,
-.sb-auth-card::after,
-.sb-auth-card--access::before,
-.sb-auth-card--setup::before {
-  content: none;
+.sb-auth-card::after {
+  content: none !important;
 }
 
-.sb-auth-accent,
-.sb-auth-icon,
-.sb-auth-slots {
-  display: none;
-}
-
-.sb-auth-accent-legacy {
-  position: relative;
-  height: 3px;
-  overflow: hidden;
-}
-
-/* A whisper-thin highlight that drifts across the accent bar on a slow loop —
-   like light catching brushed metal. Idle-screen ambience; never distracting. */
-.sb-auth-accent::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 40%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.55) 50%,
-    transparent 100%
-  );
-  transform: translateX(-150%);
-  animation: sb-accent-drift-kf 4.5s ease-in-out infinite;
-  animation-delay: 0.6s;
-}
-
-@keyframes sb-accent-drift-kf {
-  0%, 8% { transform: translateX(-150%); }
-  55%, 100% { transform: translateX(350%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-accent::after {
-    display: none;
-  }
-}
-
-.sb-auth-card--access .sb-auth-accent {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(239, 68, 68, 0.12) 12%,
-    rgba(220, 38, 38, 0.72) 50%,
-    rgba(239, 68, 68, 0.12) 88%,
-    transparent 100%
-  );
-}
-
-.sb-auth-card--setup .sb-auth-accent {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(16, 185, 129, 0.12) 12%,
-    rgba(5, 150, 105, 0.72) 50%,
-    rgba(16, 185, 129, 0.12) 88%,
-    transparent 100%
-  );
-}
-
-.sb-auth-card--warn .sb-auth-accent {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(245, 158, 11, 0.12) 12%,
-    rgba(217, 119, 6, 0.72) 50%,
-    rgba(245, 158, 11, 0.12) 88%,
-    transparent 100%
-  );
-}
-
-.sb-auth-icon {
+.sb-auth-card__body {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 0.875rem;
-  flex-shrink: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-}
-
-.sb-auth-card--access .sb-auth-icon {
-  background: linear-gradient(145deg, #fff5f5, #fee2e2);
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  color: #dc2626;
-  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
-  --sb-icon-glow: rgba(239, 68, 68, 0.32);
-}
-
-.sb-auth-card--setup .sb-auth-icon {
-  background: linear-gradient(145deg, #ecfdf5, #d1fae5);
-  border: 1px solid rgba(52, 211, 153, 0.35);
-  color: #059669;
-  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
-  --sb-icon-glow: rgba(16, 185, 129, 0.3);
-}
-
-.sb-auth-card--warn .sb-auth-icon {
-  background: linear-gradient(145deg, #fffbeb, #fef3c7);
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  color: #d97706;
-  animation: sb-icon-breathe-kf 3.6s ease-in-out infinite;
-  --sb-icon-glow: rgba(245, 158, 11, 0.32);
-}
-
-/* Quiet ambient life for an otherwise static screen — a slow breathing glow,
-   not a pulse you'd consciously clock. */
-@keyframes sb-icon-breathe-kf {
-  0%, 100% {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 0 0 var(--sb-icon-glow, transparent);
-  }
-  50% {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 14px 1px var(--sb-icon-glow, transparent);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-card--access .sb-auth-icon,
-  .sb-auth-card--setup .sb-auth-icon,
-  .sb-auth-card--warn .sb-auth-icon {
-    animation: none;
-  }
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 24px 24px;
 }
 
 .sb-auth-title {
-  font-size: 1.15rem;
+  margin: 0;
+  font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -247,119 +125,66 @@
 }
 
 .sb-auth-subtitle {
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: #6b7280;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #4A453C;
 }
 
-.sb-auth-label {
+.sb-auth-field-label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #9ca3af;
-}
-
-.sb-auth-input-wrap {
-  position: relative;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #4A453C;
 }
 
 .sb-auth-input {
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid #E4DDD0;
+  border-radius: 6px;
+  border: 1px solid #C4B8A4;
   background: #F6F1E8;
-  padding: 0.85rem 0.9rem;
+  padding: 10px 12px;
   text-align: left;
   font-family: var(--font-ui, var(--font-inter-tight), system-ui);
-  font-size: 1.15rem;
-  letter-spacing: 0.28em;
+  font-size: 18px;
+  letter-spacing: 0.18em;
   color: #1C1910;
   box-shadow: none;
-  transition: border-color 0.15s ease;
 }
 
-.sb-auth-input--compact {
-  padding: 0.8rem 0.85rem;
-  font-size: 1.45rem;
-  letter-spacing: 0.58em;
-  padding-right: calc(0.85rem - 0.58em);
-}
-
-.sb-auth-input::placeholder {
-  color: #d4d4d8;
-  letter-spacing: inherit;
-}
-
-.sb-auth-card--access .sb-auth-input:focus,
-.sb-auth-card--desk .sb-auth-input:focus,
-.sb-auth-card--setup .sb-auth-input:focus {
+.sb-auth-card--desk .sb-auth-input:focus {
   outline: none;
-  border-color: #C4B8A4;
+  border-color: #6B645A;
   box-shadow: none;
 }
 
-.sb-auth-card--access .sb-auth-input--error,
 .sb-auth-card--desk .sb-auth-input--error {
-  border-color: #B42318;
+  border-color: #8A1C16;
   box-shadow: none;
 }
 
-.sb-auth-slots {
+.sb-auth-actions {
   display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-top: 0.85rem;
-}
-
-.sb-auth-input--compact + .sb-auth-slots {
-  margin-top: 0.55rem;
-  margin-bottom: 0.15rem;
-}
-
-.sb-auth-slot {
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 9999px;
-  background: #e4e4e7;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  transition:
-    transform 0.18s var(--sb-spring-gentle),
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.sb-auth-card--access .sb-auth-slot--filled {
-  background: linear-gradient(145deg, #f87171, #ef4444);
-  border-color: rgba(220, 38, 38, 0.35);
-  box-shadow: 0 0 8px -2px rgba(239, 68, 68, 0.45);
-  transform: scale(1.15);
-}
-
-.sb-auth-card--setup .sb-auth-slot--filled {
-  background: linear-gradient(145deg, #34d399, #10b981);
-  border-color: rgba(5, 150, 105, 0.35);
-  box-shadow: 0 0 8px -2px rgba(16, 185, 129, 0.4);
-  transform: scale(1.15);
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
 }
 
 .sb-auth-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  border-radius: 0.875rem;
-  padding: 0.8rem 1rem;
-  font-size: 0.8125rem;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 14px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  transition:
-    background 0.2s ease,
-    transform 0.12s ease,
-    box-shadow 0.2s ease;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .sb-auth-primary--block {
@@ -371,103 +196,63 @@
 }
 
 .sb-auth-primary--active {
-  color: #fafafa;
-  background: linear-gradient(180deg, #3f3f46 0%, #18181b 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 8px 18px -8px rgba(0, 0, 0, 0.35);
+  color: #FBF7F0;
+  background: #2F2B24;
 }
 
 .sb-auth-primary--active:hover {
-  background: linear-gradient(180deg, #52525b 0%, #27272a 100%);
-}
-
-.sb-auth-primary--active:active {
-  transform: scale(0.985);
+  background: #3F3A32;
 }
 
 .sb-auth-primary--disabled {
-  color: #a1a1aa;
-  background: #e4e4e7;
+  color: #6B645A;
+  background: #E4DDD0;
   cursor: not-allowed;
 }
 
-.sb-auth-primary--success {
-  color: #1C1910;
-  background: #EDE4D6;
-  box-shadow: none;
-}
-
-.sb-auth-primary__icon-pop {
-  display: inline-flex;
-  animation: sb-icon-pop-kf 0.36s var(--sb-spring-gentle) both;
-}
-
-@keyframes sb-icon-pop-kf {
-  from {
-    opacity: 0;
-    transform: scale(0.4) rotate(-12deg);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-primary__icon-pop {
-    animation: none;
-  }
-}
-
 .sb-auth-secondary {
-  border-radius: 0.875rem;
-  padding: 0.8rem 1.1rem;
-  font-size: 0.8125rem;
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
+  color: #4A453C;
+  background: transparent;
+  border: 1px solid #C4B8A4;
 }
 
 .sb-auth-secondary:hover:not(:disabled) {
-  color: #374151;
-  border-color: rgba(0, 0, 0, 0.16);
-  background: #ffffff;
+  color: #1C1910;
+  border-color: #6B645A;
+  background: #F6F1E8;
 }
 
 .sb-auth-secondary--ghost {
   width: 100%;
-  padding: 0.55rem 1rem;
+  padding: 8px 12px;
   background: transparent;
   border: none;
-  color: #9ca3af;
+  color: #4A453C;
 }
 
 .sb-auth-secondary--ghost:hover:not(:disabled) {
-  color: #4b5563;
+  color: #1C1910;
   background: transparent;
 }
 
 .sb-auth-error {
-  font-size: 0.75rem;
-  line-height: 1.45;
-  color: #b91c1c;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 0.75rem;
-  padding: 0.65rem 0.85rem;
-  animation: sb-error-enter-kf 0.28s var(--sb-spring-gentle) both;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #8A1C16;
+  background: #F6E8E4;
+  border: 1px solid #E4C4BC;
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
-@keyframes sb-error-enter-kf {
+@keyframes sb-modal-enter-kf {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -475,96 +260,12 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .sb-auth-error {
-    animation: none;
-  }
-}
-
-/* Modal enter / exit — a hair of blur-in on top of the lift so the card
-   feels like it's materializing out of the scrim rather than just sliding
-   up. Barely perceptible on its own; that's the point. */
-@keyframes sb-modal-enter-kf {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.985);
-    filter: blur(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-
 .sb-modal-enter {
-  animation: sb-modal-enter-kf 0.34s var(--sb-spring-gentle) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sb-modal-enter {
-    animation-duration: 0.01ms;
-  }
+  animation: sb-modal-enter-kf 0.2s ease both;
 }
 
 .sb-modal-exit {
-  animation: sb-modal-enter-kf 0.18s var(--sb-spring-gentle) reverse both;
-}
-
-@keyframes sb-shake-kf {
-  0%,
-  100% {
-    transform: translateX(0) rotate(0deg);
-  }
-  20% {
-    transform: translateX(-7px) rotate(-0.4deg);
-  }
-  40% {
-    transform: translateX(7px) rotate(0.4deg);
-  }
-  60% {
-    transform: translateX(-4px) rotate(-0.2deg);
-  }
-  80% {
-    transform: translateX(4px) rotate(0.2deg);
-  }
-}
-
-.animate-shake {
-  animation: sb-shake-kf 0.42s ease;
-}
-
-/* Dots flash red in place, then the PIN clears — a beat of "that was wrong"
-   instead of the slots just snapping back to empty. */
-@keyframes sb-slot-error-flash-kf {
-  0%, 100% {
-    background: #e4e4e7;
-    border-color: rgba(0, 0, 0, 0.06);
-    transform: scale(1);
-  }
-  30% {
-    background: linear-gradient(145deg, #f87171, #ef4444);
-    border-color: rgba(220, 38, 38, 0.4);
-    transform: scale(1.15);
-  }
-}
-
-.sb-auth-slot--error-flash {
-  animation: sb-slot-error-flash-kf 0.5s ease;
-  animation-delay: calc(var(--sb-slot-i, 0) * 22ms);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-shake,
-  .sb-auth-slot--error-flash {
-    animation: none;
-  }
-}
-
-.sb-auth-accent,
-.sb-auth-icon,
-.sb-auth-slots {
-  display: none !important;
+  animation: sb-modal-enter-kf 0.14s ease reverse both;
 }
 
 @keyframes sb-content-enter-kf {

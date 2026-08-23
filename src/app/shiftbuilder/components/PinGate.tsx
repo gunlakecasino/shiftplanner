@@ -119,42 +119,37 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
       className="sb-auth-card sb-auth-card--desk"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <div className="relative px-7 pt-7 pb-4">
+      <form onSubmit={handleSubmit} className="sb-auth-card__body">
         <h2 id={titleId} className="sb-auth-title">
           SheetBuilder
         </h2>
-        <p id={descId} className="sb-auth-subtitle mt-1">
+        <p id={descId} className="sb-auth-subtitle">
           Ops PIN
         </p>
-      </div>
 
-      <form onSubmit={handleSubmit} className="relative px-7 pb-7 space-y-4">
-        <div>
-          <label htmlFor={inputId} className="sb-auth-label">
-            6-digit PIN
-          </label>
-          <input
-            ref={inputRef}
-            id={inputId}
-            type="password"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={6}
-            value={pin}
-            onChange={(e) => handlePinChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && isComplete) {
-                void handleSubmit(e);
-              }
-            }}
-            className={cn("sb-auth-input", error && "sb-auth-input--error")}
-            placeholder="••••••"
-            disabled={submitting}
-            autoComplete="one-time-code"
-            aria-invalid={!!error}
-            aria-describedby={error ? "pin-gate-error" : undefined}
-          />
-        </div>
+        <label htmlFor={inputId} className="sr-only">
+          Ops PIN
+        </label>
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="password"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={6}
+          value={pin}
+          onChange={(e) => handlePinChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && isComplete) {
+              void handleSubmit(e);
+            }
+          }}
+          className={cn("sb-auth-input", error && "sb-auth-input--error")}
+          disabled={submitting}
+          autoComplete="one-time-code"
+          aria-invalid={!!error}
+          aria-describedby={error ? "pin-gate-error" : undefined}
+        />
 
         {error ? (
           <div id="pin-gate-error" role="alert" className="sb-auth-error">
@@ -162,7 +157,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
           </div>
         ) : null}
 
-        <div className="flex items-center gap-3 pt-1">
+        <div className="sb-auth-actions">
           <button
             type="submit"
             disabled={!isComplete || submitting}

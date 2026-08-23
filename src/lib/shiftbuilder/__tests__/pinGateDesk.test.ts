@@ -10,6 +10,10 @@ const pinChange = readFileSync(
   resolve(process.cwd(), "src/app/shiftbuilder/components/PinChangeGate.tsx"),
   "utf8",
 );
+const opsAuthGate = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/components/OpsAuthGate.tsx"),
+  "utf8",
+);
 const authCss = readFileSync(
   resolve(process.cwd(), "src/app/shiftbuilder/authGate.css"),
   "utf8",
@@ -21,22 +25,48 @@ describe("PinGate desk — corporate ops console", () => {
     expect(pinGate).toContain("SheetBuilder");
     expect(pinGate).toContain("Ops PIN");
     expect(pinGate).toContain('"Enter"');
+    expect(pinGate).toContain("sr-only");
     expect(pinGate).not.toContain("sb-auth-accent");
     expect(pinGate).not.toContain("sb-auth-icon");
     expect(pinGate).not.toContain("sb-auth-slots");
     expect(pinGate).not.toContain("SheetBuilder Access");
+    expect(pinGate).not.toContain("6-digit PIN");
+    expect(pinGate).not.toContain("6-DIGIT PIN");
     expect(pinGate).not.toContain("SIGNED IN");
     expect(pinGate).not.toContain("VERIFYING");
     expect(pinGate).not.toContain("animate-shake");
     expect(pinGate).not.toContain("errorFlash");
+    expect(pinGate).not.toContain("••••••");
+    expect(pinGate).not.toContain("check_circle");
+    expect(pinGate).not.toMatch(/\block\b/);
     expect(pinGate).toContain("cleaned.length === 6");
   });
 
-  it("scrubs matching PIN-change theater and hides leftover auth chrome", () => {
+  it("does not paint skeleton, blur, or accent theater behind the PIN card", () => {
+    expect(opsAuthGate).toContain("sb-auth-desk");
+    expect(opsAuthGate).not.toContain("BuilderLoadingShell");
+    expect(opsAuthGate).not.toContain("backdropFilter");
+    expect(opsAuthGate).not.toContain("WebkitBackdropFilter");
+    expect(opsAuthGate).not.toContain("sb-auth-pin-scrim");
+    expect(opsAuthGate).not.toContain("sb-auth-accent");
+    expect(opsAuthGate).not.toContain("sb-auth-icon");
+    expect(opsAuthGate).not.toContain("warning");
+    expect(authCss).toContain("background: #E8E0D2");
+    expect(authCss).toContain("background: #FBF7F0");
+    expect(authCss).not.toContain("backdrop-filter");
+    expect(authCss).not.toContain("sb-accent-drift");
+    expect(authCss).not.toContain("sb-icon-breathe");
+    expect(authCss).not.toContain("sb-slot-error-flash");
+    expect(authCss).not.toContain("linear-gradient(180deg, #3f3f46");
+  });
+
+  it("scrubs matching PIN-change theater", () => {
     expect(pinChange).toContain("sb-auth-card--desk");
+    expect(pinChange).toContain("Set PIN");
+    expect(pinChange).toContain('"Save"');
     expect(pinChange).not.toContain("sb-auth-accent");
     expect(pinChange).not.toContain("sb-auth-slots");
+    expect(pinChange).not.toContain("SAVING PIN");
     expect(authCss).toContain("quiet desk paper");
-    expect(authCss).toMatch(/\.sb-auth-slots \{[\s\S]*display: none !important/);
   });
 });

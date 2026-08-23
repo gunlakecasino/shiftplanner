@@ -116,7 +116,7 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
     ref?: React.RefObject<HTMLInputElement | null>,
   ) => (
     <div>
-      <label htmlFor={fieldId} className="sb-auth-label">
+      <label htmlFor={fieldId} className="sb-auth-field-label">
         {label}
       </label>
       <input
@@ -128,7 +128,7 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
         maxLength={6}
         value={value}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        className="sb-auth-input sb-auth-input--compact"
+        className="sb-auth-input"
         disabled={submitting}
         autoComplete="off"
       />
@@ -144,19 +144,16 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
       className="sb-auth-card sb-auth-card--desk sb-auth-card--wide"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <div className="relative px-7 pt-7 pb-4">
+      <form onSubmit={handleSubmit} className="sb-auth-card__body">
         <h2 id={titleId} className="sb-auth-title">
-          Set your personal PIN
+          Set PIN
         </h2>
-        <p id={descId} className="sb-auth-subtitle mt-1.5">
-          Welcome, {operatorName}. Re-enter your temporary PIN, then choose a private
-          6-digit ops PIN. Avoid sequences like 123456.
+        <p id={descId} className="sb-auth-subtitle">
+          {operatorName}: temporary PIN, then a new 6-digit PIN.
         </p>
-      </div>
 
-      <form onSubmit={handleSubmit} className="relative px-7 pb-7 space-y-4">
         {pinField(tempPin, setTempPin, "Temporary PIN", tempId)}
-        {pinField(newPin, setNewPin, "New 6-Digit PIN", newId, inputRef)}
+        {pinField(newPin, setNewPin, "New PIN", newId, inputRef)}
         {pinField(confirmPin, setConfirmPin, "Confirm PIN", confirmId)}
 
         {error ? (
@@ -173,7 +170,7 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
             canSubmit ? "sb-auth-primary--active" : "sb-auth-primary--disabled",
           )}
         >
-          {submitting ? <BuilderBusyLabel>SAVING PIN</BuilderBusyLabel> : "Save & continue"}
+          {submitting ? <BuilderBusyLabel>Saving</BuilderBusyLabel> : "Save"}
         </button>
 
         <button
