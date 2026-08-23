@@ -10,7 +10,7 @@ export function MiniCalendar({ activeDate, onSelect, onClose }: MiniCalendarProp
 
   return (
     <div
-      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-[#1e1e28] border border-white/10 rounded-xl shadow-2xl p-3 w-52"
+      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white border border-[#E6EAF0] rounded-xl shadow-sm p-3 w-52"
       onMouseLeave={onClose}
     >
       <div className="grid grid-cols-7 mb-1">
@@ -33,7 +33,7 @@ export function MiniCalendar({ activeDate, onSelect, onClose }: MiniCalendarProp
               onClick={() => { if (isInRail) { onSelect(railIdx); onClose(); } }}
               style={isActive && activeColor ? { backgroundColor: activeColor } : undefined}
               className={`text-[10px] font-medium h-6 w-full rounded-md transition-colors leading-none
-                ${isActive ? "text-white font-bold" : isInRail ? "text-white hover:bg-white/15" : "text-gray-500 hover:bg-white/10"}`}
+                ${isActive ? "text-white font-bold" : isInRail ? "text-[#0F172A] hover:bg-[#F4F6FA]" : "text-[#94A3B8] hover:bg-[#F4F6FA]"}`}
             >
               {day}
             </button>

@@ -65,13 +65,10 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
             ) : (
               <div className="flex-1 min-h-0 flex flex-col">
                 <div className="flex-1 flex flex-col items-start justify-center min-h-0">
-                  <span
-                    className="text-[13px] font-semibold tracking-[0.04em]"
-                    style={{ color: `${accentColor}99` }}
-                  >
+                  <span className="text-[12px] font-medium tracking-[0.01em] text-[#94A3B8]">
                     Assign TM
                   </span>
-                  <span className="no-print text-[10px] mt-0.5 text-[#94A3B8]">Drop to assign</span>
+                  <span className="no-print text-[9px] font-normal mt-0.5 text-[#B0B8C4]">Drop to assign</span>
                 </div>
                 {taskBlock}
               </div>

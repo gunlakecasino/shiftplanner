@@ -326,7 +326,7 @@ export function UnassignedInvite({
   return (
     <motion.div
       key="unassigned-invite"
-      className={`sb-unassigned-invite flex flex-col items-start justify-center text-[#94A3B8] tracking-[0.15px] rounded-[8px] cursor-pointer w-full flex-1 min-h-0 ${cfg.padding}`}
+      className={`sb-unassigned-invite flex flex-col items-start justify-center text-[#B0B8C4] tracking-[0.01em] rounded-[8px] cursor-pointer w-full flex-1 min-h-0 ${cfg.padding}`}
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
       }}
@@ -338,19 +338,19 @@ export function UnassignedInvite({
       title={title}
     >
       <span
-        className="leading-none text-[#CBD5E1]"
+        className="leading-none text-[#C5CDD8]"
         style={{ fontSize: cfg.plusSize, fontWeight: 400 }}
       >
         +
       </span>
       <span
-        className="font-semibold tracking-[0.02em] text-[#64748B] mt-1"
-        style={{ fontSize: cfg.labelSize, opacity: 1 }}
+        className="font-medium tracking-[0.01em] text-[#94A3B8] mt-1"
+        style={{ fontSize: cfg.labelSize, opacity: 0.92 }}
       >
         Assign TM
       </span>
       {size === "zone" ? (
-        <span className="no-print text-[10px] text-[#94A3B8] mt-0.5">Drop to assign</span>
+        <span className="no-print text-[9px] font-normal text-[#B0B8C4] mt-0.5">Drop to assign</span>
       ) : (
         <UnassignedDropHint className="mt-0.5" />
       )}

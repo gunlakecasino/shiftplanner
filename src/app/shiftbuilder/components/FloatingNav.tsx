@@ -142,8 +142,8 @@ function nightActionClusterStyle(): CSSProperties {
     display: "inline-flex",
     alignItems: "center",
     gap: 2,
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#F4F6FA",
+    border: "1px solid #E6EAF0",
     boxShadow: "none",
   };
 }
@@ -156,7 +156,7 @@ function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
     borderRadius: 6,
     border: 0,
     background: "transparent",
-    color: "rgba(244,244,245,0.92)",
+    color: "#334155",
     fontSize: 12,
     fontWeight: 650,
     letterSpacing: "-0.01em",
@@ -181,10 +181,10 @@ function SheetBuilderMark({ className }: { className?: string }) {
       aria-label="SheetBuilder"
       focusable="false"
     >
-      <rect width="32" height="32" rx="4" fill="#2A2B32" />
-      <rect x="6" y="8" width="20" height="2" fill="#C8C4BA" />
-      <rect x="6" y="15" width="20" height="2" fill="#C8C4BA" opacity="0.65" />
-      <rect x="6" y="22" width="13" height="2" fill="#C8C4BA" opacity="0.4" />
+      <rect width="32" height="32" rx="4" fill="#EEF1F6" />
+      <rect x="6" y="8" width="20" height="2" fill="#64748B" />
+      <rect x="6" y="15" width="20" height="2" fill="#64748B" opacity="0.65" />
+      <rect x="6" y="22" width="13" height="2" fill="#64748B" opacity="0.4" />
     </svg>
   );
 }
@@ -257,9 +257,9 @@ export default function FloatingNav(props: FloatingNavProps) {
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const selectedDay = days.find((d) => d.id === selectedDayId);
-  const chromeText = "#f4f4f5";
-  const mutedChromeText = "rgba(244,244,245,0.66)";
-  const chromeDivider = "rgba(255,255,255,0.12)";
+  const chromeText = "#0F172A";
+  const mutedChromeText = "#64748B";
+  const chromeDivider = "#E6EAF0";
   const rosterScheduledCount = rosterSummary?.scheduledCount ?? 0;
   const rosterPlacedCount = rosterSummary?.placedCount ?? 0;
   const rosterOpenCount = rosterSummary?.openCount ?? 0;
@@ -309,10 +309,10 @@ export default function FloatingNav(props: FloatingNavProps) {
   };
 
   const menuPanelClass =
-    "rounded-xl border border-white/10 bg-[#1d1d20] shadow-xl py-1 text-[13px] text-zinc-100";
+    "rounded-xl border border-[#E6EAF0] bg-white shadow-sm py-1 text-[13px] text-[#0F172A]";
   const menuItemClass =
-    "w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 disabled:opacity-40";
-  const menuDividerClass = "h-px bg-white/10 my-1 mx-2";
+    "w-full text-left px-3 py-1.5 hover:bg-[#F4F6FA] flex items-center gap-2 disabled:opacity-40";
+  const menuDividerClass = "h-px bg-[#E6EAF0] my-1 mx-2";
 
   const isViewingToday = !!selectedDay?.isToday;
   const packageCalendarActiveIndex = Math.max(0, days.findIndex((day) => day.id === selectedDayId));
@@ -340,10 +340,10 @@ export default function FloatingNav(props: FloatingNavProps) {
           right: 0,
           width: "100%",
           minWidth: 0,
-          background: "#1E1F24",
+          background: "#FFFFFF",
           borderRadius: 0,
           border: "none",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: "1px solid #E6EAF0",
           boxShadow: "none",
           boxSizing: "border-box",
           height: 54,
@@ -358,7 +358,7 @@ export default function FloatingNav(props: FloatingNavProps) {
         }}
       >
         {/* BRAND — SheetBuilder launchpad */}
-        <div className="sb-topbar-brand relative flex shrink-0 items-center gap-2.5 border-r border-white/10 pr-5" ref={launchpadRef}>
+        <div className="sb-topbar-brand relative flex shrink-0 items-center gap-2.5 border-r border-[#E6EAF0] pr-5" ref={launchpadRef}>
           <button
             type="button"
             className="sb-sheetbuilder-launch-trigger sb-interactive flex min-w-0 items-center gap-2.5 rounded-md"
@@ -389,7 +389,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             <div
               role="menu"
               aria-label="SheetBuilder launchpad"
-              className="sb-sheetbuilder-launchpad absolute left-0 top-full z-[90] mt-1.5 overflow-hidden rounded-md border border-white/10 bg-[#1E1F24] p-1 text-zinc-100"
+              className="sb-sheetbuilder-launchpad absolute left-0 top-full z-[90] mt-1.5 overflow-hidden rounded-md border border-[#E6EAF0] bg-white p-1 text-[#0F172A]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sb-sheetbuilder-launchpad-grid flex flex-col">
@@ -528,14 +528,14 @@ export default function FloatingNav(props: FloatingNavProps) {
                       height: 44,
                       gap: 3,
                       boxShadow: "none",
-                      borderBottom: "1px solid rgba(244,244,245,0.88)",
+                      borderBottom: "2px solid #0F172A",
                     }}
                   >
                     <span
                       style={{
                         fontSize: 9,
                         fontWeight: 850,
-                        color: "rgba(244,244,245,0.72)",
+                        color: "#64748B",
                         letterSpacing: "0.08em",
                         lineHeight: 1,
                       }}
@@ -546,7 +546,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                       style={{
                         fontSize: 14,
                         fontWeight: 850,
-                        color: "#f4f4f5",
+                        color: "#0F172A",
                         lineHeight: 1,
                         letterSpacing: "0",
                       }}
@@ -571,10 +571,10 @@ export default function FloatingNav(props: FloatingNavProps) {
                     border: "1px solid transparent",
                   }}
                 >
-                  <span style={{ fontSize: 9, fontWeight: 850, color: isToday ? "rgba(255,255,255,0.72)" : "rgba(244,244,245,0.46)", lineHeight: 1, letterSpacing: "0.08em" }}>
+                  <span style={{ fontSize: 9, fontWeight: 850, color: isToday ? "#334155" : "#94A3B8", lineHeight: 1, letterSpacing: "0.08em" }}>
                     {letter}
                   </span>
-                  <span style={{ fontSize: 14, fontWeight: 850, color: isToday ? "rgba(255,255,255,0.82)" : "rgba(244,244,245,0.64)", lineHeight: 1 }}>
+                  <span style={{ fontSize: 14, fontWeight: 850, color: isToday ? "#0F172A" : "#64748B", lineHeight: 1 }}>
                     {dateNum}
                   </span>
                 </button>
@@ -700,10 +700,8 @@ export default function FloatingNav(props: FloatingNavProps) {
               type="button"
               className="sb-sheetbuilder-roster-toggle icon-btn sb-interactive flex items-center justify-center rounded-full"
               style={{
-                color: rosterOpen ? "#fff" : mutedChromeText,
-                background: rosterOpen
-                  ? "rgba(255,255,255,0.13)"
-                  : "rgba(255,255,255,0.04)",
+                color: rosterOpen ? "#0F172A" : mutedChromeText,
+                background: rosterOpen ? "#EEF1F6" : "transparent",
               }}
               onClick={() => {
                 // Opens the real RosterRail. This used to open a read-only
@@ -766,7 +764,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 fontWeight: 700,
                 letterSpacing: "0.02em",
                 color: chromeText,
-                background: "rgba(255,255,255,0.08)",
+                background: "#EEF1F6",
               }}
             onClick={() => {
               setProfileOpen((v) => !v);
@@ -788,7 +786,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="border-b border-white/10 px-3 py-2 text-[12px] text-zinc-400">
+                <div className="border-b border-[#E6EAF0] px-3 py-2 text-[12px] text-[#64748B]">
                   {currentUser.full_name}
                   <div className="opacity-80">{currentUser.username} · {roleLabel(currentUser.role)}</div>
                 </div>
@@ -825,7 +823,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             <button
               type="button"
               className="sb-topbar-more icon-btn sb-interactive flex items-center justify-center w-6 h-6 rounded-full"
-              style={{ color: "#aaa" }}
+              style={{ color: mutedChromeText }}
             onClick={() => {
               setMoreOpen((v) => !v);
               setRosterMenuOpen(false);
