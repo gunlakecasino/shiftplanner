@@ -41,6 +41,7 @@ const TYPING_SELECTOR =
 
 /** True when the event is coming from a field that should keep its own keys. */
 export function isDeskTypingTarget(target: EventTarget | null): boolean {
+  if (typeof Element === "undefined") return false;
   if (!(target instanceof Element)) return false;
   if (target.closest(TYPING_SELECTOR)) return true;
   const role = target.getAttribute("role");
@@ -50,6 +51,7 @@ export function isDeskTypingTarget(target: EventTarget | null): boolean {
 
 /** Confirm / Print / pads already own Escape and letters. */
 export function isDeskModalLock(target: EventTarget | null): boolean {
+  if (typeof document === "undefined" || typeof Element === "undefined") return false;
   if (!(target instanceof Element)) {
     return !!document.querySelector(
       '[role="alertdialog"], [aria-modal="true"]:not([data-sb-cheatsheet])',

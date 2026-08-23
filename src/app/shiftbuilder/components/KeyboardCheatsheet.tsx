@@ -13,8 +13,7 @@ type Props = {
 };
 
 /**
- * Calm in-app cheatsheet. Lists only real desk bindings — no Run Engine / R,
- * no ⌘K, no agentic theater.
+ * Calm in-app cheatsheet. Lists only real desk bindings. No palette. No theater.
  */
 export function KeyboardCheatsheet({ open, onClose }: Props) {
   const cardRef = React.useRef<HTMLDivElement>(null);
