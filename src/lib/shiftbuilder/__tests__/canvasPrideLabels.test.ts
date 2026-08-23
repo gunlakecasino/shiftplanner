@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  coverageChipTone,
   formatCanvasCoverageChip,
   formatCanvasRepeatReason,
   formatCanvasRrSideLabel,
@@ -86,6 +87,25 @@ describe("formatCanvasCoverageChip", () => {
       "Covering Women's 6",
     );
     expect(formatCanvasCoverageChip("And Women's Restroom 6").startsWith("Covering Men's")).toBe(false);
+  });
+});
+
+describe("coverageChipTone", () => {
+  it("keeps gold/yellow covering chips readable (no pale-yellow-on-white)", () => {
+    const gold = coverageChipTone("#ffcc00");
+    expect(gold.ink).toBe("#6B4E00");
+    expect(gold.surface).toBe("#F3E4B0");
+    expect(gold.surface.toLowerCase()).not.toBe("#ffffff");
+    expect(gold.ink.toLowerCase()).not.toBe("#ffffff");
+    expect(gold.ink.toLowerCase()).not.toBe("#ffcc00");
+  });
+
+  it("maps zone and RR accents to dark same-family ink on tinted paper", () => {
+    expect(coverageChipTone("#ff3b30").ink).toBe("#8A1C16");
+    expect(coverageChipTone("#C05A98").ink).toBe("#7D3A68");
+    expect(coverageChipTone("#007aff").ink).toBe("#004A9E");
+    expect(coverageChipTone("#34c759").ink).toBe("#176B32");
+    expect(coverageChipTone("#a2845e").surface).not.toBe("#ffffff");
   });
 });
 

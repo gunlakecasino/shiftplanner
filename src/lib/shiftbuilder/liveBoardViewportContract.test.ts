@@ -249,6 +249,23 @@ describe("SheetBuilder live undo toast (PR C)", () => {
   });
 });
 
+describe("SheetBuilder calm desk paper", () => {
+  it("uses warm paper on the live canvas and keeps covering as inset chips", () => {
+    expect(globalsCss).toContain("Calm desk paper — live board cards only");
+    expect(globalsCss).toContain("--sb-card-paper: #FBF7F0");
+    expect(globalsCss).toContain("sb-coverage-chip");
+    expect(globalsCss).toContain("Header deferred to PR #9");
+    expect(globalsCss).not.toMatch(/\.print-artboard\s*\{[^}]*sb-card-paper/);
+  });
+
+  it("does not rewrite FloatingNav night actions in this pass", () => {
+    expect(floatingNav).toContain("velvetGlassPillStyle");
+    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).toContain(">Draft<");
+    expect(floatingNav).toContain(">Print<");
+  });
+});
+
 describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
   it("uses honest gendered RR titles instead of truncated RR 6 WOMEN'S", () => {
     expect(rrCard).toContain("formatCanvasRrSideLabel");

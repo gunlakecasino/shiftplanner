@@ -12,65 +12,70 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
     onClick?.();
   };
 
+  const slotTitle = !noChip ? (
+    <span
+      className="sb-canvas-slot-label text-[10px] font-semibold uppercase tracking-[0.04em] leading-snug"
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", color: accentColor }}
+    >
+      {cardLabel}
+    </span>
+  ) : (
+    <div />
+  );
+
+  const taskBlock = hasTasks ? (
+    <div className="mt-auto min-w-0 flex flex-col gap-1">
+      {taskContent ?? notes?.map((note, index) => (
+        <div key={`${note}-${index}`} className="flex items-start gap-1 min-w-0">
+          <span
+            className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: accentColor, opacity: 0.85 }}
+          />
+          <span className="text-[9px] leading-snug text-[#5C564C] break-words">{note}</span>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
   if (unassigned) {
     return (
       <div
         onClick={handleCardClick}
-        className="rounded-lg border border-gray-200 min-h-[172px] flex flex-col overflow-hidden bg-white cursor-pointer"
+        className="sb-desk-card rounded-lg border border-[#E4DDD0] min-h-0 h-full flex flex-col overflow-hidden bg-[#FBF7F0] cursor-pointer"
       >
         <div className="flex flex-1 min-h-0">
           <div className="w-[5px] shrink-0 rounded-l-xl" style={{ backgroundColor: accentColor }} />
-          <div className="flex flex-col flex-1 p-3 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            {!noChip
-              ? <span className="sb-canvas-slot-label text-[10px] font-semibold uppercase tracking-[0.04em] leading-snug" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", color: accentColor }}>{cardLabel}</span>
-              : <div />}
-          </div>
-          {coverage && coverage.length > 0 ? (
-            <div className="flex-1 min-h-0 flex flex-col gap-2">
-              <div className="min-w-0 flex flex-col gap-1">
-                <div className="sb-covered-by-label text-[8px] font-semibold uppercase tracking-[0.1em] text-[#9aa3b2]">Covered by</div>
-                {coverage.map((c) => (
-                  <div key={c.label} className="flex items-baseline gap-1.5 min-w-0">
-                    <span className="text-[10px] font-bold text-gray-500 shrink-0">{c.label}</span>
-                    <span className="text-[15px] font-bold text-gray-400 truncate">{c.name}</span>
-                  </div>
-                ))}
-              </div>
-              {hasTasks && (
-                <div className="min-w-0 mt-auto flex flex-col gap-1">
-                  {taskContent ?? notes?.map((note, index) => (
-                    <div key={`${note}-${index}`} className="flex items-start gap-1 min-w-0">
-                      <span
-                        className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: accentColor, opacity: 0.85 }}
-                      />
-                      <span className="text-[9px] leading-snug text-gray-600 break-words">{note}</span>
+          <div className="flex flex-col flex-1 p-3 min-w-0 text-left">
+            <div className="flex items-center justify-between mb-2">
+              {slotTitle}
+            </div>
+            {coverage && coverage.length > 0 ? (
+              <div className="flex-1 min-h-0 flex flex-col gap-2">
+                <div className="min-w-0 flex flex-col gap-1 items-start text-left">
+                  <div className="sb-covered-by-label text-[8px] font-semibold uppercase tracking-[0.1em] text-[#8A8378]">Covered by</div>
+                  {coverage.map((c) => (
+                    <div key={c.label} className="flex items-baseline gap-1.5 min-w-0">
+                      <span className="text-[10px] font-bold text-[#6B645A] shrink-0">{c.label}</span>
+                      <span className="text-[15px] font-bold text-[#4A453C] truncate">{c.name}</span>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex-1 min-h-0 flex flex-col">
-              <div className="flex-1 flex items-center justify-center">
-                <span className="text-[13px] font-semibold" style={{ color: `${accentColor}55` }}>Unassigned</span>
+                {taskBlock}
               </div>
-              {hasTasks && (
-                <div className="mt-auto min-w-0">
-                  {taskContent ?? notes?.map((note, index) => (
-                    <div key={`${note}-${index}`} className="flex items-start gap-1 min-w-0">
-                      <span
-                        className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: accentColor, opacity: 0.85 }}
-                      />
-                      <span className="text-[9px] leading-tight text-gray-600 break-words">{note}</span>
-                    </div>
-                  ))}
+            ) : (
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 flex flex-col items-start justify-center min-h-0">
+                  <span
+                    className="text-[13px] font-semibold tracking-[0.04em]"
+                    style={{ color: `${accentColor}99` }}
+                  >
+                    ASSIGN TM
+                  </span>
+                  <span className="no-print text-[10px] mt-0.5 text-[#9A9286]">Drop to assign</span>
                 </div>
-              )}
-            </div>
-          )}
+                {taskBlock}
+              </div>
+            )}
           </div>
         </div>
         {footer}
@@ -81,34 +86,23 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
   return (
     <div
       onClick={handleCardClick}
-      className="rounded-lg border border-gray-200 min-h-[172px] flex flex-col overflow-hidden bg-white cursor-pointer"
+      className="sb-desk-card rounded-lg border border-[#E4DDD0] min-h-0 h-full flex flex-col overflow-hidden bg-[#FBF7F0] cursor-pointer"
     >
       <div className="flex flex-1 min-h-0">
         <div className="w-[5px] shrink-0 rounded-l-xl" style={{ backgroundColor: accentColor }} />
-        <div className="flex flex-col flex-1 p-3 min-w-0">
-        <div className={`flex items-center justify-between ${projectPills ? "mb-1" : "mb-2.5"}`}>
-          {!noChip
-            ? <span className="sb-canvas-slot-label text-[10px] font-semibold uppercase tracking-[0.04em] leading-snug" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", color: accentColor }}>{cardLabel}</span>
-            : <div />}
-        </div>
-        {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
-        <div className="flex flex-col gap-0.5 mb-2">
-          <div className="text-[17px] font-bold text-gray-900 leading-tight truncate">{name}</div>
-          {nameMeta}
-          {secondName && (
-            <div className="text-[13px] font-semibold text-gray-400 leading-tight truncate">{secondName}</div>
-          )}
-        </div>
-        {hasTasks && (
-          <div className="mt-auto flex flex-col gap-1">
-            {taskContent ?? notes?.map((n, i) => (
-              <div key={i} className="flex items-start gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full mt-[4px] shrink-0" style={{ backgroundColor: accentColor, opacity: 0.85 }} />
-                    <span className="text-[10px] font-medium text-gray-600 leading-snug break-words">{n}</span>
-              </div>
-            ))}
+        <div className="flex flex-col flex-1 p-3 min-w-0 text-left">
+          <div className={`flex items-center justify-between ${projectPills ? "mb-1" : "mb-2.5"}`}>
+            {slotTitle}
           </div>
-        )}
+          {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
+          <div className="flex flex-col gap-0.5 mb-2 items-start text-left">
+            <div className="text-[17px] font-bold text-[#1C1910] leading-tight truncate w-full">{name}</div>
+            {nameMeta}
+            {secondName && (
+              <div className="text-[13px] font-semibold text-[#8A8378] leading-tight truncate">{secondName}</div>
+            )}
+          </div>
+          {taskBlock}
         </div>
       </div>
       {footer}

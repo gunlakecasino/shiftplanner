@@ -328,7 +328,7 @@ function RRSideShell({
         {body}
       </div>
       {coverageTasks.length > 0 && (
-        <div className="sb-coverage-footer shrink-0">
+        <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
           {coverageTasks.map((t) => (
             <CoverageBar
               key={t.id}

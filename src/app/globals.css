@@ -6681,3 +6681,151 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-break-badge-btn::before {
   content: none !important;
 }
+
+/* ==========================================================================
+   Calm desk paper — live board cards only.
+   Header deferred to PR #9. Golden print metrics are untouched.
+   ========================================================================== */
+
+.sb-builder-shell.sb-canvas-builder {
+  --sb-paper: #F4EFE6;
+  --sb-substrate: #EBE4D6;
+  --sb-desk: #E8E0D2;
+  --sb-card-paper: #FBF7F0;
+  --sb-card-line: #E4DDD0;
+  --sb-z1: #C8960C;
+  --sb-z2: #C8960C;
+  --sb-z3: #D93838;
+  --sb-z4: #D93838;
+  --sb-z5: #D93838;
+  --sb-z7: #4B7BE8;
+  --sb-z9: #D93838;
+  --sb-z10: #4CAF7D;
+  --sb-rr1: #C8960C;
+  --sb-rr7: #4B7BE8;
+  --sb-rr10: #4CAF7D;
+  --sb-aux-z9sr: #D93838;
+}
+
+.sb-builder-shell.sb-canvas-builder .sb-builder-stage {
+  background: var(--sb-desk, #E8E0D2) !important;
+}
+
+.sb-builder-shell.sb-canvas-builder .sb-builder-fluid-viewport {
+  background: var(--sb-paper, #ffffff) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-refined-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card {
+  background: var(--sb-card-paper, #FBF7F0) !important;
+  border-color: var(--sb-card-line, #E4DDD0) !important;
+  box-shadow: 0 1px 2px rgba(48, 38, 22, 0.04);
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.empty,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.sb-card-empty {
+  background: var(--sb-card-paper, #FBF7F0) !important;
+  border-color: var(--sb-card-line, #E4DDD0) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-accent-stripe,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card > .h-\[3px\] {
+  background-color: color-mix(in srgb, var(--card-accent, #8a8378) 82%, #6B5A3A) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-overlap-grid {
+  align-items: stretch;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid > *,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid > *,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-overlap-grid > * {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-wrapper > .sb-desk-card {
+  height: 100%;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-unassigned-invite {
+  align-items: flex-start !important;
+  justify-content: center;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-block,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-stack {
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+  margin-inline: 0;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .sb-break-badge-btn,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .sb-fit-chip {
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--sb-card-paper, #FBF7F0) 70%, #E8E0D2) !important;
+  color: #6B645A !important;
+  font-size: 8.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.01em !important;
+  padding: 2px 6px !important;
+  min-width: 0 !important;
+  height: auto !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 10px !important;
+  background: transparent !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip {
+  width: auto !important;
+  max-width: 100%;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 3px 7px !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip .sb-coverage-bar-label {
+  text-transform: none !important;
+  letter-spacing: 0.01em !important;
+  font-size: 9px !important;
+  font-weight: 650 !important;
+  color: inherit !important;
+  opacity: 1 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+  background: color-mix(in srgb, var(--sb-paper, #F4EFE6) 78%, #E8E0D2) !important;
+  border-color: var(--sb-card-line, #E4DDD0) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .assignment-card {
+  background: var(--sb-card-paper, #FBF7F0) !important;
+  border-color: var(--sb-card-line, #E4DDD0) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-primary-name,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card .text-\[17px\] {
+  text-align: left;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3)::after {
+  background: linear-gradient(180deg, rgba(244, 239, 230, 0) 0%, rgba(244, 239, 230, 0.92) 70%, #F4EFE6 100%);
+}
