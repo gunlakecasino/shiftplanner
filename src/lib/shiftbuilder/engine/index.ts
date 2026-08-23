@@ -7,9 +7,7 @@
  * This powers the main "Run Engine" button (full plan into draft) and is called
  * internally by the Week optimizer (rolling + polish).
  *
- * See timefoldLocalSolver.ts (the "Optimize Tonight" deep rotation path) for the
- * complementary current-board proposal UI. They share the objective but differ
- * in seeding and output style. Consolidation target: use this optimizer for both.
+ * Live optimizer is `engine/optimizer.ts`. The old Timefold lib path is retired.
  *
  * Stage gate enforces lex hierarchy (coverage > rotation > prefs > skill).
  */

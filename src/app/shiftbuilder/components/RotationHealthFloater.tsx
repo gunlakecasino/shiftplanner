@@ -32,7 +32,6 @@ import {
 } from "./canvasPillGlass";
 import { SB_DRAWER_TRANSITION } from "./builderPrimitives";
 import { RotationHealthOrb } from "./RotationHealthOrb";
-import type { TimefoldProgressTick } from "@/lib/shiftbuilder/timefold/timefoldTypes";
 
 export type RotationHealthPlacement =
   | "above-ops-pill"

@@ -159,6 +159,18 @@ import { usePrintManager } from "./hooks/usePrintManager";
 import { deepRefreshShiftBuilderDay } from "@/lib/shiftbuilder/shiftBuilderResume";
 import { useLiveAssignments } from "@/lib/shiftbuilder/useLiveAssignments";
 import {
+  APPLY_TO_LIVE_CONFIRM,
+  APPLY_TO_LIVE_CONFIRM_LABEL,
+  APPLY_TO_LIVE_DISCARD_POINT,
+  APPLY_TO_LIVE_POINT,
+  PUBLISH_DAY_CONFIRM,
+  PUBLISH_DAY_CONFIRM_LABEL,
+  PUBLISH_WEEK_CONFIRM,
+  UNPUBLISH_DAY_CONFIRM,
+  UNPUBLISH_DAY_CONFIRM_LABEL,
+  UNPUBLISH_WEEK_CONFIRM,
+} from "@/lib/shiftbuilder/stakesCopy";
+import {
   initLiveCacheForNight,
   retainLiveCacheMount,
   liveAssignmentsStore,
@@ -1349,15 +1361,15 @@ function AuthedShiftBuilder() {
     const summaryPoints = grokExpl
       ? [grokExpl.slice(0, 120) + (grokExpl.length > 120 ? "…" : "")]
       : [
-          "Changes become visible to all TMs immediately after Apply to Live",
-          "To abandon these proposals without writing, use Discard Draft first",
+          APPLY_TO_LIVE_POINT,
+          APPLY_TO_LIVE_DISCARD_POINT,
         ];
 
     const okToApply = await confirmDialog(
-      `This writes to the live board — TMs will see it immediately.`,
+      APPLY_TO_LIVE_CONFIRM,
       {
         title: `Apply ${changeCount} draft change${changeCount === 1 ? "" : "s"} to the live board?`,
-        confirmLabel: "Apply to Live",
+        confirmLabel: APPLY_TO_LIVE_CONFIRM_LABEL,
         summary,
         summaryPoints,
       },
@@ -3240,16 +3252,18 @@ function AuthedShiftBuilder() {
     const willPublish = currentNightStatus !== "published";
     const action = willPublish ? "publish" : "unpublish";
 
-    // Disable confirm popup when publishing (user request: "disable the pop up confirm if i want to publish a night now").
-    // Keep a lightweight confirm only for unpublish (more destructive).
-    if (!willPublish) {
-      const okToUnpublish = await confirmDialog(
-        "Unpublished nights return to draft status.",
-        { title: `Unpublish ${dayLabel} (${dateIso})?`, confirmLabel: "Unpublish", tone: "danger" },
-      );
-      if (!okToUnpublish) {
-        return;
-      }
+    const okToToggle = willPublish
+      ? await confirmDialog(PUBLISH_DAY_CONFIRM, {
+          title: `Publish ${dayLabel} (${dateIso})?`,
+          confirmLabel: PUBLISH_DAY_CONFIRM_LABEL,
+        })
+      : await confirmDialog(UNPUBLISH_DAY_CONFIRM, {
+          title: `Unpublish ${dayLabel} (${dateIso})?`,
+          confirmLabel: UNPUBLISH_DAY_CONFIRM_LABEL,
+          tone: "danger",
+        });
+    if (!okToToggle) {
+      return;
     }
 
     setPublishDayBusy(true);
@@ -3305,6 +3319,19 @@ function AuthedShiftBuilder() {
       }
 
       const action = publish ? "publish" : "unpublish";
+      const okToToggleWeek = publish
+        ? await confirmDialog(PUBLISH_WEEK_CONFIRM, {
+            title: "Publish this week?",
+            confirmLabel: "Publish Week",
+          })
+        : await confirmDialog(UNPUBLISH_WEEK_CONFIRM, {
+            title: "Unpublish this week?",
+            confirmLabel: "Unpublish Week",
+            tone: "danger",
+          });
+      if (!okToToggleWeek) {
+        return;
+      }
       setPublishWeekBusy(true);
       try {
         const { getOrCreateNightForDate, setNightPublished } = await import(
@@ -3361,6 +3388,7 @@ function AuthedShiftBuilder() {
       currentNight.queryClient,
       logBuilderChange,
       setCurrentNightStatus,
+      confirmDialog,
     ]
   );
 

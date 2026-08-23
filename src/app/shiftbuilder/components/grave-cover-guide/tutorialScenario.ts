@@ -61,7 +61,7 @@ export const GUIDE_STEPS: GuideStep[] = [
   {
     id: "intro",
     title: "Covering grave tonight",
-    body: "Martinez called off from Z4. On most nights there is no bench — you reshuffle people already on the board. This practice board mirrors live ShiftBuilder: Grave Roster on the left, Placement Pad on the card, coverage bars at the card bottom (not in the task list), and the Tasks Pad for regular task lines.",
+    body: "Martinez is marked off from Z4. On most nights there is no bench — you reshuffle people already on the board. This practice board mirrors live ShiftBuilder: Grave Roster on the left, Placement Pad on the card, coverage bars at the card bottom (not in the task list), and the Tasks Pad for regular task lines.",
     hint: "Click Start when ready.",
   },
   {

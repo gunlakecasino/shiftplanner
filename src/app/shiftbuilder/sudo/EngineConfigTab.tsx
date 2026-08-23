@@ -270,7 +270,7 @@ export function EngineConfigTab({ onDataChanged, isDark = false }: EngineConfigT
           </div>
 
           <div className="mt-3 text-[11px] text-zinc-500">
-            Higher effort gives Grok more time to consider operator notes, call-offs, recent history, and pair dynamics before overriding the deterministic ranking.
+            Higher effort gives Grok more time to consider operator notes, marked-off TMs, recent history, and pair dynamics before overriding the deterministic ranking.
           </div>
         </div>
 

@@ -268,9 +268,6 @@ export interface ShiftBuilderBoardProps {
   onOptimizeNight?: () => void;
   onClearBoard?: () => void;
   engineRunning?: boolean;
-  deepOptimizeRunning?: boolean;
-  deepOptimizeTick?: import("@/lib/shiftbuilder/timefold/timefoldTypes").TimefoldProgressTick | null;
-  onCancelDeepOptimize?: () => void;
   onApplyDraft?: () => void;
   onDiscardDraft?: () => void;
   showDraftStatusPill?: boolean;

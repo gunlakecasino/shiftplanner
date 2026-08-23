@@ -1,12 +1,15 @@
 /**
- * Batch Planner client surface — all privileged work goes through
- * postOpsMutation → /api/shiftbuilder/mutations (canRunEngine + admin server).
+ * Batch Planner client surface — RETIRED.
  *
- * Heavy engine logic lives in sudoBatchPlanner.server.ts (never imported here
- * into the browser static graph).
+ * Live writes must go Run Engine → Draft → Apply. These wrappers throw
+ * immediately and never POST. The mutations route also returns 410.
+ *
+ * Heavy engine logic remains in sudoBatchPlanner.server.ts for history only.
  */
 
-import { postOpsMutation } from "./opsMutationClient";
+import {
+  BATCH_PLANNER_RETIRED_ERROR,
+} from "./batchPlannerRetired";
 
 export interface BatchNightResult {
   nightId: string;
@@ -35,66 +38,38 @@ export interface BatchRunOptions {
   filterBySchedule?: boolean;
 }
 
-function assertBrowser(fn: string): void {
-  if (typeof window === "undefined") {
-    throw new Error(`${fn} is browser-only; use *Server via mutations route`);
-  }
+function retired(): never {
+  throw new Error(BATCH_PLANNER_RETIRED_ERROR);
 }
 
-/** Run weighted/unified engine for every night in a week (session + canRunEngine). */
+/** Retired — throws. Use Run Engine → Draft → Apply. */
 export async function batchRunEngineForWeek(
-  weekId: string,
-  options: BatchRunOptions = {},
+  _weekId: string,
+  _options: BatchRunOptions = {},
 ): Promise<BatchWeekResult> {
-  assertBrowser("batchRunEngineForWeek");
-  return postOpsMutation<BatchWeekResult>("batch_run_engine_week", {
-    weekId,
-    options,
-  });
+  retired();
 }
 
-/** Run engine for a single night (session + canRunEngine). */
+/** Retired — throws. Use Run Engine → Draft → Apply. */
 export async function batchRunEngineForNight(
-  nightId: string,
-  options: BatchRunOptions = {},
+  _nightId: string,
+  _options: BatchRunOptions = {},
 ): Promise<BatchNightResult> {
-  assertBrowser("batchRunEngineForNight");
-  return postOpsMutation<BatchNightResult>("batch_run_engine_night", {
-    nightId,
-    options,
-  });
+  retired();
 }
 
-/** Nights for Batch Planner week list. */
+/** Retired — throws. */
 export async function listNightsForWeek(
-  weekId: string,
+  _weekId: string,
 ): Promise<
   Array<{ nightId: string; nightDate: string; dayName: string; assignmentCount: number }>
 > {
-  assertBrowser("listNightsForWeek");
-  const res = await postOpsMutation<{
-    nights: Array<{
-      nightId: string;
-      nightDate: string;
-      dayName: string;
-      assignmentCount: number;
-    }>;
-  }>("list_batch_nights", { weekId });
-  return res.nights ?? [];
+  retired();
 }
 
-/** Weeks that have nights (Batch Planner picker). */
+/** Retired — throws. */
 export async function listWeeksWithNights(): Promise<
   Array<{ weekId: string; weekEnding: string; weekLabel: string; nightCount: number }>
 > {
-  assertBrowser("listWeeksWithNights");
-  const res = await postOpsMutation<{
-    weeks: Array<{
-      weekId: string;
-      weekEnding: string;
-      weekLabel: string;
-      nightCount: number;
-    }>;
-  }>("list_batch_weeks", {});
-  return res.weeks ?? [];
+  retired();
 }

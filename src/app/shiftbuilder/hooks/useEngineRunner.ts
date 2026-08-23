@@ -17,7 +17,7 @@ import { useConfirm } from "../components/ConfirmDialog";
  * `runWeightedPlanner` fallthrough. Dev-only legacy is opt-in via
  * localStorage `sb_legacy_engine=1` (non-production builds).
  *
- * See notes in timefoldLocalSolver.ts and engine/index.ts. Week uses the same engine core.
+ * See notes in engine/index.ts and engine/optimizer.ts. Week uses the same engine core.
  */
 export interface UseEngineRunnerParams {
   // Pure helpers (passed from orchestrator to avoid duplication)

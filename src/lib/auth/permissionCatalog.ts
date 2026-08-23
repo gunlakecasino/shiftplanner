@@ -44,9 +44,9 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   },
   {
     key: "canRunEngine",
-    label: "Run Engine / Batch Planner",
+    label: "Run Engine",
     group: "Advanced",
-    description: "Trigger the placement engine and batch planner",
+    description: "Trigger the placement engine (Run Engine → Draft → Apply)",
   },
   {
     key: "canManageTeam",

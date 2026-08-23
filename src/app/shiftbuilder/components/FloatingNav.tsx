@@ -97,7 +97,6 @@ export interface FloatingNavProps {
   /** Primary day placement action: opens the SheetBuilder run confirmation. */
   onOptimizeNight?: () => void;
   engineRunning?: boolean;
-  deepOptimizeRunning?: boolean;
   /** Hidden from chrome (PR A). Prop retained so callers do not have to unwire yet. */
   onRunWeek?: () => void;
   weekRunBusy?: boolean;
