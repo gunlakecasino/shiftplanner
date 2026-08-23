@@ -248,3 +248,43 @@ describe("SheetBuilder live undo toast (PR C)", () => {
     expect(shiftBuilderClient).toContain("upsertDraftSlot(slotKey, { kind: \"clear\" })");
   });
 });
+
+describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
+  it("uses honest gendered RR titles instead of truncated RR 6 WOMEN'S", () => {
+    expect(rrCard).toContain("formatCanvasRrSideLabel");
+    expect(rrCard).not.toContain("${def.label} WOMEN'S");
+    expect(rrCard).not.toContain("${def.label} MEN'S");
+    expect(rrCard).not.toContain("◆");
+  });
+
+  it("keeps coverage on the named restroom half and hides grey trail codes", () => {
+    const chrome = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    expect(chrome).toContain("formatCanvasTrailChip");
+    expect(chrome).toContain("formatCanvasRepeatReason");
+    expect(chrome).toContain("sb-critical-repeat-mark");
+    expect(chrome).toContain("Repeat");
+    expect(chrome).not.toContain("rounded-full font-black");
+    expect(coverageBar).toContain("formatCanvasCoverageChip");
+    expect(coverageBar).not.toContain("replace(/^AND\\s+/i, '+ ')");
+  });
+
+  it("stacks covered-by with tasks and lets zone titles wrap", () => {
+    const shiftCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+      "utf8",
+    );
+    expect(shiftCard).not.toContain("grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]");
+    expect(shiftCard).not.toContain("whitespace-nowrap");
+    expect(shiftCard).not.toContain(">Tasks<");
+    expect(globalsCss).toContain("Canvas pride — live board cards only");
+    expect(globalsCss).toContain("sb-tm-trail-chip");
+    expect(globalsCss).toContain("content: none !important");
+  });
+});

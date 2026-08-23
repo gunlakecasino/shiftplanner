@@ -6579,3 +6579,105 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
     padding-bottom: 4px !important;
   }
 }
+
+/* Canvas pride — live board cards only. Does not touch Golden print metrics. */
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid .sb-canvas-slot-label,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-rr-side-label,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-canvas-slot-label {
+  max-width: none !important;
+  white-space: normal !important;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.2 !important;
+  text-overflow: unset;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-card-header {
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-package-card-task-list,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-task-scroll {
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  mask-image: linear-gradient(180deg, #000 86%, transparent);
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-package-card-task-list::-webkit-scrollbar,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-task-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-coverage-footer {
+  padding: 0 8px 8px !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar {
+  min-height: 20px;
+  margin: 0 !important;
+  border-radius: 6px !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-tm-trail-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  font-size: 8px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-tm-trail-chip--repeat {
+  background: color-mix(in srgb, #b91c1c 10%, #fff);
+  color: #9f1239;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-critical-repeat-mark {
+  width: auto !important;
+  height: auto !important;
+  border-radius: 4px !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-break-badge-btn {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: #6b7280 !important;
+  font-size: 8.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-break-badge-btn,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-break-badge-btn {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  gap: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #6b7280 !important;
+  font-size: 8.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-break-badge-btn::before {
+  content: none !important;
+}

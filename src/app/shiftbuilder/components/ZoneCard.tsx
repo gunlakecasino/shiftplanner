@@ -254,7 +254,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       onOpenTasksPad={packageTaskInteractionsEnabled ? onOpenTaskTextEdit : undefined}
       isLocked={!packageTaskInteractionsEnabled}
       enabled={packageTaskInteractionsEnabled}
-      className="sb-package-card-task-list min-w-0 max-h-[78px] overflow-y-auto"
+      className="sb-package-card-task-list min-w-0 overflow-hidden"
       style={{ color: cardAccentInk(color) }}
     >
       {regularTasks.map((task) => (

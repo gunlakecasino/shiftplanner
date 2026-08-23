@@ -178,7 +178,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
           onOpenTasksPad={onOpenTaskTextEdit}
           isLocked={isLocked}
           enabled={showDigitalAssists}
-          className={`sb-card-task-scroll mx-2 mb-1.5 flex-1 min-h-[16px] overflow-y-auto ${taskLabelSizeClass(
+          className={`sb-card-task-scroll mx-2 mb-1.5 flex-1 min-h-[16px] overflow-hidden ${taskLabelSizeClass(
             TASK_LABEL_SIZE_PX.rrOverlap,
           )} leading-tight ${taskLabelColorClass(hasTM)}`}
           style={{ fontFamily: helv, color: cardAccentInk(accent) }}
@@ -201,7 +201,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
         </CardTaskZone>
       ) : regularTasks.length > 0 ? (
         <div
-          className={`sb-card-task-scroll mx-2 mb-1.5 flex-1 min-h-0 overflow-y-auto ${taskLabelSizeClass(
+          className={`sb-card-task-scroll mx-2 mb-1.5 flex-1 min-h-0 overflow-hidden ${taskLabelSizeClass(
             TASK_LABEL_SIZE_PX.rrOverlap,
           )} leading-tight ${taskLabelColorClass(hasTM)}`}
           style={{ fontFamily: helv }}

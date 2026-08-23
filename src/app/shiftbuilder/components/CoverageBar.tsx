@@ -8,6 +8,7 @@ import {
   COVERAGE_BAR_H,
   isGoldAccent,
 } from "@/lib/shiftbuilder/constants";
+import { formatCanvasCoverageChip } from "@/lib/shiftbuilder/canvasPrideLabels";
 
 /**
  * CoverageBar — rendered at the very bottom of a zone or RR card to show
@@ -67,7 +68,7 @@ const CoverageBar = React.memo(function CoverageBar({
           opacity: builderCalm ? 0.75 : 0.95,
         }}
       >
-        {builderCalm ? task.taskLabel.replace(/^AND\s+/i, '+ ') : task.taskLabel}
+        {builderCalm ? formatCanvasCoverageChip(task.taskLabel) : task.taskLabel}
       </span>
       {onRemoveTask && (
         <button

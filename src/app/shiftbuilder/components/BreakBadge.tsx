@@ -4,7 +4,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { premiumSpring } from "@/lib/premiumSpring";
-import { BREAK_GROUP_OVERLAPS, breakHeaderMark } from "@/lib/shiftbuilder/constants";
+import { BREAK_GROUP_OVERLAPS } from "@/lib/shiftbuilder/constants";
 import { isTabletTouchDevice } from "@/lib/shiftbuilder/tabletDevice";
 
 // BreakBadge: header-style break mark (1/2/3/OL/–). Display-only on the
@@ -50,6 +50,8 @@ const BreakBadge = React.memo(function BreakBadge({
     kioskSize && "sb-break-header-num--kiosk",
     tablet || kioskSize ? "min-h-11 min-w-11 p-2" : "-m-1 p-1",
   );
+  const markText =
+    value === 0 ? "–" : isOl ? "Overlaps" : `Break ${value}`;
   const mark = (
     <motion.span
       className="leading-none"
@@ -57,7 +59,7 @@ const BreakBadge = React.memo(function BreakBadge({
       whileHover={onCycle ? { scale: 1.04, transition: premiumSpring } : undefined}
       whileTap={onCycle ? { scale: 0.96, transition: { ...premiumSpring, stiffness: 600, damping: 15 } } : undefined}
     >
-      {breakHeaderMark(value)}
+      {markText}
     </motion.span>
   );
 
