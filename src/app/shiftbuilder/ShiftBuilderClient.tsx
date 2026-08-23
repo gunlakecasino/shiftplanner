@@ -342,6 +342,7 @@ import {
   getSlotAccentColor,
   getSlotCoverageLabel,
   parseCoverageTargetFromTaskLabel,
+  persistSlotForCoverageSource,
 } from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
@@ -3548,7 +3549,7 @@ function AuthedShiftBuilder() {
         const existingCoverers =
           buildCoveredByIndex(assignments, selectedTasks, auxDefs)[targetKey] ?? [];
         const coverageSide = suggestCoverageSideForNewCoverer(existingCoverers);
-        const { slot_key, slot_type, rr_side } = uiToDb(sourceKey);
+        const { slot_key, slot_type, rr_side } = persistSlotForCoverageSource(sourceKey);
         await addNightSlotTask({
           nightId: effectiveNightId,
           slotKey: slot_key,
@@ -6716,6 +6717,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           ? parseCoverageTargetFromTaskLabel(
               removedTask.taskLabel,
               buildCoverageLabelIndex(auxDefs),
+              uiKey,
             )
           : null
       );
