@@ -3,7 +3,7 @@ import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
 
-export type PrintPreviewView = "deployment" | "breaks";
+export type PrintPreviewView = "deployment" | "breaks" | "planner";
 
 export type PrintVariant = "official" | "planning";
 
@@ -76,6 +76,17 @@ export type PrintDaySnapshot = {
   nightStatus?: "published" | "draft";
   /** Last three worked-grave placement labels per TM, newest first. */
   placementTrailsByTmId?: Record<string, string[]>;
+  /**
+   * Graves Default Schedule + on-call for the left-hand portrait planner column.
+   * Names come from GDS; placement fill on the right uses `assignments`.
+   */
+  scheduledRoster?: Array<{
+    tmId: string;
+    name: string;
+    isFullGrave: boolean;
+    isPMOverlap: boolean;
+    isAMOverlap: boolean;
+  }>;
 };
 
 export type PrintPreviewPageProps = {

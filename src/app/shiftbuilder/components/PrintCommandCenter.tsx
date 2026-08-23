@@ -21,8 +21,8 @@ import {
   countPrintPages,
   estimatePrintSeconds,
   tonightPrintConfig,
-  tonightPlanningPrintConfig,
   applyPrintRoleDefaults,
+  dayHasPrintPages,
 } from "../print/printConfigUtils";
 
 
@@ -32,6 +32,8 @@ export interface PrintDayConfig {
   dayIndex: number;
   printDeploy: boolean;
   printBreaks: boolean;
+  /** Optional US Letter portrait planner sheet (roster left, placements right). */
+  printPlanner?: boolean;
   inOverview: boolean;
 }
 
@@ -87,7 +89,7 @@ interface PrintCommandCenterProps {
   /** Jump to on-canvas Golden preview for a deploy/breaks sheet */
   onPreviewSheet?: (args: {
     dayIndex: number;
-    view: "deployment" | "breaks";
+    view: "deployment" | "breaks" | "planner";
     label: string;
     printVariant: PrintVariant;
     includeShiftNotes: boolean;
@@ -130,7 +132,7 @@ function hasUnpublishedQueuedNights(
   statusByDay: Record<number, string | null | undefined>,
 ): boolean {
   return days
-    .filter((d) => d.printDeploy || d.printBreaks)
+    .filter(dayHasPrintPages)
     .some((d) => {
       const status = resolveNightStatus(d.dayIndex, selectedDayIndex, currentNightStatus, statusByDay);
       return status !== "published";
@@ -366,13 +368,7 @@ export function PrintCommandCenter({
   // Default to tonight's deploy + breaks when opened
   useEffect(() => {
     if (!open) return;
-    const defaultVariant: PrintVariant =
-      currentNightStatus !== "published" ? "planning" : "official";
-    const baseConfig =
-      defaultVariant === "planning"
-        ? tonightPlanningPrintConfig(selectedDayIndex)
-        : tonightPrintConfig(selectedDayIndex, defaultVariant);
-    applyConfig(applyPrintRoleDefaults(baseConfig, canAccessSudo));
+    applyConfig(applyPrintRoleDefaults(tonightPrintConfig(selectedDayIndex, "official"), canAccessSudo));
     setShowAdvanced(false);
   }, [
     open,
@@ -388,7 +384,7 @@ export function PrintCommandCenter({
     const activeIndices = [
       ...new Set(
         days
-          .filter((d) => d.printDeploy || d.printBreaks)
+          .filter(dayHasPrintPages)
           .map((d) => d.dayIndex),
       ),
     ];
@@ -440,7 +436,7 @@ export function PrintCommandCenter({
   const pageCount = useMemo(() => countPrintPages(days), [days]);
   const estSecs = useMemo(() => estimatePrintSeconds(days), [days]);
   const uniqueExportDays = useMemo(
-    () => new Set(days.filter((d) => d.printDeploy || d.printBreaks).map((d) => d.dayIndex)).size,
+    () => new Set(days.filter(dayHasPrintPages).map((d) => d.dayIndex)).size,
     [days],
   );
   const exportLabel = uniqueExportDays > 1 ? "Export ZIP" : "Export PDF";
@@ -467,8 +463,9 @@ export function PrintCommandCenter({
 
   const deployCount = useMemo(() => days.filter((d) => d.printDeploy).length, [days]);
   const breaksCount = useMemo(() => days.filter((d) => d.printBreaks).length, [days]);
+  const plannerCount = useMemo(() => days.filter((d) => d.printPlanner).length, [days]);
   const activeNightCount = useMemo(
-    () => days.filter((d) => d.printDeploy || d.printBreaks).length,
+    () => days.filter(dayHasPrintPages).length,
     [days],
   );
   // Keep Tab focus inside the dialog
@@ -571,10 +568,16 @@ export function PrintCommandCenter({
   const handlePreview = useCallback(() => {
     if (pageCount === 0 || !onPreviewSheet) return;
     const selected =
-      days.find((d) => d.dayIndex === selectedDayIndex && (d.printDeploy || d.printBreaks)) ??
-      days.find((d) => d.printDeploy || d.printBreaks);
+      days.find((d) => d.dayIndex === selectedDayIndex && dayHasPrintPages(d)) ??
+      days.find(dayHasPrintPages);
     if (!selected) return;
-    const view = selected.printDeploy ? "deployment" : "breaks";
+    const view = selected.printPlanner && !selected.printDeploy
+      ? "planner"
+      : selected.printDeploy
+        ? "deployment"
+        : selected.printBreaks
+          ? "breaks"
+          : "planner";
     const label = DAY_DEFS[selected.dayIndex]?.name ?? `Day ${selected.dayIndex + 1}`;
     onPreviewSheet({
       dayIndex: selected.dayIndex,
@@ -633,6 +636,7 @@ export function PrintCommandCenter({
       estSecs={estSecs}
       deployCount={deployCount}
       breaksCount={breaksCount}
+      plannerCount={plannerCount}
       handlePrint={handlePrint}
       handleExport={handleExport}
       handlePreview={handlePreview}
@@ -1097,6 +1101,7 @@ function PackagePrintCommandCenterShell({
   estSecs,
   deployCount,
   breaksCount,
+  plannerCount,
   handlePrint,
   handleExport,
   handlePreview,
@@ -1128,6 +1133,7 @@ function PackagePrintCommandCenterShell({
   estSecs: number;
   deployCount: number;
   breaksCount: number;
+  plannerCount: number;
   handlePrint: () => void;
   handleExport: () => void;
   handlePreview: () => void;
@@ -1146,14 +1152,14 @@ function PackagePrintCommandCenterShell({
   exportLabel: string;
   canAccessSudo: boolean;
 }) {
-  const toggle = (i: number, key: "printDeploy" | "printBreaks") =>
+  const toggle = (i: number, key: "printDeploy" | "printBreaks" | "printPlanner") =>
     setDays((prev) =>
       prev.map((d, j) =>
         j === i ? { ...d, [key]: !d[key], inOverview: false } : d,
       ),
     );
 
-  const setAll = (key: "printDeploy" | "printBreaks") =>
+  const setAll = (key: "printDeploy" | "printBreaks" | "printPlanner") =>
     setDays((prev) => prev.map((d) => ({ ...d, [key]: true, inOverview: false })));
 
   const clear = () =>
@@ -1162,6 +1168,7 @@ function PackagePrintCommandCenterShell({
         ...d,
         printDeploy: false,
         printBreaks: false,
+        printPlanner: false,
         inOverview: false,
       })),
     );
@@ -1237,6 +1244,7 @@ function PackagePrintCommandCenterShell({
               {([
                 ["printDeploy", "assignments"],
                 ["printBreaks", "tasks"],
+                ["printPlanner", "planner"],
               ] as const).map(([key, label]) => (
                 <button
                   key={key}
@@ -1260,15 +1268,16 @@ function PackagePrintCommandCenterShell({
             style={{ gridTemplateColumns: `repeat(${Math.max(DAY_DEFS.length, 1)}, minmax(0, 1fr))` }}
           >
             {DAY_DEFS.map((day, i) => {
-              const ds = days[i] ?? { dayIndex: i, printDeploy: false, printBreaks: false, inOverview: false };
+              const ds = days[i] ?? { dayIndex: i, printDeploy: false, printBreaks: false, printPlanner: false, inOverview: false };
               const isActive = i === selectedDayIndex;
               const bothOn = ds.printDeploy && ds.printBreaks;
+              const anyOn = Boolean(ds.printDeploy || ds.printBreaks || ds.printPlanner);
               return (
                 <div
                   key={day.index}
                   className="rounded-xl overflow-hidden border transition-all"
                   style={{
-                    borderColor: (ds.printDeploy || ds.printBreaks) ? day.color : "#f0f0f4",
+                    borderColor: anyOn ? day.color : "#f0f0f4",
                     boxShadow: isActive ? `0 0 0 2px ${day.color}40` : undefined,
                   }}
                 >
@@ -1283,7 +1292,7 @@ function PackagePrintCommandCenterShell({
                       )
                     }
                     className="w-full flex flex-col items-center py-3 transition-colors"
-                    style={{ backgroundColor: bothOn ? day.color : ds.printDeploy || ds.printBreaks ? `${day.color}18` : "#fafafa" }}
+                    style={{ backgroundColor: bothOn ? day.color : anyOn ? `${day.color}18` : "#fafafa" }}
                   >
                     {isActive && (
                       <span
@@ -1306,10 +1315,11 @@ function PackagePrintCommandCenterShell({
                       {day.dateNum}
                     </span>
                   </button>
-                  <div className="border-t" style={{ borderColor: (ds.printDeploy || ds.printBreaks) ? `${day.color}30` : "#f3f4f6" }}>
+                  <div className="border-t" style={{ borderColor: anyOn ? `${day.color}30` : "#f3f4f6" }}>
                     {([
                       ["printDeploy", "assignments"],
                       ["printBreaks", "tasks"],
+                      ["printPlanner", "planner"],
                     ] as const).map(([key, label], ki) => (
                       <button
                         key={key}
@@ -1342,18 +1352,15 @@ function PackagePrintCommandCenterShell({
         </div>
 
         <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
             <FileText size={13} className="text-gray-400" />
-            <div>
-              <span className="text-[11px] font-semibold text-gray-700">Floor Sheet</span>
-              <span className="text-[10px] text-gray-400 ml-1.5">Full zone layout · official output</span>
+            <div className="min-w-0">
+              <span className="text-[11px] font-semibold text-gray-700">Planner sheet (portrait)</span>
+              <span className="text-[10px] text-gray-400 ml-1.5">
+                Optional with Golden · roster left · zones / RR / aux / overlaps
+              </span>
             </div>
           </div>
-          <Toggle
-            on={printVariant === "official"}
-            color="#7c3aed"
-            onChange={() => void handlePrintVariantChange(printVariant === "official" ? "planning" : "official")}
-          />
         </div>
 
         <div className="px-6 py-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-4 gap-2">
@@ -1401,6 +1408,7 @@ function PackagePrintCommandCenterShell({
             )}
             <span className="hidden sm:inline">
               {deployCount} assignments · {breaksCount} tasks
+              {plannerCount > 0 ? ` · ${plannerCount} planner` : ""}
             </span>
             <span className="hidden md:inline">
               Print <kbd className="bg-white border border-gray-200 text-gray-500 px-1 py-px rounded text-[9px] font-mono shadow-sm">⌘↵</kbd>

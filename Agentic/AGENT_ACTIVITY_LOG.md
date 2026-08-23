@@ -22,6 +22,26 @@
 
 ---
 
+## 2026-08-23 — Grok — SheetBuilder portrait planner sheet
+
+**Task**: Add a US Letter portrait planner page Brian can print from Print Command Center beside Golden landscape floor sheets. Locked layout: scheduled roster LEFT; zones / restrooms / aux / overlaps on the right. Independent of slim PR A/B/C.
+
+**Changes**:
+- New print-only page kind `planner` (816×1056, not Golden 1056×816).
+- Left column: Graves Default Schedule + on-call (`gravesScheduleRoster`). Quiet PM/AM marks for overlaps vs full-grave.
+- Right grids: same live/draft placement snapshot Golden uses (persisted night-core → live-board overlay → draft overlay). Empty slots render as open boxes. Breaks omitted (stay on Golden breaks sheet).
+- Long roster paginates to a second portrait page instead of crushing type.
+- Print Command Center: per-night **planner** chip + “All planner”. Replaced the competing landscape “Planning Worksheet” sheet-type toggle with one “Planner sheet (portrait)” entry. Floor sheets stay official Golden.
+- Mixed-orientation print/PDF: named `@page planner-sheet` + jsPDF portrait pages. Golden landscape metrics and post-processors untouched.
+- night-core `printOnly` now still returns the compact GDS roster (members/grave rails stay stripped).
+- Tests: `portraitPlanner.test.ts` plus assemble/queue coverage. Version 1.251 (print CSS cache-bust).
+
+**Preview data**: throwaway Friday fixture (no production Apply). Roster = GDS; names on the right = live/draft placements.
+
+**Status**: Shipped as a separate PR. Screenshot: `/opt/cursor/artifacts/screenshots/portrait-planner-sheet.png`.
+
+---
+
 ## 2026-08-23 — Grok Build — SheetBuilder PR B (night actions seen)
 
 **Task**: After PR A quiet chrome, surface the remaining night actions. No auth / PIN / RLS. No engine or Golden print edits. No production Apply.

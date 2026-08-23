@@ -3,8 +3,8 @@
  * Matches ShiftBuilderBoard isPrintPreview layout (Monday 0615.pdf reference).
  */
 
-body.printing-dual-mode .print-dual-container .print-artboard,
-body.golden-export-raster .print-dual-container .print-artboard {
+body.printing-dual-mode .print-dual-container .print-artboard:not([data-print-view="planner"]),
+body.golden-export-raster .print-dual-container .print-artboard:not([data-print-view="planner"]) {
   width: 1056px;
   height: 816px;
   min-height: 816px;
@@ -2342,4 +2342,289 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   font-size: 10px;
   line-height: 1.15;
   font-weight: 800;
+}
+
+/* ── Portrait planner sheet (US Letter 8.5×11) ─────────────────────────── */
+.print-artboard.sb-planner-sheet,
+.print-artboard[data-print-view="planner"] {
+  width: 816px;
+  height: 1056px;
+  min-height: 1056px;
+  max-height: 1056px;
+  padding: 22px 20px 18px;
+  margin: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  box-sizing: border-box;
+  font-family: var(--font-atkinson), "Atkinson Hyperlegible", system-ui, sans-serif;
+  color: #1c1c1e;
+}
+
+.sb-planner-header {
+  flex: 0 0 auto;
+}
+
+.sb-planner-header-stripe {
+  height: 3px;
+  border-radius: 2px;
+  margin-bottom: 10px;
+}
+
+.sb-planner-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e5ea;
+}
+
+.sb-planner-kicker {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8e8e93;
+}
+
+.sb-planner-title {
+  margin-top: 2px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  line-height: 1.05;
+  color: #1c1c1e;
+}
+
+.sb-planner-sub {
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.sb-planner-daynum {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 0.85;
+  letter-spacing: -1.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-planner-body {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 12px;
+}
+
+.sb-planner-roster {
+  min-width: 0;
+  border-right: 1px solid #ececf0;
+  padding-right: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sb-planner-roster-head {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8e8e93;
+  margin-bottom: 8px;
+}
+
+.sb-planner-roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sb-planner-roster-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 22px;
+  padding: 2px 0;
+  border-bottom: 1px solid #f2f2f7;
+}
+
+.sb-planner-roster-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.15px;
+  color: #1c1c1e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-planner-roster-row.is-placed .sb-planner-roster-name {
+  color: #3a3a3c;
+}
+
+.sb-planner-roster-band {
+  flex-shrink: 0;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #8e8e93;
+}
+
+.sb-planner-roster-empty {
+  font-size: 11px;
+  color: #aeaeB2;
+  font-weight: 500;
+}
+
+.sb-planner-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sb-planner-section {
+  min-width: 0;
+}
+
+.sb-planner-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.sb-planner-section-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.sb-planner-section-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: #ececf0;
+}
+
+.sb-planner-section-count {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #8e8e93;
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-planner-grid {
+  display: grid;
+  gap: 5px;
+}
+
+.sb-planner-grid-rr {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.sb-planner-grid-zones {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.sb-planner-grid-aux {
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+}
+
+.sb-planner-grid-ol {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.sb-planner-slot {
+  position: relative;
+  min-width: 0;
+  min-height: 54px;
+  border: 1px solid #d8d8de;
+  border-radius: 4px;
+  background: #ffffff;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 8px 7px 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sb-planner-slot-stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sb-planner-accent, #8e8e93);
+}
+
+.sb-planner-slot-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sb-planner-accent, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-planner-slot-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: #1c1c1e;
+  line-height: 1.15;
+}
+
+.sb-planner-slot.is-empty {
+  background: #fafafa;
+  border-style: solid;
+  border-color: #e5e5ea;
+}
+
+.sb-planner-slot-open {
+  height: 16px;
+  border: 1px solid #d1d1d6;
+  border-radius: 3px;
+  background: #ffffff;
+}
+
+.sb-planner-overlaps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sb-planner-overlap-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.sb-planner-overlap-day {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+.sb-planner-overlap-time {
+  font-size: 9px;
+  font-weight: 700;
+  color: #8e8e93;
 }

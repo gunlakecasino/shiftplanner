@@ -5,7 +5,7 @@ import {
   buildPrintQueue,
 } from "./printConfigUtils";
 
-export type PrintPageKind = "deploy" | "breaks" | "overview" | "cover";
+export type PrintPageKind = "deploy" | "breaks" | "overview" | "cover" | "planner";
 
 export type GoldenPrintPage = {
   key: string;
@@ -13,11 +13,15 @@ export type GoldenPrintPage = {
   kind: PrintPageKind;
 };
 
-export type CapturedDayPages = Map<number, { deployHTML?: string; breaksHTML?: string }>;
+export type CapturedDayPages = Map<
+  number,
+  { deployHTML?: string; breaksHTML?: string; plannerHTML?: string[]; }
+>;
 
 function kindFromKey(key: string): PrintPageKind {
   if (key === "__cover") return "cover";
   if (key === "__overview") return "overview";
+  if (key.includes("-p")) return "planner";
   if (key.endsWith("-b")) return "breaks";
   return "deploy";
 }
@@ -68,6 +72,12 @@ export function assembleGoldenPrintPages(args: {
         key: `${d.dayIndex}-b`,
       });
     }
+    if (d.printPlanner && c.plannerHTML?.length) {
+      c.plannerHTML.forEach((html, index) => {
+        const key = index === 0 ? `${d.dayIndex}-p` : `${d.dayIndex}-p${index + 1}`;
+        pageMap.set(key, { html, key });
+      });
+    }
   }
 
   const queue = applyCustomQueueOrder(
@@ -88,6 +98,14 @@ export function assembleGoldenPrintPages(args: {
   for (const item of queue) {
     const page = pageMap.get(item.id);
     if (page) pushPage(pages, page.html, page.key);
+    if (item.type === "planner") {
+      const extras = [...pageMap.entries()]
+        .filter(([key]) => key.startsWith(`${item.dayIndex}-p`) && key !== item.id)
+        .sort(([a], [b]) => a.localeCompare(b));
+      for (const [, extra] of extras) {
+        pushPage(pages, extra.html, extra.key);
+      }
+    }
   }
 
   return pages;

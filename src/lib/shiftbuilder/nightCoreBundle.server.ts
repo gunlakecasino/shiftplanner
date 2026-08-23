@@ -394,7 +394,9 @@ async function buildNightCoreBundleUncached(
       isFullGraveTonight: fullGrave.has(m.id),
     }));
 
-  const gravesScheduleRoster = printOnly ? [] : buildGravesScheduleRosterRows(scheduled, allMembers);
+  // Print still needs the compact GDS + on-call roster for the portrait planner
+  // column. Board-only member/grave rails stay stripped under printOnly.
+  const gravesScheduleRoster = buildGravesScheduleRosterRows(scheduled, allMembers);
 
   const nightMeta = await fetchNightMeta(nightId, isoDate);
 

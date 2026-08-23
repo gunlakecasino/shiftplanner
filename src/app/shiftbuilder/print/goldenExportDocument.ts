@@ -7,6 +7,7 @@ import {
   GOLDEN_RASTER_STAGING_LEFT_PX,
   GOLDEN_WIDTH_PX,
 } from "./goldenConstants";
+import { printArtboardSizePx } from "./printPageGeometry";
 import {
   centerGoldenRasterContent,
   flattenGoldenRasterStageBleed,
@@ -173,6 +174,8 @@ async function captureArtboardPixels(
     center?: boolean;
     direct?: boolean;
     fontEmbedCss?: string;
+    widthPx?: number;
+    heightPx?: number;
   },
 ): Promise<RasterResult> {
   stripGoldenRasterChrome(artboard);
@@ -180,18 +183,20 @@ async function captureArtboardPixels(
     ? { shell: artboard, restore: () => undefined }
     : mountGoldenRasterCaptureShell(artboard);
 
+  const widthPx = args.widthPx ?? GOLDEN_WIDTH_PX;
+  const heightPx = args.heightPx ?? GOLDEN_HEIGHT_PX;
   const captureOpts = {
     pixelRatio: args.pixelRatio,
-    width: GOLDEN_WIDTH_PX,
-    height: GOLDEN_HEIGHT_PX,
+    width: widthPx,
+    height: heightPx,
     cacheBust: false,
     backgroundColor: "#ffffff",
     preferredFontFormat: "woff2",
     ...(args.fontEmbedCss !== undefined ? { fontEmbedCSS: args.fontEmbedCss } : {}),
     style: {
       ...GOLDEN_RASTER_ROOT_STYLE,
-      width: `${GOLDEN_WIDTH_PX}px`,
-      height: `${GOLDEN_HEIGHT_PX}px`,
+      width: `${widthPx}px`,
+      height: `${heightPx}px`,
       backgroundColor: "#ffffff",
     },
   };
@@ -213,7 +218,7 @@ async function captureArtboardPixels(
 
   const dims = await measureRasterDataUrl(dataUrl);
 
-  if (dims.width < GOLDEN_WIDTH_PX * args.pixelRatio * 0.5) {
+  if (dims.width < widthPx * args.pixelRatio * 0.5) {
     throw new Error(
       `Export raster undersized (${dims.width}×${dims.height}). ` +
         "Fonts/CSS may not have loaded — try Print → Save as PDF.",
@@ -228,11 +233,12 @@ async function captureArtboardPixels(
   };
 }
 
-function applyArtboardContract(artboard: HTMLElement): void {
-  artboard.style.width = `${GOLDEN_WIDTH_PX}px`;
-  artboard.style.height = `${GOLDEN_HEIGHT_PX}px`;
-  artboard.style.minHeight = `${GOLDEN_HEIGHT_PX}px`;
-  artboard.style.maxHeight = `${GOLDEN_HEIGHT_PX}px`;
+function applyArtboardContract(artboard: HTMLElement, kind?: string): void {
+  const size = printArtboardSizePx(kind ?? (artboard.getAttribute("data-print-view") === "planner" ? "planner" : "deploy"));
+  artboard.style.width = `${size.width}px`;
+  artboard.style.height = `${size.height}px`;
+  artboard.style.minHeight = `${size.height}px`;
+  artboard.style.maxHeight = `${size.height}px`;
   artboard.style.zoom = "1";
   artboard.style.transform = "none";
   artboard.style.display = "flex";
@@ -256,16 +262,17 @@ export async function rasterizeGoldenArtboardElement(args: {
   fontEmbedCss?: string;
 }): Promise<RasterResult> {
   const isGravesSheet = args.artboard.classList.contains("sb-graves-sheet");
-  if (!isGravesSheet && args.kind === "breaks") {
+  const isPlanner = args.kind === "planner";
+  if (!isGravesSheet && !isPlanner && args.kind === "breaks") {
     postProcessBreaksArtboard(args.artboard);
-  } else if (!isGravesSheet && args.kind === "deploy") {
+  } else if (!isGravesSheet && !isPlanner && args.kind === "deploy") {
     postProcessOfficialDeploymentArtboard(args.artboard);
   }
   prepareArtboardForRaster(args.artboard);
-  applyArtboardContract(args.artboard);
-  if (!isGravesSheet && args.kind === "breaks") {
+  applyArtboardContract(args.artboard, args.kind);
+  if (!isGravesSheet && !isPlanner && args.kind === "breaks") {
     postProcessBreaksArtboard(args.artboard);
-  } else if (!isGravesSheet && args.kind === "deploy") {
+  } else if (!isGravesSheet && !isPlanner && args.kind === "deploy") {
     postProcessOfficialDeploymentArtboard(args.artboard);
   }
   // The approved Graves pages already use export-safe fixed CSS. Inlining their
@@ -297,13 +304,16 @@ export async function rasterizeGoldenArtboardElement(args: {
     const editableTmFields = args.editableTmNames
       ? collectAndSuppressEditableTmFields(args.artboard)
       : [];
+    const size = printArtboardSizePx(args.kind);
     const raster = await withWhiteDocumentBackground(() =>
       captureArtboardPixels(args.artboard, {
         pixelRatio: args.pixelRatio,
         usePng: args.usePng,
-        center: !isGravesSheet,
-        direct: isGravesSheet,
+        center: !isGravesSheet && !isPlanner,
+        direct: isGravesSheet || isPlanner,
         fontEmbedCss: args.fontEmbedCss,
+        widthPx: size.width,
+        heightPx: size.height,
       }),
     );
     return {

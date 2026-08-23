@@ -11,6 +11,8 @@ import {
   waitForGoldenRenderSettled,
 } from "./printSession";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "./goldenConstants";
+import { printArtboardSizePx, printPageOrientation } from "./printPageGeometry";
+import { dayHasPrintPages } from "./printConfigUtils";
 import {
   addEditableTmFieldsToPdf,
   type EditablePdfTmField,
@@ -26,6 +28,7 @@ export type GoldenRasterPage = {
   dataUrl: string;
   format: "PNG" | "JPEG";
   editableTmFields?: EditablePdfTmField[];
+  orientation?: "landscape" | "portrait";
 };
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -45,13 +48,16 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 }
 
 /** Match browser print: fit the full Golden page inside the selected margins. */
-export function getGoldenPdfPlacement(config: PrintConfig): {
+export function getGoldenPdfPlacement(
+  config: PrintConfig,
+  orientation: "landscape" | "portrait" = "landscape",
+): {
   x: number;
   y: number;
   width: number;
   height: number;
 } {
-  return getPrintImagePlacementPt(config);
+  return getPrintImagePlacementPt(config, orientation);
 }
 
 export function triggerPdfDownload(blob: Blob, filename: string): void {
@@ -101,13 +107,13 @@ export async function buildPdfBlobFromRasterPages(
   rasterPages: GoldenRasterPage[],
   config: PrintConfig,
 ): Promise<Blob> {
-  const placement = getGoldenPdfPlacement(config);
+  const firstOrientation = rasterPages[0]?.orientation ?? "landscape";
   const hasEditableFields = rasterPages.some(
     (page) => (page.editableTmFields?.length ?? 0) > 0,
   );
   const { default: jsPDF, AcroFormTextField } = await import("jspdf");
   const pdf = new jsPDF({
-    orientation: "landscape",
+    orientation: firstOrientation,
     unit: "pt",
     format: "letter",
     // jsPDF 4.2.1 emits invisible AcroForm appearance streams when global
@@ -117,7 +123,9 @@ export async function buildPdfBlobFromRasterPages(
     precision: 16,
   });
   rasterPages.forEach((page, idx) => {
-    if (idx > 0) pdf.addPage();
+    const orientation = page.orientation ?? "landscape";
+    if (idx > 0) pdf.addPage("letter", orientation);
+    const placement = getGoldenPdfPlacement(config, orientation);
     pdf.addImage(
       page.dataUrl,
       page.format,
@@ -193,7 +201,8 @@ export async function rasterizeGoldenPrintPages(
         ab.style.display = j === i ? "flex" : "none";
         ab.style.visibility = j === i ? "visible" : "hidden";
       });
-      session.container.style.height = `${GOLDEN_HEIGHT_PX}px`;
+      const size = printArtboardSizePx(page.kind);
+      session.container.style.height = `${size.height}px`;
       // Force a layout + paint pass for the newly-shown artboard before capture.
       artboards[i].getBoundingClientRect();
       await waitForGoldenRenderSettled();
@@ -217,7 +226,7 @@ export async function rasterizeGoldenPrintPages(
           key: page.key,
           kind: page.kind,
           rasterPx: `${raster.width}×${raster.height}`,
-          goldenPx: `${GOLDEN_WIDTH_PX}×${GOLDEN_HEIGHT_PX}`,
+          goldenPx: `${size.width}×${size.height}`,
           pixelRatio,
           source: "live-dom",
         });
@@ -226,6 +235,7 @@ export async function rasterizeGoldenPrintPages(
       out.push({
         dataUrl: raster.dataUrl,
         format: raster.format,
+        orientation: printPageOrientation(page.kind),
         ...(raster.editableTmFields
           ? { editableTmFields: raster.editableTmFields }
           : {}),
@@ -264,7 +274,7 @@ export async function exportGoldenPdf(args: {
   const buildBlob = (slices: GoldenRasterPage[]) =>
     buildPdfBlobFromRasterPages(slices, args.config);
 
-  const activeDayConfigs = args.config.days.filter((d) => d.printDeploy || d.printBreaks);
+  const activeDayConfigs = args.config.days.filter(dayHasPrintPages);
   const uniqueDayIndices = [...new Set(activeDayConfigs.map((d) => d.dayIndex))];
   const useZip = uniqueDayIndices.length > 1;
   const editableTmNames = args.config.editableTmNames === true;
@@ -278,7 +288,12 @@ export async function exportGoldenPdf(args: {
     for (const dayIdx of uniqueDayIndices.sort((a, b) => a - b)) {
       const indices = pages
         .map((p, idx) => ({ p, idx }))
-        .filter(({ p }) => p.key === `${dayIdx}-d` || p.key === `${dayIdx}-b`)
+        .filter(({ p }) =>
+          p.key === `${dayIdx}-d` ||
+          p.key === `${dayIdx}-b` ||
+          p.key === `${dayIdx}-p` ||
+          p.key.startsWith(`${dayIdx}-p`),
+        )
         .map(({ idx }) => idx);
       if (indices.length === 0) continue;
       zip.file(

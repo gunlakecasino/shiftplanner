@@ -541,6 +541,15 @@ body {
   contain: layout paint;
 }
 
+.print-artboard.sb-planner-sheet,
+.print-artboard[data-print-view="planner"] {
+  width: 816px;   /* 8.5" × 96 dpi */
+  height: 1056px; /* 11"  × 96 dpi */
+  min-height: 1056px;
+  max-height: 1056px;
+  padding: 22px 20px 18px;
+}
+
 /* Sheet header (date + shift meta).
    Padding/margin are owned by the consuming JSX (Tailwind utilities
    in @layer utilities win over unlayered rules in Tailwind v4, so
