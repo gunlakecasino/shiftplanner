@@ -69,6 +69,11 @@ import {
   saveAiFeedbackServer,
   saveOpsKnowledgeServer,
 } from "@/lib/shiftbuilder/opsKnowledge/opsKnowledge.server";
+import {
+  BATCH_PLANNER_RETIRED_ERROR,
+  isRetiredBatchPlannerAction,
+  retiredBatchPlannerResponse,
+} from "@/lib/shiftbuilder/batchPlannerRetired";
 
 /** Single permission or any-of list (sudo/manage-team identity surfaces). */
 type ActionPerm = PermissionKey | "authenticated" | PermissionKey[];
@@ -125,7 +130,7 @@ const ACTION_PERMISSIONS: Record<string, ActionPerm> = {
   save_ops_knowledge: "canAccessSudo",
   load_ai_feedback: "authenticated",
   save_ai_feedback: "canEditAssignments",
-  // Batch planner
+  // Batch planner — retired. POST returns 410 before these permissions run.
   batch_run_engine_week: "canRunEngine",
   batch_run_engine_night: "canRunEngine",
   list_batch_weeks: "canRunEngine",
@@ -193,6 +198,13 @@ export async function POST(request: NextRequest) {
   }
 
   const action = String(body.action ?? "");
+  if (isRetiredBatchPlannerAction(action)) {
+    const retired = retiredBatchPlannerResponse();
+    return NextResponse.json(
+      { error: BATCH_PLANNER_RETIRED_ERROR },
+      { status: retired.status },
+    );
+  }
   const permission = ACTION_PERMISSIONS[action];
   if (!permission) {
     return NextResponse.json({ error: `Unknown mutation: ${action}` }, { status: 400 });
@@ -582,42 +594,6 @@ export async function POST(request: NextRequest) {
       case "save_ai_feedback": {
         await saveAiFeedbackServer(body as never);
         return NextResponse.json({ ok: true });
-      }
-
-      // ── Batch planner (P0) ───────────────────────────────────────
-      case "batch_run_engine_week": {
-        const { batchRunEngineForWeekServer } = await import(
-          "@/lib/shiftbuilder/sudoBatchPlanner.server"
-        );
-        const result = await batchRunEngineForWeekServer(
-          String(body.weekId),
-          (body.options as never) ?? {},
-        );
-        return NextResponse.json(result);
-      }
-      case "batch_run_engine_night": {
-        const { batchRunEngineForNightServer } = await import(
-          "@/lib/shiftbuilder/sudoBatchPlanner.server"
-        );
-        const result = await batchRunEngineForNightServer(
-          String(body.nightId),
-          (body.options as never) ?? {},
-        );
-        return NextResponse.json(result);
-      }
-      case "list_batch_weeks": {
-        const { listWeeksWithNightsServer } = await import(
-          "@/lib/shiftbuilder/sudoBatchPlanner.server"
-        );
-        const weeks = await listWeeksWithNightsServer();
-        return NextResponse.json({ weeks });
-      }
-      case "list_batch_nights": {
-        const { listNightsForWeekServer } = await import(
-          "@/lib/shiftbuilder/sudoBatchPlanner.server"
-        );
-        const nights = await listNightsForWeekServer(String(body.weekId));
-        return NextResponse.json({ nights });
       }
 
       default:

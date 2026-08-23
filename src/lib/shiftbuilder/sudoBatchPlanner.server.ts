@@ -1,6 +1,9 @@
 /**
  * Server-only batch placement engine (admin client + canPlace writes).
- * Called only from /api/shiftbuilder/mutations after canRunEngine gate.
+ *
+ * RETIRED as a live-write path. Mutations route returns 410 for every
+ * batch_* action. Left in tree for history — do not rewire callers.
+ * Live path is Run Engine → Draft → Apply.
  */
 
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";

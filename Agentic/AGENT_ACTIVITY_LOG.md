@@ -4,6 +4,37 @@
 
 ---
 
+## 2026-08-23 — Grok Build — SheetBuilder fireproof pass (won’t-get-Brian-fired)
+
+**Task**: Make SheetBuilder safe for a live grave night. Sole user Brian. No gimmicks. No silent live writes. No lying UI. Branch from `main` @ `ee41ccb`. No Golden / optimizer.ts / TasksPad / official-flag / production Apply / PIN rewrite.
+
+**Batch Planner killed as a live-write weapon**:
+- Mutations `batch_run_engine_week` / `batch_run_engine_night` / `list_batch_weeks` / `list_batch_nights` return **410** with `"Batch Planner retired — use Run Engine → Draft → Apply"` before session or `sudoBatchPlanner.server`.
+- Client wrappers throw the same error and no longer POST.
+- Server file left in tree for history. Settings still has no planner tab; `?tab=planner` still redirects to Engine Config.
+
+**Timefold dead lib**:
+- Zero live-app imports after leftover type props were removed from `RotationHealthFloater` / `ShiftBuilderBoard` / `FloatingNav`.
+- Deleted `src/lib/shiftbuilder/timefold/{timefoldTypes,timefoldLocalSolver,timefoldMock}.ts`. **Did not touch `engine/optimizer.ts`.**
+
+**Stakes copy restored**:
+- Apply to Live still double-confirms: `"This writes to the live board — TMs will see it immediately."` + `"Changes become visible to all TMs immediately after Apply to Live"`.
+- Publish Day / Unpublish Day are no longer one-click silent. Week publish/unpublish also confirm. Copy names TMs see / stop seeing the night.
+
+**Gendered RR guardrail**:
+- Hard test: women’s TM cannot place on MRR* and men’s TM cannot place on WRR* through `isEligibleForSlot` and `canPlace` (live RR nums + trail codes). Source scan: drag uses liturgy; Apply/opsMutations use `canPlace`. Build fails if liturgy is missing.
+
+**Operator language**:
+- Default chrome stays **Marked Off**. Tutorial + Engine Config no longer say “called off” as the default state. MarkerPad still offers “Called off” as a literal reason.
+
+**Tests**: `batchPlannerRetired`, `stakesCopy`, `genderedRrPlacement`, `timefoldOrphan`, `markedOffChrome`. Version 1.253.
+
+**Sacred held**: Golden print, `engine/optimizer.ts`, TasksPad / `night_slot_tasks`, official-flag, no production Apply, no auth/PIN.
+
+**Status**: Ready for Dyno merge. No production Apply.
+
+---
+
 ## 2026-08-23 — Grok — SheetBuilder de-gimmick + Projects kill
 
 **Task**: Raise the refinement bar on `/sheetbuilder`. Quiet Apple-professional ops tool — paper is the product, chrome is a desk. Kill the unused Projects product. Delete dead Timefold UI (not `engine/optimizer.ts`). Engine stays buried. No Golden print / engine rewrite / production Apply. TasksPad + `night_slot_tasks` stay.
