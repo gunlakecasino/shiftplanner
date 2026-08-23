@@ -141,6 +141,12 @@
   --sb-dur-mid:  0.38s;
   --sb-dur-slow: 0.52s;
 
+  /* P0 motion budget — cards/sections animate transform + opacity only. */
+  --sb-motion-instant: 100ms;
+  --sb-motion-quick: 170ms;
+  --sb-motion-move: 220ms;
+  --sb-motion-pad: 280ms;
+
   /* Light band that glides across the board on a day switch. Core = the bright
      glare; edge = faint dark shoulders so it still reads on white in light mode. */
   --sb-day-sweep-core: rgba(255, 255, 255, 0.95);
@@ -344,7 +350,9 @@ body {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 10px;
-  transition: all 0.1s cubic-bezier(0.23, 1, 0.32, 1);
+  transition:
+    transform var(--sb-motion-instant) var(--sb-spring-snappy),
+    opacity var(--sb-motion-instant) var(--sb-spring-snappy);
   min-height: var(--touch-min);
 }
 
@@ -447,7 +455,9 @@ body {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.1px;
-  transition: all 0.1s cubic-bezier(0.23, 1, 0.32, 1);
+  transition:
+    transform var(--sb-motion-instant) var(--sb-spring-snappy),
+    opacity var(--sb-motion-instant) var(--sb-spring-snappy);
   white-space: nowrap;
   user-select: none;
 }
@@ -638,9 +648,8 @@ body {
   --mouse-y: 50%;
   --card-accent: #8e8e93; /* iOS gray fallback */
   transition:
-    box-shadow 200ms ease,
-    transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
-    border-color 120ms ease;
+    transform var(--sb-motion-move) var(--sb-spring-snappy),
+    opacity var(--sb-motion-quick) var(--sb-spring-snappy);
   contain: layout style paint;
 }
 
@@ -1850,6 +1859,7 @@ body.sb-roster-open .sb-stage-host {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  contain: layout paint;
 }
 
 .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sb-builder-section {
@@ -1881,6 +1891,7 @@ body.sb-roster-open .sb-stage-host {
 .sb-builder-stage .sb-zone-grid,
 .sb-builder-stage .sb-rr-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  contain: layout paint;
 }
 
 @media (pointer: coarse) and (min-width: 1024px) {
@@ -1892,6 +1903,7 @@ body.sb-roster-open .sb-stage-host {
 
 .sb-builder-stage .sb-aux-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  contain: layout paint;
 }
 
 /* Breaks view — legacy flex row (print / fallback). */
@@ -2647,12 +2659,14 @@ body.sb-roster-open .sb-stage-host {
   background: rgba(28, 28, 30, 0.94);
 }
 
-/* === Draft Ambiance — ambient gold frame while unapplied draft changes exist ===
+/* === Draft Ambiance — reserved layer so gold breath never remounts cards ===
    Pairs with DraftStatusPill (bottom-center). Breathes gently; static under
    prefers-reduced-motion. pointer-events: none — purely ambient. */
+.sb-draft-frame,
 .sb-draft-frame-active {
   position: relative;
 }
+.sb-draft-frame::after,
 .sb-draft-frame-active::after {
   content: "";
   position: absolute;
@@ -2664,6 +2678,9 @@ body.sb-roster-open .sb-stage-host {
     inset 0 0 28px -18px var(--sb-gold),
     0 0 0 1px var(--sb-gold-tint);
   pointer-events: none;
+  opacity: 0;
+}
+.sb-draft-frame-active::after {
   animation: sb-draft-breathe 3.2s ease-in-out infinite;
 }
 @keyframes sb-draft-breathe {
@@ -2678,6 +2695,64 @@ body.sb-roster-open .sb-stage-host {
   .sb-draft-pill-dot {
     animation: none;
     opacity: 0.8;
+  }
+}
+
+/* P0 — DnD settle overshoot + target-rail luminance pulse */
+@keyframes sb-dnd-settle-kf {
+  0% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.assignment-card.sb-dnd-settle,
+.sb-assignment-card.sb-dnd-settle {
+  animation: sb-dnd-settle-kf var(--sb-motion-move) var(--sb-spring-bounce) both;
+}
+.assignment-card.sb-dnd-settle .sb-card-accent-stripe,
+.assignment-card.sb-dnd-settle > :first-child,
+.sb-assignment-card.sb-dnd-settle .sb-card-accent-stripe,
+.sb-assignment-card.sb-dnd-settle > :first-child {
+  filter: brightness(1.11);
+  transition: filter 120ms var(--sb-spring-snappy);
+}
+
+/* Poll tick — thin topbar hairline, not a board remount */
+@keyframes sb-poll-hairline-kf {
+  0%, 100% { opacity: 0; }
+  40% { opacity: 1; }
+}
+.sb-sheetbuilder-topbar.sb-poll-hairline-pulse::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: color-mix(in srgb, #0F172A 22%, transparent);
+  animation: sb-poll-hairline-kf var(--sb-motion-quick) var(--sb-spring-snappy) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assignment-card.sb-dnd-settle,
+  .sb-assignment-card.sb-dnd-settle {
+    animation: none;
+  }
+  .assignment-card.sb-dnd-settle .sb-card-accent-stripe,
+  .assignment-card.sb-dnd-settle > :first-child,
+  .sb-assignment-card.sb-dnd-settle .sb-card-accent-stripe,
+  .sb-assignment-card.sb-dnd-settle > :first-child {
+    filter: none;
+    transition: none;
+  }
+  .sb-sheetbuilder-topbar.sb-poll-hairline-pulse::after {
+    animation: none;
+    opacity: 0;
+  }
+  .sb-builder-stage .assignment-card,
+  .sb-builder-stage .sb-day-card-host,
+  .slot,
+  .btn {
+    transition-duration: 0ms !important;
   }
 }
 
@@ -2930,6 +3005,11 @@ body.sb-roster-open .sb-stage-host {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.sb-builder-stage .sb-overlap-card-grid,
+.sb-builder-stage .sb-overlap-grid {
+  contain: layout paint;
 }
 
 .sb-overlap-card-grid .assignment-card,

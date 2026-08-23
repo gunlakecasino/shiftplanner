@@ -15,7 +15,9 @@ import {
   resumeHydratedBoardDayKey,
   setBoardAssignmentsDayKey,
   shouldApplyNightBoardQueryToStore,
+  reconcileBoardAssignments,
 } from "@/lib/shiftbuilder/liveCache";
+import { pulseBoardPollHairline } from "@/lib/shiftbuilder/boardMotion";
 import {
   invalidateNightBoardQueries,
   patchNightCoreAssignmentsCache,
@@ -345,12 +347,29 @@ export function useShiftData(
 
   React.useEffect(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
-    if (hydratedAssignmentsDayRef.current === dayKey) return;
     // Background poll/refetch must not block remount hydration — waiting on
     // isCoreFetching made Settings↔canvas paint a cold veil for a full RTT.
     if (queryColdLoading) return;
     if (currentNight.isCorePlaceholder) return;
     if (!shouldApplyNightBoardQueryToStore()) return;
+
+    // Same-day poll / refetch: keep unchanged card object identity.
+    if (hydratedAssignmentsDayRef.current === dayKey) {
+      if (nightAccessBlocked) return;
+      const fromQuery = currentNight.assignments;
+      if (!fromQuery || typeof fromQuery !== "object") return;
+      const storeNow = useShiftBuilderStore.getState().assignments ?? {};
+      const { next, changed } = reconcileBoardAssignments(storeNow, fromQuery);
+      if (changed) {
+        useShiftBuilderStore.getState().setAssignments(next);
+        try {
+          mirrorMainAssignmentsToLiveStore(selectedDay.date);
+        } catch {}
+        bumpLiveAssignVersion();
+      }
+      pulseBoardPollHairline();
+      return;
+    }
 
     if (nightAccessBlocked) {
       useShiftBuilderStore.getState().setAssignments({});
@@ -374,20 +393,22 @@ export function useShiftData(
 
     previousHydratedDayRef.current = dayKey;
 
-    let next: Record<string, any> = { ...fromQuery };
+    const storeNow = useShiftBuilderStore.getState().assignments ?? {};
+    let incoming: Record<string, any> = { ...fromQuery };
 
     // On same-day load (not switch), merge any in-flight store edits so optimistic work isn't lost.
     if (!isDaySwitch) {
-      const store = useShiftBuilderStore.getState().assignments ?? {};
-      for (const [k, v] of Object.entries(store)) {
-        if (v?.tmId && (!next[k]?.tmId || next[k].tmId !== v.tmId)) {
-          next[k] = { ...next[k], ...v };
+      for (const [k, v] of Object.entries(storeNow)) {
+        if (v?.tmId && (!incoming[k]?.tmId || incoming[k].tmId !== v.tmId)) {
+          incoming[k] = { ...incoming[k], ...v };
         }
       }
     }
 
-    // Push into the main board store (cards/Board subscribe narrowly here)
-    useShiftBuilderStore.getState().setAssignments(next);
+    const { next, changed } = reconcileBoardAssignments(storeNow, incoming);
+    if (changed) {
+      useShiftBuilderStore.getState().setAssignments(next);
+    }
     setBoardAssignmentsDayKey(dayKey);
     hydratedAssignmentsDayRef.current = dayKey;
     setHydratedDayKey(dayKey);

@@ -185,6 +185,7 @@ import {
   resetLiveBoardGesture,
   cancelNightBoardQueries,
 } from "@/lib/shiftbuilder/liveCache";
+import { pulseDropTarget } from "@/lib/shiftbuilder/boardMotion";
 import {
   GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
   invalidateNightCoreQueries,
@@ -5508,6 +5509,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       if (over?.data.current?.type === "slot") {
         const normalizedSlot = safeNormalizeSlotKey((over.data.current as any).slotKey);
         assign(normalizedSlot, a.tmId, a.tmName);
+        pulseDropTarget(normalizedSlot);
       }
       return;
     }
@@ -5775,6 +5777,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               ? { tmId: effectiveTo.tmId, tmName: effectiveTo.tmName ?? effectiveTo.tmId }
               : null,
           );
+          pulseDropTarget(toKey);
           return;
         }
 
@@ -5811,6 +5814,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
         mirrorMainAssignmentsToLiveStore(captureDate);
         setLiveAssignVersion((v) => v + 1);
+        pulseDropTarget(toKey);
 
         // Single background persist path (no parallel legacy double-write — races
         // made production look like "nothing saved" when one write undid the other).
@@ -8526,7 +8530,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               className="sb-builder-canvas flex min-h-0 w-full max-w-full flex-1 flex-col"
             >
               <div className="sb-builder-fluid-viewport w-full min-h-0 flex-1 flex flex-col">
-              <div className={`sb-builder-scale-viewport w-full min-h-0 flex-1 flex flex-col ${isDraftMode && draftSlotCount > 0 ? "sb-draft-frame-active" : ""}`}>
+              <div className={`sb-builder-scale-viewport w-full min-h-0 flex-1 flex flex-col${isDraftMode ? " sb-draft-frame" : ""}${isDraftMode && draftSlotCount > 0 ? " sb-draft-frame-active" : ""}`}>
               <BuilderUnpublishedNightShell
                 show={showUnpublishedNight}
                 dayLabel={selectedDay.name}

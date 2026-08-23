@@ -4,6 +4,7 @@ import React from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { COVERAGE_BAR_H } from "@/lib/shiftbuilder/constants";
 import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
+import { placementIdentityKey } from "@/lib/shiftbuilder/boardMotion";
 import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
 import { cardAccentInk, isGoldAccent } from "@/lib/shiftbuilder/constants";
 import {
@@ -733,7 +734,7 @@ export function UnassignedPrintLabel({ showDigitalAssists }: { showDigitalAssist
 
 export type SlotAssignmentState =
   | { kind: "loading" }
-  | { kind: "draft"; proposedName: string; previousName?: string }
+  | { kind: "draft"; proposedName: string; proposedTmId?: string; previousName?: string }
   | { kind: "assigned"; tmName: string; tmId?: string; isLocked?: boolean }
   | { kind: "covered"; coveredBy: CoveredByEntry[] }
   | { kind: "unassigned" };
@@ -792,12 +793,11 @@ export function SlotAssignmentBody({
       ) : state.kind === "draft" ? (
         showDigitalAssists ? (
           <motion.div
-            key="draft"
+            key={placementIdentityKey(state)}
             className="flex flex-col min-w-0 relative pl-2 border-l-[3px] border-[var(--sb-gold-border)] rounded-l"
-            initial={{ opacity: 0, y: 3, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -2, scale: 0.985 }}
-            transition={premiumSpring}
+            initial={false}
+            animate={{ opacity: 1 }}
+            transition={reducedMotion ? premiumSpringReduced : premiumSpring}
           >
             {projectPills}
             <TmNameBlock
@@ -834,7 +834,7 @@ export function SlotAssignmentBody({
             ) : null}
           </motion.div>
         ) : (
-          <div key="draft" className="flex flex-col min-w-0">
+          <div key={placementIdentityKey(state)} className="flex flex-col min-w-0">
             <TmNameBlock
               name={state.proposedName}
               fontSize={fontSize}
@@ -867,15 +867,14 @@ export function SlotAssignmentBody({
       ) : state.kind === "assigned" ? (
         showDigitalAssists ? (
           <motion.div
-            key={`assigned-${state.tmId ?? state.tmName}`}
+            key={placementIdentityKey(state)}
             className="flex items-start gap-1 min-w-0 w-full"
-            initial={{ opacity: 0, y: 6, scale: 0.93 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -2, scale: 0.97 }}
+            initial={false}
+            animate={{ opacity: 1, scale: 1 }}
             transition={
               reducedMotion
                 ? premiumSpringReduced
-                : { ...premiumSpring, stiffness: 400, damping: 28 }
+                : { ...premiumSpring, stiffness: 420, damping: 32 }
             }
           >
             {state.isLocked ? (
@@ -899,7 +898,7 @@ export function SlotAssignmentBody({
           </motion.div>
         ) : (
           <div
-            key={`assigned-${state.tmId ?? state.tmName}`}
+            key={placementIdentityKey(state)}
             className="flex items-center gap-1.5 min-w-0"
           >
             {state.isLocked ? <LockIcon size={lockSize} /> : null}

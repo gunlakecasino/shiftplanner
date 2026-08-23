@@ -222,6 +222,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     assignmentState = {
       kind: "draft",
       proposedName: draftInfo!.proposedTmName,
+      proposedTmId: draftInfo?.proposedTmId,
       previousName: draftInfo?.previousTmName,
     };
   } else if (hasTM) {

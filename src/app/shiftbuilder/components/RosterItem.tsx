@@ -88,7 +88,7 @@ const RosterItem = React.memo(function RosterItem({
           {canEdit && !isLocked && onUnplace ? (
             <button
               type="button"
-              className="sb-roster-unplace-btn opacity-80 group-hover:opacity-100 hover:opacity-100 px-2 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wide text-[#FF3B30] bg-[#FF3B3010] hover:bg-[#FF3B3018] active:scale-95 transition-all border border-[#FF3B3022]"
+              className="sb-roster-unplace-btn opacity-80 group-hover:opacity-100 hover:opacity-100 px-2 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wide text-[#FF3B30] bg-[#FF3B3010] hover:bg-[#FF3B3018] active:scale-95 transition-opacity transition-transform border border-[#FF3B3022]"
               title={`Unplace ${tm.name} from the board`}
               aria-label={`Unplace ${tm.name}`}
               onPointerDown={(e) => {

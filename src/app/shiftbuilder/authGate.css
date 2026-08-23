@@ -515,7 +515,7 @@
 }
 
 .sb-card-populate {
-  animation: sb-card-populate-kf 0.34s var(--sb-spring-gentle) both;
+  animation: sb-card-populate-kf var(--sb-motion-move, 220ms) var(--sb-spring-gentle) both;
 }
 
 .sb-card-populate--d0 {
@@ -570,82 +570,51 @@
   font-weight: 600;
 }
 
-/* ── v1.0 day-switch inner-content veil (~250ms, additive only) ──
-   Card shells stay fixed; accent stripe + chrome sharp; assignment interior blurs. */
+/* ── Paper-only day switch (P0) ──
+   Topbar + section chrome + color rails stay put. Only card paper
+   (names / tasks) does a ~200ms shared-axis shift + opacity. */
 
-.sb-day-content-veil .sb-day-card-host {
+.sb-day-content-veil .sb-day-card-host,
+.sb-day-content-veil .sheet-section-header,
+.sb-day-content-veil .sb-card-accent-stripe,
+.sb-day-content-veil .assignment-card > :first-child {
   opacity: 1 !important;
   transform: none !important;
   animation: none !important;
+  filter: none !important;
 }
 
 .sb-day-content-veil .sb-builder-card-grid .assignment-card > :not(:first-child) {
-  filter: blur(12px);
-  opacity: 0.22;
+  opacity: 0.35;
+  transform: translateX(10px);
   transition:
-    filter 0.3s var(--sb-spring-gentle),
-    opacity 0.3s var(--sb-spring-gentle);
+    opacity var(--sb-motion-move, 220ms) var(--sb-spring-gentle),
+    transform var(--sb-motion-move, 220ms) var(--sb-spring-gentle);
   pointer-events: none;
 }
 
+.sb-day-content-veil.sb-day-veil--prev .sb-builder-card-grid .assignment-card > :not(:first-child) {
+  transform: translateX(-10px);
+}
+
 .sb-day-content-veil.sb-day-content-ready .sb-builder-card-grid .assignment-card > :not(:first-child) {
-  filter: blur(0);
   opacity: 1;
+  transform: translateX(0);
   pointer-events: auto;
+}
+
+/* No full-canvas fade and no luminous sweep — chrome stays anchored. */
+.sb-day-content-veil .sb-builder-scale-viewport::after {
+  content: none;
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sb-day-content-veil .sb-builder-card-grid .assignment-card > :not(:first-child) {
     filter: none;
     opacity: 1;
+    transform: none;
+    transition: none;
     pointer-events: auto;
-  }
-}
-
-/* ── Day-switch luminous sweep (rides the inner-content veil) ──
-   A soft light band glides across the board in the direction of travel:
-   forward (next day) →, backward (prev day) ←. Monochrome, echoing the engine
-   overlay's light-wave so the two read as one family. Anchored to and clipped
-   by .sb-builder-scale-viewport (already position:relative; overflow:hidden),
-   so nothing in the layout is disturbed. GPU-cheap: transform + opacity only. */
-
-.sb-day-content-veil .sb-builder-scale-viewport::after {
-  content: "";
-  position: absolute;
-  top: -6%;
-  bottom: -6%;
-  left: 0;
-  width: 40%;
-  z-index: 42;
-  pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent 30%,
-    var(--sb-day-sweep-edge, rgba(0, 0, 0, 0.05)) 44%,
-    var(--sb-day-sweep-core, rgba(255, 255, 255, 0.92)) 50%,
-    var(--sb-day-sweep-edge, rgba(0, 0, 0, 0.05)) 56%,
-    transparent 70%
-  );
-  filter: blur(5px);
-  will-change: transform, opacity;
-  transform: translateX(-130%);
-  /* One slow, luxurious pass that spans most of the 1.75s hold and settles
-     just before the board resolves. */
-  animation: sb-day-sweep 1.5s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-/* Backward switch — same band, reversed travel. */
-.sb-day-content-veil.sb-day-veil--prev .sb-builder-scale-viewport::after {
-  animation-direction: reverse;
-}
-@keyframes sb-day-sweep {
-  0%   { transform: translateX(-130%); opacity: 0; }
-  22%  { opacity: 1; }
-  78%  { opacity: 1; }
-  100% { transform: translateX(360%); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sb-day-content-veil .sb-builder-scale-viewport::after {
-    content: none;
-    animation: none;
   }
 }

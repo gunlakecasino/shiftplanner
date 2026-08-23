@@ -16,7 +16,10 @@ import {
   setBoardAssignmentsDayKey,
   shouldApplyNightBoardQueryToStore,
   shouldRefetchNightBoardOnFocus,
+  reconcileBoardAssignments,
+  assignmentPlacementEqual,
 } from "../liveCache";
+import { placementIdentityKey } from "../boardMotion";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
 import {
   bindNightBoardAbortSignal,
@@ -255,5 +258,47 @@ describe("continuity acceptance — hold previous UI, never replace the board", 
     expect(isSameSheetBuilderPathname("/sheetbuilder/settings?tab=engine")).toBe(true);
     expect(isSameSheetBuilderPathname("/sheetbuilder")).toBe(false);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("P0 unstocky — poll reconcile + stable placement keys", () => {
+  it("keeps unchanged slot object identity when poll data matches", () => {
+    const ada = { tmId: "tm-1", tmName: "Ada", isLocked: false, breakGroup: 2 };
+    const current = { Z1: ada, Z2: { tmId: "tm-2", tmName: "Bo", breakGroup: 1 } };
+    const incoming = {
+      Z1: { tmId: "tm-1", tmName: "Ada", isLocked: false, breakGroup: 2 },
+      Z2: { tmId: "tm-2", tmName: "Bo", breakGroup: 1 },
+    };
+    const { next, changed } = reconcileBoardAssignments(current, incoming);
+    expect(changed).toBe(false);
+    expect(next).toBe(current);
+    expect(next.Z1).toBe(ada);
+  });
+
+  it("patches only the slots that actually moved", () => {
+    const ada = { tmId: "tm-1", tmName: "Ada", breakGroup: 1 };
+    const current = { Z1: ada, Z2: { tmId: "tm-2", tmName: "Bo", breakGroup: 1 } };
+    const incoming = {
+      Z1: { tmId: "tm-1", tmName: "Ada", breakGroup: 1 },
+      Z2: { tmId: "tm-9", tmName: "Cy", breakGroup: 3 },
+    };
+    const { next, changed } = reconcileBoardAssignments(current, incoming);
+    expect(changed).toBe(true);
+    expect(next.Z1).toBe(ada);
+    expect(next.Z2.tmId).toBe("tm-9");
+    expect(assignmentPlacementEqual(current.Z2, incoming.Z2)).toBe(false);
+  });
+
+  it("uses the same identity key for assigned and draft of the same TM", () => {
+    expect(placementIdentityKey({ kind: "assigned", tmId: "tm-1", tmName: "Ada" })).toBe("tm:tm-1");
+    expect(
+      placementIdentityKey({ kind: "draft", proposedTmId: "tm-1", proposedName: "Ada" }),
+    ).toBe("tm:tm-1");
+  });
+
+  it("applies same-day poll with reconcile instead of wiping the grid", () => {
+    expect(useShiftData).toContain("reconcileBoardAssignments");
+    expect(useShiftData).toContain("pulseBoardPollHairline");
+    expect(useShiftData).toContain("Same-day poll / refetch");
   });
 });

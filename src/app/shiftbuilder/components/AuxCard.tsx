@@ -364,6 +364,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     assignmentState = {
       kind: "draft",
       proposedName: draftInfo.proposedTmName,
+      proposedTmId: draftInfo.proposedTmId,
       previousName: draftInfo.previousTmName,
     };
   } else if (hasTM) {

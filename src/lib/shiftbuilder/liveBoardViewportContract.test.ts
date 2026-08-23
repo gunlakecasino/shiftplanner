@@ -494,6 +494,67 @@ describe("SheetBuilder chrome match (light topbar)", () => {
   });
 });
 
+describe("SheetBuilder P0 unstocky motion", () => {
+  const authGate = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/authGate.css"),
+    "utf8",
+  );
+  const veil = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/state/dayCardContentVeil.ts"),
+    "utf8",
+  );
+  const chrome = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+    "utf8",
+  );
+  const version = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/version.ts"),
+    "utf8",
+  );
+
+  it("ships motion tokens and does not use transition:all on live cards", () => {
+    expect(globalsCss).toContain("--sb-motion-instant: 100ms");
+    expect(globalsCss).toContain("--sb-motion-quick: 170ms");
+    expect(globalsCss).toContain("--sb-motion-move: 220ms");
+    expect(globalsCss).toContain("contain: layout paint");
+    expect(globalsCss).toContain("sb-dnd-settle");
+    expect(globalsCss).toContain("sb-poll-hairline-pulse");
+    expect(globalsCss).not.toMatch(/\.assignment-card \{[\s\S]{0,400}transition:\s*all/);
+    expect(globalsCss).not.toMatch(/\.slot \{[\s\S]{0,280}transition:\s*all/);
+    expect(globalsCss).not.toMatch(/\.btn \{[\s\S]{0,280}transition:\s*all/);
+  });
+
+  it("keeps card hosts on slot identity instead of day+slot remount keys", () => {
+    expect(shiftBuilderBoard).not.toContain("key={`${dayTransitionKey}-${key}`}");
+    expect(shiftBuilderBoard).not.toContain("key={`${dayTransitionKey}-${slotKey}`}");
+    expect(shiftBuilderBoard).toContain("key={key}");
+    expect(shiftBuilderBoard).toContain("key={slotKey}");
+    expect(chrome).toContain("placementIdentityKey");
+    expect(chrome).not.toContain("initial={{ opacity: 0, y: 6, scale: 0.93 }}");
+  });
+
+  it("day-switch paper is ≤220ms shared-axis, not a 1.75s canvas sweep", () => {
+    expect(veil).toContain("export const DAY_CONTENT_VEIL_MS = 200");
+    expect(veil).not.toContain("1750");
+    expect(authGate).toContain("translateX(10px)");
+    expect(authGate).not.toContain("filter: blur(12px)");
+    expect(authGate).not.toContain("sb-day-sweep 1.5s");
+    expect(authGate).toContain("content: none");
+  });
+
+  it("does not put Engine back in the header and bumps the patch version", () => {
+    expect(floatingNav).not.toContain('"Engine"');
+    expect(floatingNav).toContain(">Draft<");
+    expect(floatingNav).toContain(">Print<");
+    expect(version).toContain('"1.269"');
+  });
+
+  it("reserves the draft gold frame so breath does not remount the board", () => {
+    expect(shiftBuilderClient).toContain("sb-draft-frame");
+    expect(globalsCss).toContain(".sb-draft-frame,");
+  });
+});
+
 describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
   it("uses honest gendered RR titles instead of truncated RR 6 WOMEN'S", () => {
     expect(rrCard).toContain("formatCanvasRrSideLabel");
