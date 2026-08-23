@@ -10,7 +10,6 @@ import {
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
 import { MiniCalendar } from "../redesign/components/MiniCalendar";
-import { velvetGlassPillStyle } from "./canvasPillGlass";
 import {
   ChevronDown,
   ChevronLeft,
@@ -136,15 +135,17 @@ const MONTHS = MONTH_LONG;
 const SHORT_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 function nightActionClusterStyle(): CSSProperties {
-  return velvetGlassPillStyle({
-    height: 32,
-    padding: 2,
-    borderRadius: 8,
+  return {
+    height: 30,
+    padding: 1,
+    borderRadius: 4,
     display: "inline-flex",
     alignItems: "center",
     gap: 0,
-    boxShadow: "inset 0 1px 0 var(--sb-glass-highlight)",
-  });
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    boxShadow: "none",
+  };
 }
 
 function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
@@ -180,13 +181,10 @@ function SheetBuilderMark({ className }: { className?: string }) {
       aria-label="SheetBuilder"
       focusable="false"
     >
-      <rect width="32" height="32" rx="7" fill="#1e1e28" />
-      <rect x="5" y="5" width="6.5" height="9" rx="1.5" fill="#C8960C" />
-      <rect x="12.75" y="5" width="6.5" height="9" rx="1.5" fill="#D93838" />
-      <rect x="20.5" y="5" width="6.5" height="9" rx="1.5" fill="#4B7BE8" />
-      <rect x="5" y="15.5" width="6.5" height="9" rx="1.5" fill="#D96B9A" />
-      <rect x="12.75" y="15.5" width="6.5" height="9" rx="1.5" fill="#4CAF7D" />
-      <rect x="20.5" y="15.5" width="6.5" height="9" rx="1.5" fill="#9B6A45" />
+      <rect width="32" height="32" rx="4" fill="#2A2B32" />
+      <rect x="6" y="8" width="20" height="2" fill="#C8C4BA" />
+      <rect x="6" y="15" width="20" height="2" fill="#C8C4BA" opacity="0.65" />
+      <rect x="6" y="22" width="13" height="2" fill="#C8C4BA" opacity="0.4" />
     </svg>
   );
 }
@@ -342,13 +340,11 @@ export default function FloatingNav(props: FloatingNavProps) {
           right: 0,
           width: "100%",
           minWidth: 0,
-          background: "linear-gradient(180deg, #343340 0%, #292933 100%)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
+          background: "#1E1F24",
           borderRadius: 0,
           border: "none",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset, 0 16px 40px -28px rgba(0,0,0,0.8)",
+          boxShadow: "none",
           boxSizing: "border-box",
           height: 54,
           maxHeight: 54,
@@ -393,13 +389,13 @@ export default function FloatingNav(props: FloatingNavProps) {
             <div
               role="menu"
               aria-label="SheetBuilder launchpad"
-              className="sb-sheetbuilder-launchpad absolute left-0 top-full z-[90] mt-2 overflow-hidden rounded-[26px] border border-white/10 bg-[#252532] p-5 text-zinc-100 shadow-2xl"
+              className="sb-sheetbuilder-launchpad absolute left-0 top-full z-[90] mt-1.5 overflow-hidden rounded-md border border-white/10 bg-[#1E1F24] p-1 text-zinc-100"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="sb-sheetbuilder-launchpad-grid grid grid-cols-2 gap-5">
+              <div className="sb-sheetbuilder-launchpad-grid flex flex-col">
                 <Link href={APP_BASE_PATH} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
                   <span className="sb-sheetbuilder-launchpad-card-icon">
-                    <Home size={28} strokeWidth={2} />
+                    <Home size={15} strokeWidth={2} />
                   </span>
                   <strong>Home</strong>
                 </Link>
@@ -407,7 +403,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 {showTeamLink && (
                   <Link href={`${APP_BASE_PATH}/team`} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
                     <span className="sb-sheetbuilder-launchpad-card-icon">
-                      <Users size={28} strokeWidth={2} />
+                      <Users size={15} strokeWidth={2} />
                     </span>
                     <strong>Team</strong>
                   </Link>
@@ -424,7 +420,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                     }}
                   >
                     <span className="sb-sheetbuilder-launchpad-card-icon">
-                      <Settings size={28} strokeWidth={2} />
+                      <Settings size={15} strokeWidth={2} />
                     </span>
                     <strong>Settings</strong>
                   </button>
@@ -443,7 +439,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             className="icon-btn sb-interactive flex items-center gap-1 rounded-full px-2.5 py-1.5"
             style={{
               fontSize: 13,
-              fontWeight: 850,
+              fontWeight: 600,
               color: chromeText,
               letterSpacing: "-0.02em",
             }}

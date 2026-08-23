@@ -125,7 +125,8 @@ describe("SheetBuilder desk refine + Projects retirement", () => {
   });
 
   it("keeps Engine / Draft / Print as one quiet velvet cluster without sparkle chrome", () => {
-    expect(floatingNav).toContain("velvetGlassPillStyle");
+    expect(floatingNav).toContain("nightActionClusterStyle");
+    expect(floatingNav).not.toContain("velvetGlassPillStyle");
     expect(floatingNav).toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
@@ -171,7 +172,8 @@ describe("SheetBuilder desk refine + Projects retirement", () => {
 
 describe("SheetBuilder night actions (PR B)", () => {
   it("surfaces Engine, Draft, and Print as velvet glass pills", () => {
-    expect(floatingNav).toContain("velvetGlassPillStyle");
+    expect(floatingNav).toContain("nightActionClusterStyle");
+    expect(floatingNav).not.toContain("velvetGlassPillStyle");
     expect(floatingNav).toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
@@ -258,7 +260,10 @@ describe("SheetBuilder calm desk paper", () => {
   });
 
   it("quiets the header: velvet night actions, no dead bell, Published as text", () => {
-    expect(floatingNav).toContain("velvetGlassPillStyle");
+    expect(floatingNav).toContain("nightActionClusterStyle");
+    expect(floatingNav).not.toContain("velvetGlassPillStyle");
+    expect(floatingNav).not.toContain("backdropFilter");
+    expect(floatingNav).toContain('background: "#1E1F24"');
     expect(floatingNav).toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
