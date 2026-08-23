@@ -130,29 +130,31 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
           Gun Lake graves ops.
         </p>
 
-        <label htmlFor={inputId} className="sb-auth-field-label">
-          PIN
-        </label>
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="password"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          value={pin}
-          onChange={(e) => handlePinChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && isComplete) {
-              void handleSubmit(e);
-            }
-          }}
-          className={cn("sb-auth-input", error && "sb-auth-input--error")}
-          disabled={submitting}
-          autoComplete="one-time-code"
-          aria-invalid={!!error}
-          aria-describedby={error ? "pin-gate-error" : undefined}
-        />
+        <div className="sb-auth-field">
+          <label htmlFor={inputId} className="sb-auth-field-label">
+            PIN
+          </label>
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            value={pin}
+            onChange={(e) => handlePinChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && isComplete) {
+                void handleSubmit(e);
+              }
+            }}
+            className={cn("sb-auth-input", error && "sb-auth-input--error")}
+            disabled={submitting}
+            autoComplete="one-time-code"
+            aria-invalid={!!error}
+            aria-describedby={error ? "pin-gate-error" : undefined}
+          />
+        </div>
 
         {error ? (
           <div id="pin-gate-error" role="alert" className="sb-auth-error">

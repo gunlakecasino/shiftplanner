@@ -115,7 +115,7 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
     fieldId: string,
     ref?: React.RefObject<HTMLInputElement | null>,
   ) => (
-    <div>
+    <div className="sb-auth-field">
       <label htmlFor={fieldId} className="sb-auth-field-label">
         {label}
       </label>

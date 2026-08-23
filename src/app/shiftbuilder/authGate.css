@@ -65,7 +65,7 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 44%) minmax(0, 1fr);
   background: #ffffff;
 }
 
@@ -73,8 +73,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 32px 24px;
+  justify-content: flex-start;
+  padding: 48px 56px;
   background: #ffffff;
 }
 
@@ -82,10 +82,10 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   pointer-events: none;
 }
 
@@ -98,14 +98,14 @@
 .sb-auth-form {
   position: relative;
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
   background: transparent;
   border: 0;
   box-shadow: none;
 }
 
 .sb-auth-form--wide {
-  max-width: 360px;
+  max-width: 380px;
 }
 
 .sb-auth-form::before,
@@ -125,79 +125,100 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 28px;
+  margin-bottom: 36px;
 }
 
 .sb-auth-mark {
   position: relative;
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background: #111827;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #0F172A;
 }
 
 .sb-auth-mark::after {
   content: "";
   position: absolute;
-  inset: 8px 7px auto 7px;
-  height: 12px;
+  inset: 9px 8px auto 8px;
+  height: 13px;
   background:
     linear-gradient(#ffffff, #ffffff) 0 0 / 100% 2px no-repeat,
-    linear-gradient(#ffffff, #ffffff) 0 5px / 100% 2px no-repeat,
-    linear-gradient(#ffffff, #ffffff) 0 10px / 64% 2px no-repeat;
+    linear-gradient(#ffffff, #ffffff) 0 5.5px / 100% 2px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 0 11px / 64% 2px no-repeat;
   opacity: 0.92;
 }
 
 .sb-auth-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 750;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  color: #111827;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+  color: #0F172A;
 }
 
 .sb-auth-lead,
 .sb-auth-subtitle {
-  margin: 0 0 28px;
+  margin: 0 0 32px;
   font-size: 15px;
-  line-height: 1.45;
-  color: #6B7280;
+  line-height: 1.5;
+  color: #64748B;
+}
+
+.sb-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 16px;
+  border: 1px solid #E6EAF0;
+  background: #F8FAFC;
+  padding: 10px 16px 12px;
+}
+
+.sb-auth-field + .sb-auth-field {
+  margin-top: 12px;
 }
 
 .sb-auth-field-label {
   display: block;
-  margin: 0 0 8px;
-  font-size: 12px;
+  margin: 0;
+  font-size: 11px;
   font-weight: 650;
   letter-spacing: 0;
   text-transform: none;
-  color: #6B7280;
+  color: #64748B;
 }
 
 .sb-auth-input {
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid #E5E7EB;
-  background: #F8FAFC;
-  padding: 14px 16px;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  padding: 2px 0 0;
   text-align: left;
   font-family: var(--font-ui, var(--font-inter-tight), system-ui);
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: 0.22em;
-  color: #111827;
+  color: #0F172A;
   box-shadow: none;
 }
 
 .sb-auth-form .sb-auth-input:focus {
   outline: none;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sb-auth-field:focus-within {
   border-color: #007AFF;
   background: #ffffff;
   box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
 }
 
-.sb-auth-form .sb-auth-input--error {
+.sb-auth-form .sb-auth-input--error,
+.sb-auth-field:has(.sb-auth-input--error) {
   border-color: #EF4444;
   box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
 }
@@ -207,7 +228,7 @@
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  padding-top: 20px;
+  padding-top: 22px;
 }
 
 .sb-auth-primary {
@@ -216,8 +237,8 @@
   justify-content: center;
   gap: 6px;
   border: 0;
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 16px;
+  padding: 15px 16px;
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -242,8 +263,9 @@
 }
 
 .sb-auth-primary--disabled {
-  color: #94A3B8;
-  background: #E8EEF4;
+  color: #ffffff;
+  background: #007AFF;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
@@ -291,53 +313,57 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 36px;
+  padding: 48px 40px;
   overflow: hidden;
-  background:
-    radial-gradient(120% 80% at 80% 0%, rgba(0, 122, 255, 0.10), transparent 55%),
-    linear-gradient(180deg, #E8F1FA 0%, #F3F7FB 48%, #EEF3F8 100%);
+  background: #F4F6FA;
 }
 
-.sb-auth-visual__glow {
-  position: absolute;
-  inset: 12% 18%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 70%);
-  filter: blur(28px);
-  pointer-events: none;
-}
-
-.sb-auth-visual__panel {
+.sb-auth-preview {
   position: relative;
   z-index: 1;
-  width: min(360px, 100%);
+  width: min(440px, 100%);
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 24px 48px -28px rgba(15, 23, 42, 0.28);
+  padding: 22px 22px 18px;
+}
+
+.sb-auth-preview__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .sb-auth-visual__eyebrow {
-  margin: 0 0 6px;
-  font-size: 13px;
+  margin: 0;
+  font-size: 15px;
   font-weight: 750;
   letter-spacing: -0.03em;
-  color: #111827;
+  color: #0F172A;
 }
 
 .sb-auth-visual__kicker {
-  margin: 0 0 22px;
-  font-size: 13px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
   color: #64748B;
 }
 
 .sb-auth-floor {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .sb-auth-floor__cell {
   position: relative;
-  min-height: 56px;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.35);
+  min-height: 68px;
+  border-radius: 14px;
+  background: #F4F6FA;
   overflow: hidden;
 }
 
@@ -359,7 +385,7 @@
 }
 
 .sb-auth-visual__foot {
-  margin: 22px 0 0;
+  margin: 16px 0 0;
   font-size: 12px;
   color: #64748B;
 }
@@ -375,7 +401,9 @@
 
   .sb-auth-split__form {
     min-height: 100%;
-    background: #F5F7F9;
+    justify-content: center;
+    padding: 32px 24px;
+    background: #F4F6FA;
   }
 }
 

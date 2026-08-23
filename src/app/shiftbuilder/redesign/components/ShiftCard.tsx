@@ -41,7 +41,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
     return (
       <div
         onClick={handleCardClick}
-        className="sb-desk-card rounded-2xl border border-[#E6EAF0] min-h-0 h-full flex flex-col overflow-hidden bg-white cursor-pointer"
+        className="sb-desk-card rounded-[20px] border border-transparent min-h-0 h-full flex flex-col overflow-hidden bg-white cursor-pointer"
       >
         <div className="flex flex-1 min-h-0">
           <div className="w-[7px] shrink-0 rounded-l-2xl" style={{ backgroundColor: accentColor }} />
@@ -86,7 +86,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
   return (
     <div
       onClick={handleCardClick}
-      className="sb-desk-card rounded-2xl border border-[#E6EAF0] min-h-0 h-full flex flex-col overflow-hidden bg-white cursor-pointer"
+      className="sb-desk-card rounded-[20px] border border-transparent min-h-0 h-full flex flex-col overflow-hidden bg-white cursor-pointer"
     >
       <div className="flex flex-1 min-h-0">
         <div className="w-[7px] shrink-0 rounded-l-2xl" style={{ backgroundColor: accentColor }} />

@@ -255,7 +255,7 @@ describe("SheetBuilder modern lightweight desk", () => {
   it("uses cool gray canvas, white cards, and keeps covering as inset chips", () => {
     expect(globalsCss).toContain("Modern lightweight desk — live board cards only");
     expect(globalsCss).toContain("--sb-card-paper: #FFFFFF");
-    expect(globalsCss).toContain("--sb-paper: #F5F7F9");
+    expect(globalsCss).toContain("--sb-paper: #F4F6FA");
     expect(globalsCss).toContain("sb-coverage-chip");
     expect(globalsCss).not.toContain("#F4EFE6");
     expect(globalsCss).not.toContain("#FBF7F0");
@@ -269,7 +269,7 @@ describe("SheetBuilder modern lightweight desk", () => {
     expect(deskCss).not.toMatch(/--sb-z1:\s*#C8960C/);
     expect(deskCss).not.toMatch(/--sb-z3:\s*#D93838/);
     expect(deskCss).not.toContain("6B5A3A");
-    expect(deskCss).toContain("border-radius: 16px !important");
+    expect(deskCss).toContain("border-radius: 20px !important");
   });
 
   it("keeps redesign zone rails on the uniform code", () => {
@@ -306,7 +306,7 @@ describe("SheetBuilder modern lightweight desk measured sit", () => {
     expect(globalsCss).toContain("Modern lightweight desk — measured sit (live zds acceptance)");
     expect(globalsCss).toContain("padding: 0 10px 12px 12px !important");
     expect(globalsCss).toMatch(
-      /\.sb-with-aux-sidebar > section:nth-child\(3\) \.sheet-section-header \.label \{[\s\S]*?letter-spacing: 0\.08em !important/,
+      /\.sb-with-aux-sidebar > section:nth-child\(3\) \.sheet-section-header \.label \{[\s\S]*?letter-spacing: 0\.04em !important/,
     );
     expect(globalsCss).toContain("color: #64748B !important");
   });

@@ -6674,44 +6674,44 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
    ========================================================================== */
 
 .sb-builder-shell.sb-canvas-builder {
-  --sb-paper: #F5F7F9;
-  --sb-substrate: #EEF1F5;
-  --sb-desk: #F5F7F9;
+  --sb-paper: #F4F6FA;
+  --sb-substrate: #EEF1F6;
+  --sb-desk: #F4F6FA;
   --sb-card-paper: #FFFFFF;
   --sb-card-line: #E6EAF0;
 }
 
 .sb-builder-shell.sb-canvas-builder .sb-builder-stage {
-  background: var(--sb-desk, #F5F7F9) !important;
+  background: var(--sb-desk, #F4F6FA) !important;
 }
 
 .sb-builder-shell.sb-canvas-builder .sb-builder-fluid-viewport {
-  background: var(--sb-paper, #F5F7F9) !important;
+  background: var(--sb-paper, #F4F6FA) !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace {
-  --sb-grid-gap: 14px;
-  background: var(--sb-paper, #F5F7F9) !important;
+  --sb-grid-gap: 16px;
+  background: var(--sb-paper, #F4F6FA) !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid {
-  gap: 14px;
+  gap: 16px;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-refined-card,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card {
   background: var(--sb-card-paper, #FFFFFF) !important;
-  border-color: var(--sb-card-line, #E6EAF0) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -18px rgba(15, 23, 42, 0.28);
+  border-color: transparent !important;
+  border-radius: 20px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -24px rgba(15, 23, 42, 0.28);
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.empty,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.sb-card-empty {
   background: var(--sb-card-paper, #FFFFFF) !important;
-  border-color: var(--sb-card-line, #E6EAF0) !important;
+  border-color: transparent !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid,
@@ -6752,7 +6752,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-card-accent-stripe,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card > .h-\[3px\]:not(.sb-card-accent-stripe),
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .h-\[3px\]:not(.sb-card-accent-stripe) {
-  border-radius: 16px 0 0 16px !important;
+  border-radius: 20px 0 0 20px !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .sb-fit-chip {
@@ -6821,8 +6821,10 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
-  background: #F8FAFC !important;
-  border-color: var(--sb-card-line, #E6EAF0) !important;
+  background: #FFFFFF !important;
+  border-color: transparent !important;
+  border-radius: 20px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -24px rgba(15, 23, 42, 0.22);
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .assignment-card {
@@ -6836,7 +6838,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3)::after {
-  background: linear-gradient(180deg, rgba(245, 247, 249, 0) 0%, rgba(245, 247, 249, 0.88) 70%, #F5F7F9 100%);
+  background: linear-gradient(180deg, rgba(244, 246, 250, 0) 0%, rgba(244, 246, 250, 0.88) 70%, #F4F6FA 100%);
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header,
@@ -6848,12 +6850,17 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   align-items: baseline;
 }
 
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header::before,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header::before {
+  content: none !important;
+}
+
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header .label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header .label {
   color: #64748B !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.08em !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
   line-height: 1.2 !important;
 }
 
@@ -6923,9 +6930,9 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header .label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header .label {
   color: #64748B !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.08em !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
   line-height: 1.2 !important;
 }
 

@@ -71,10 +71,11 @@ function PinSessionError({
 function AuthFloorVisual() {
   return (
     <aside className="sb-auth-visual" aria-hidden="true">
-      <div className="sb-auth-visual__glow" />
-      <div className="sb-auth-visual__panel">
-        <p className="sb-auth-visual__eyebrow">SheetBuilder</p>
-        <p className="sb-auth-visual__kicker">Graves night board</p>
+      <div className="sb-auth-preview">
+        <div className="sb-auth-preview__bar">
+          <p className="sb-auth-visual__eyebrow">Night board</p>
+          <p className="sb-auth-visual__kicker">Zones 1–10</p>
+        </div>
         <div className="sb-auth-floor">
           {GRAVES_FLOOR_ZONES.map((zone) => (
             <div
@@ -87,7 +88,7 @@ function AuthFloorVisual() {
             </div>
           ))}
         </div>
-        <p className="sb-auth-visual__foot">Gun Lake · ZDS ops</p>
+        <p className="sb-auth-visual__foot">Gun Lake graves</p>
       </div>
     </aside>
   );

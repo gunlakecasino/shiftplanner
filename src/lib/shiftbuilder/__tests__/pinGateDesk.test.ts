@@ -51,7 +51,7 @@ describe("PinGate — modern lightweight ops console", () => {
   it("does not paint skeleton, blur, or dusty beige behind the PIN form", () => {
     expect(opsAuthGate).toContain("sb-auth-split");
     expect(opsAuthGate).toContain("sb-auth-visual");
-    expect(opsAuthGate).toContain("Graves night board");
+    expect(opsAuthGate).toContain("Night board");
     expect(opsAuthGate).not.toContain("BuilderLoadingShell");
     expect(opsAuthGate).not.toContain("backdropFilter");
     expect(opsAuthGate).not.toContain("WebkitBackdropFilter");
@@ -63,7 +63,8 @@ describe("PinGate — modern lightweight ops console", () => {
     expect(opsAuthGate).not.toContain("vault");
     expect(opsAuthGate).not.toContain("Sign In");
     expect(opsAuthGate).not.toContain("Signup");
-    expect(authCss).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
+    expect(authCss).toContain("grid-template-columns: minmax(360px, 44%) minmax(0, 1fr)");
+    expect(authCss).toContain("sb-auth-preview");
     expect(authCss).toContain("background: #007AFF");
     expect(authCss).not.toContain("#E8E0D2");
     expect(authCss).not.toContain("#FBF7F0");
