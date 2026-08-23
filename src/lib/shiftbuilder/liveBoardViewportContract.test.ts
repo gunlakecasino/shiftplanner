@@ -147,3 +147,33 @@ describe("SheetBuilder night actions (PR B)", () => {
     expect(globalsCss).not.toMatch(/\.print-artboard\s*\{[^}]*sb-paper-desk/);
   });
 });
+
+describe("SheetBuilder live undo toast (PR C)", () => {
+  it("reuses Sonner + the existing history snapshot path", () => {
+    expect(shiftBuilderClient).toContain("from \"@/lib/shiftbuilder/historyUndoToast\"");
+    expect(shiftBuilderClient).toContain("runSharedHistoryUndo");
+    expect(shiftBuilderClient).toContain("offerHistoryUndoToast");
+    expect(shiftBuilderClient).toContain("performHistoryUndo");
+    expect(shiftBuilderClient).toContain("shiftHistoryRef.current.undo()");
+    expect(shiftBuilderClient).toContain('applyHistorySnapshotRef.current(snapshot, "Undo")');
+    expect(shiftBuilderClient).toContain("performHistoryUndoRef.current()");
+    expect(shiftBuilderClient).not.toContain("create table");
+    expect(shiftBuilderClient).not.toContain("CREATE TABLE");
+    expect(shiftBuilderClient).not.toMatch(/undoStack\s*=/);
+  });
+
+  it("offers Undo only after a successful live occupied swap persist", () => {
+    expect(shiftBuilderClient).toContain("if (displacedTmId)");
+    expect(shiftBuilderClient).toContain('offerPersistedHistoryUndoToastRef.current("Swapped")');
+    expect(shiftBuilderClient).toContain("batchApplyDraftAssignments");
+    expect(shiftBuilderClient).not.toMatch(/offerPersistedHistoryUndoToastRef\.current\("Swapped"\);[\s\S]{0,80}isDraftMode/);
+  });
+
+  it("offers Undo after a roster-drop unassign persist, not draft-only clears", () => {
+    expect(shiftBuilderClient).toContain('unassign(a.fromSlot, { offerUndo: true })');
+    expect(shiftBuilderClient).toContain("offerUndoAfterPersist");
+    expect(shiftBuilderClient).toContain('offerPersistedHistoryUndoToastRef.current("Unassigned")');
+    expect(shiftBuilderClient).toContain("onPersisted: offerUndoAfterPersist");
+    expect(shiftBuilderClient).toContain("upsertDraftSlot(slotKey, { kind: \"clear\" })");
+  });
+});

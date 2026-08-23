@@ -33,6 +33,11 @@ import {
 import { uiToDb, dbToUi, type SlotType } from "@/lib/shiftbuilder/slot-keys"; // auxDbKeyToDef extracted, no longer used here
 import { mapNightTasksToUiKeys as mapNightTasksToUiKeysLib } from "@/lib/shiftbuilder/mapNightTasksToUiKeys";
 import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHistory";
+import {
+  dismissHistoryUndoToast,
+  offerHistoryUndoToast,
+  runSharedHistoryUndo,
+} from "@/lib/shiftbuilder/historyUndoToast";
 // Command palette (and its hook) are loaded dynamically on first open to shrink
 // the static dependency graph of this very large file and stop Turbopack module factory errors.
 
@@ -875,6 +880,11 @@ function AuthedShiftBuilder() {
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
   const historyPersistBusyRef = useRef(false);
+  // Invalidates a covering-operator Undo toast when Cmd+Z or a newer history
+  // entry already consumed the snapshot — same stack, no second undo path.
+  const undoToastGenRef = useRef(0);
+  const performHistoryUndoRef = useRef<() => void>(() => {});
+  const offerPersistedHistoryUndoToastRef = useRef<(message: string) => void>(() => {});
 
   // Ref for handle to avoid TDZ when passing to early useAuxLayout
   const handleBoardLiveUnassignRef = useRef<((slotKey: string) => void) | null>(null);
@@ -1802,6 +1812,8 @@ function AuthedShiftBuilder() {
       };
       recordChangeRef.current(description, before, after);
       pendingHistoryRef.current = null;
+      undoToastGenRef.current += 1;
+      dismissHistoryUndoToast();
     }
   }, [assignments, auxDefs]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2814,7 +2826,7 @@ function AuthedShiftBuilder() {
     });
   };
 
-  const unassign = (slotKey: string) => {
+  const unassign = (slotKey: string, options?: { offerUndo?: boolean }) => {
     if (!requireEdit()) return;
     if (isCurrentNightLocked) {
       showToast("This day is locked — changes are disabled", "error");
@@ -2839,6 +2851,7 @@ function AuthedShiftBuilder() {
     const captureDayName = selectedDay.name;
     const prevAssignment = assignments[slotKey];
     const tmIdBeingRemoved = prevAssignment?.tmId ?? null;
+    const offerUndoAfterPersist = options?.offerUndo === true;
 
     // Derive DB key + side so legacy direct delete (and flex AUX) targets the
     // same row assign wrote (e.g. AUX3+support → support_1, not aux_3).
@@ -2860,6 +2873,9 @@ function AuthedShiftBuilder() {
         captureDayName,
         targetNightId,
         isDraftMode,
+        onPersisted: offerUndoAfterPersist
+          ? () => offerPersistedHistoryUndoToastRef.current("Unassigned")
+          : undefined,
       });
     } else {
       // Fallback (legacy direct path)
@@ -2882,7 +2898,13 @@ function AuthedShiftBuilder() {
               slotType: derivedSlotType,
               rrSide: derivedRrSide,
               dbSlotKey: derivedDbSlotKey,
-            }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
+            })
+              .then(() => {
+                if (offerUndoAfterPersist) {
+                  offerPersistedHistoryUndoToastRef.current("Unassigned");
+                }
+              })
+              .catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
           );
         }
       })();
@@ -3148,6 +3170,31 @@ function AuthedShiftBuilder() {
   const applyHistorySnapshotRef = useRef(applySnapshot);
   shiftHistoryRef.current = shiftHistory;
   applyHistorySnapshotRef.current = applySnapshot;
+
+  const performHistoryUndo = () => {
+    runSharedHistoryUndo({
+      busy: historyPersistBusyRef.current,
+      undo: () => shiftHistoryRef.current.undo(),
+      apply: (snapshot) => {
+        void applyHistorySnapshotRef.current(snapshot, "Undo");
+      },
+      dismissToast: () => {
+        undoToastGenRef.current += 1;
+        dismissHistoryUndoToast();
+      },
+    });
+  };
+  performHistoryUndoRef.current = performHistoryUndo;
+
+  const offerPersistedHistoryUndoToast = (message: string) => {
+    const gen = undoToastGenRef.current;
+    offerHistoryUndoToast(message, () => {
+      if (undoToastGenRef.current !== gen) return;
+      performHistoryUndo();
+    });
+  };
+  offerPersistedHistoryUndoToastRef.current = offerPersistedHistoryUndoToast;
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey;
@@ -3160,8 +3207,7 @@ function AuthedShiftBuilder() {
       // then gets dropped — desyncing the history pointer from the board.
       if (historyPersistBusyRef.current) return;
       if (isUndo) {
-        const previous = shiftHistoryRef.current.undo();
-        if (previous) void applyHistorySnapshotRef.current(previous, "Undo");
+        performHistoryUndoRef.current();
       } else {
         const next = shiftHistoryRef.current.redo();
         if (next) void applyHistorySnapshotRef.current(next, "Redo");
@@ -5720,6 +5766,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               );
             }
             setLastSavedAt(new Date());
+            if (displacedTmId) {
+              offerPersistedHistoryUndoToastRef.current("Swapped");
+            }
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             rollbackDrag(msg || "unknown error");
@@ -5733,7 +5782,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       if (over?.data.current?.type === "roster") {
         const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
         pendingHistoryRef.current = { description: `Unassigned from ${a.fromSlot}`, before };
-        unassign(a.fromSlot);
+        unassign(a.fromSlot, { offerUndo: true });
         return;
       }
       // → nowhere: keep the assignment. Unassigning on a missed drop is too

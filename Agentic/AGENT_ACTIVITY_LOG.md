@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-08-23 — Grok Build — SheetBuilder PR C (iPad Undo toast)
+
+**Task**: Covering operator is on iPad. After a successful live occupied→occupied swap or roster-drop unassign, show a short Undo toast that replays the existing history snapshot. Desktop Cmd+Z already persists. Stacked on PR B (`cursor/sheetbuilder-night-actions-426c`). No auth / PIN / RLS. No engine or Golden print edits. No production Apply. Call-off Restore unchanged.
+
+**Changes**:
+- `historyUndoToast.ts` offers one Sonner toast (`Undo` action, stable id) and `runSharedHistoryUndo` — the same pop-then-`applySnapshot` path Cmd/Ctrl+Z uses. No second stack, no history table.
+- Live occupied swap persist (`displacedTmId`) offers "Swapped" + Undo only after the batch write succeeds.
+- Roster-drop calls `unassign(slot, { offerUndo: true })`; toast fires from `live.unassign` `onPersisted` (legacy delete `.then` if live is missing). Draft clears still return before persist — no toast.
+- Keyboard undo goes through `performHistoryUndoRef` so a toast tap cannot double-pop while persist is busy; a newer history entry or Cmd+Z invalidates the toast generation.
+
+**Tests**: `historyUndoToast.test.ts` + PR C contract in `liveBoardViewportContract.test.ts`. `pnpm test` + tsc for the slice.
+
+**Sacred held**: One existing history snapshot, Call-off Restore untouched, `runNightEngine`, Golden print, no silent official-flag, no production Apply.
+
+**Status**: PR C Undo toast. Stacked on PR A+B.
+
+---
+
 ## 2026-08-23 — Grok Build — SheetBuilder PR B (night actions seen)
 
 **Task**: After PR A quiet chrome, surface the remaining night actions. No auth / PIN / RLS. No engine or Golden print edits. No production Apply.
