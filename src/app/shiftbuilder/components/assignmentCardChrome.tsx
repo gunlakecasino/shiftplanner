@@ -338,16 +338,16 @@ export function UnassignedInvite({
       title={title}
     >
       <span
-        className="leading-none opacity-40"
-        style={{ fontSize: cfg.plusSize }}
+        className="leading-none text-[#CBD5E1]"
+        style={{ fontSize: cfg.plusSize, fontWeight: 400 }}
       >
         +
       </span>
       <span
-        className="font-semibold tracking-[0.04em] text-[#64748B] mt-1"
-        style={{ fontSize: cfg.labelSize, opacity: 0.9 }}
+        className="font-semibold tracking-[0.02em] text-[#64748B] mt-1"
+        style={{ fontSize: cfg.labelSize, opacity: 1 }}
       >
-        ASSIGN TM
+        Assign TM
       </span>
       {size === "zone" ? (
         <span className="no-print text-[10px] text-[#94A3B8] mt-0.5">Drop to assign</span>

@@ -341,6 +341,62 @@ describe("SheetBuilder modern lightweight desk measured sit", () => {
   });
 });
 
+describe("SheetBuilder placement pad modern desk", () => {
+  const padCssStart = globalsCss.indexOf("SheetBuilder placement pad — modern lightweight desk");
+  const padCss = globalsCss.slice(padCssStart, padCssStart + 7000);
+  const placementPad = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/PlacementPad.tsx"),
+    "utf8",
+  );
+  const opsStatus = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/OpsStatusBar.tsx"),
+    "utf8",
+  );
+  const dockTabs = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/placement-dock/PlacementDockTabs.tsx"),
+    "utf8",
+  );
+
+  it("uses white / #F4F6FA surfaces and a thin uniform-code rail", () => {
+    expect(padCssStart).toBeGreaterThan(-1);
+    expect(padCss).toContain("background: #FFFFFF");
+    expect(padCss).toContain("background: #F4F6FA");
+    expect(padCss).toContain("width: 5px");
+    expect(padCss).toContain("background: #007AFF !important");
+    expect(padCss).not.toContain("radial-gradient(circle at top left");
+    expect(padCss).not.toContain("linear-gradient(180deg, #f7f8fc");
+    expect(padCss).not.toContain("#eef1f7");
+    expect(globalsCss).not.toContain("backdrop-filter: blur(28px)");
+    expect(globalsCss).not.toContain("backdrop-filter: blur(24px)");
+  });
+
+  it("keeps placement behavior and drops Sparkles / xAI chrome", () => {
+    expect(placementPad).toContain("sb-sheetbuilder-placement-pad");
+    expect(placementPad).toContain("TmPicker");
+    expect(placementPad).toContain("Assign team member");
+    expect(placementPad).toContain("Change team member");
+    expect(placementPad).toContain('background: "#007AFF"');
+    expect(placementPad).not.toContain("Sparkles");
+    expect(placementPad).not.toContain("xAI insight");
+    expect(placementPad).not.toMatch(/>\s*xAI\s*</);
+    expect(placementPad).toContain("Fit details");
+    expect(dockTabs).toContain("bg-[#007AFF]");
+    expect(dockTabs).not.toContain("bg-[#1C1C1E]");
+  });
+
+  it("lights the roster drawer and SYNCED pill", () => {
+    expect(globalsCss).toContain(".sb-sheetbuilder-roster-popover {\n  width: 360px;");
+    expect(globalsCss).toMatch(
+      /\.sb-sheetbuilder-roster-popover \{[\s\S]*?background: #FFFFFF/,
+    );
+    expect(globalsCss).not.toContain("background: #292936");
+    expect(opsStatus).toContain("background: #FFFFFF !important");
+    expect(opsStatus).toContain("border-radius: 999px !important");
+    expect(opsStatus).not.toContain("background: #1E1F24 !important");
+    expect(opsStatus).not.toContain("color: #C8C4BA !important");
+  });
+});
+
 describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
   it("uses honest gendered RR titles instead of truncated RR 6 WOMEN'S", () => {
     expect(rrCard).toContain("formatCanvasRrSideLabel");
@@ -358,6 +414,8 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
       resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
       "utf8",
     );
+    expect(chrome).toContain("Assign TM");
+    expect(chrome).not.toContain("ASSIGN TM");
     expect(chrome).toContain("formatCanvasTrailChip");
     expect(chrome).toContain("formatCanvasRepeatReason");
     expect(chrome).toContain("sb-critical-repeat-mark");
@@ -372,6 +430,8 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
       resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
       "utf8",
     );
+    expect(shiftCard).toContain("Assign TM");
+    expect(shiftCard).not.toContain("ASSIGN TM");
     expect(shiftCard).not.toContain("grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]");
     expect(shiftCard).not.toContain("whitespace-nowrap");
     expect(shiftCard).not.toContain(">Tasks<");

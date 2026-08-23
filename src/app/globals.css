@@ -3272,18 +3272,16 @@ button,
     display: flex;
     flex-direction: column;
     border-radius: 20px 0 0 20px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
+    border: 1px solid #E6EAF0;
     border-right: none;
-    background: rgba(255, 255, 255, 0.97);
-    backdrop-filter: blur(28px);
-    -webkit-backdrop-filter: blur(28px);
-    box-shadow: -10px 0 40px -12px rgba(0, 0, 0, 0.2);
+    background: #FFFFFF;
+    box-shadow: -8px 0 24px -18px rgba(15, 23, 42, 0.22);
     overflow: hidden;
   }
 
   .dark .placement-dock {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(12, 12, 14, 0.97);
+    border-color: #E6EAF0;
+    background: #FFFFFF;
   }
 
   .placement-dock-inner {
@@ -3291,8 +3289,6 @@ button,
     border-radius: 0 !important;
     box-shadow: none !important;
     background: transparent !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
 
   .placement-dock-body {
@@ -3393,18 +3389,16 @@ button,
     display: flex;
     flex-direction: column;
     border-radius: 20px 0 0 20px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
+    border: 1px solid #E6EAF0;
     border-right: none;
-    background: rgba(255, 255, 255, 0.97);
-    backdrop-filter: blur(28px);
-    -webkit-backdrop-filter: blur(28px);
-    box-shadow: -10px 0 40px -12px rgba(0, 0, 0, 0.2);
+    background: #FFFFFF;
+    box-shadow: -8px 0 24px -18px rgba(15, 23, 42, 0.22);
     overflow: hidden;
   }
 
   .dark .placement-dock {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(12, 12, 14, 0.97);
+    border-color: #E6EAF0;
+    background: #FFFFFF;
   }
 
   .placement-dock-inner {
@@ -5602,47 +5596,44 @@ button,
   font-size: 9px;
   font-weight: 950;
   line-height: 1;
-  box-shadow: 0 0 0 2px #292933;
+  box-shadow: 0 0 0 2px #1E1F24;
 }
 
 .sb-sheetbuilder-roster-popover {
   width: 360px;
   max-height: min(78vh, 860px);
   overflow: hidden auto;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 0 0 26px 26px;
-  background: #292936;
-  color: #f4f4f5;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 36px 88px -34px rgba(0, 0, 0, 0.94),
-    0 14px 34px -18px rgba(0, 0, 0, 0.86);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid #E6EAF0;
+  border-radius: 0 0 20px 20px;
+  background: #FFFFFF;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -24px rgba(15, 23, 42, 0.28);
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
 }
 
 .sb-sheetbuilder-roster-popover__title {
-  padding: 28px 26px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
-  font-size: 20px;
-  font-weight: 950;
-  letter-spacing: 0.08em;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #E6EAF0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #64748B;
+  text-transform: uppercase;
 }
 
 .sb-sheetbuilder-roster-popover__section {
-  padding: 22px 26px 16px;
+  padding: 16px 20px 12px;
 }
 
 .sb-sheetbuilder-roster-popover__section-header {
   display: flex;
   align-items: center;
-  gap: 13px;
-  color: rgba(244, 244, 245, 0.84);
-  font-size: 18px;
-  font-weight: 950;
-  letter-spacing: 0.04em;
+  gap: 10px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .sb-sheetbuilder-roster-popover__state-icon {
@@ -5671,17 +5662,17 @@ button,
 }
 
 .sb-sheetbuilder-roster-popover__subhead {
-  margin: 18px 0 7px 20px;
-  color: rgba(166, 173, 189, 0.72);
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: 0.035em;
+  margin: 14px 0 6px 20px;
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
 }
 
 .sb-sheetbuilder-roster-popover__subhead::before {
   content: "•";
   margin-right: 10px;
-  color: rgba(166, 173, 189, 0.6);
+  color: #94A3B8;
 }
 
 .sb-sheetbuilder-roster-popover__row {
@@ -5708,51 +5699,49 @@ button,
 }
 
 .sb-sheetbuilder-roster-popover__name {
-  color: rgba(215, 219, 229, 0.8);
-  font-size: 21px;
-  font-weight: 850;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 650;
   letter-spacing: -0.02em;
 }
 
 .sb-sheetbuilder-roster-popover__empty {
   padding: 8px 0 6px 38px;
-  color: rgba(166, 173, 189, 0.48);
+  color: #94A3B8;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 550;
 }
 
 .sb-sheetbuilder-roster-popover__divider {
   height: 1px;
-  margin: 0 26px;
-  background: rgba(255, 255, 255, 0.1);
+  margin: 0 20px;
+  background: #E6EAF0;
 }
 
-/* SheetBuilder placement pad redesign */
+/* ==========================================================================
+   SheetBuilder placement pad — modern lightweight desk
+   White / #F4F6FA surfaces. Thin uniform-code rail. No glass wash.
+   ========================================================================== */
 .placement-pad:has(.sb-sheetbuilder-placement-pad) {
-  filter: drop-shadow(0 20px 44px rgba(15, 23, 42, 0.18));
+  filter: drop-shadow(0 8px 24px rgba(15, 23, 42, 0.10));
 }
 
 .sb-sheetbuilder-placement-pad {
   position: relative;
-  border: 1px solid rgba(205, 213, 225, 0.95);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--placement-pad-accent, #64748b) 8%, transparent) 0, transparent 42%),
-    linear-gradient(180deg, #f7f8fc 0%, #eef1f7 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 16px 36px -24px rgba(15, 23, 42, 0.42),
-    0 1px 3px rgba(15, 23, 42, 0.08);
+  border: 1px solid #E6EAF0;
+  border-radius: 20px;
+  background: #FFFFFF;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -24px rgba(15, 23, 42, 0.28);
   color: #111827;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-rail {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 7px;
-  border-radius: 18px 0 0 18px;
+  width: 5px;
+  border-radius: 20px 0 0 20px;
   background: var(--placement-pad-accent, #64748b);
-  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.65) inset;
+  box-shadow: none;
   pointer-events: none;
   z-index: 2;
 }
@@ -5760,22 +5749,20 @@ button,
 .sb-sheetbuilder-placement-pad .sb-placement-pad-header {
   position: relative;
   padding-left: 20px !important;
-  background: rgba(255, 255, 255, 0.72);
-  border-bottom: 1px solid rgba(220, 226, 235, 0.9);
+  background: #FFFFFF;
+  border-bottom: 1px solid #E6EAF0;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-avatar {
-  width: 38px !important;
-  height: 38px !important;
-  border-radius: 13px !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.42),
-    0 7px 16px -12px var(--placement-pad-accent, #64748b);
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 12px !important;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-avatar span {
-  font-size: 16px !important;
-  font-weight: 900 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-slot {
@@ -5783,20 +5770,21 @@ button,
   width: max-content;
   max-width: 100%;
   padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--placement-pad-accent, #64748b) 18%, transparent);
+  border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--placement-pad-accent, #64748b) 11%, white);
+  background: #F4F6FA;
   color: var(--placement-pad-accent, #64748b) !important;
-  letter-spacing: 0.075em !important;
+  letter-spacing: 0.04em !important;
   line-height: 1.1;
+  font-weight: 650 !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-name {
-  margin-top: 5px;
+  margin-top: 4px;
   color: #111827 !important;
-  font-size: 21px !important;
-  font-weight: 950 !important;
-  letter-spacing: -0.035em;
+  font-size: 20px !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.03em;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-brk {
@@ -5805,43 +5793,43 @@ button,
   gap: 4px;
   min-height: 24px;
   padding: 3px 7px;
-  border: 1px solid rgba(217, 119, 6, 0.28);
+  border: 0;
   border-radius: 999px;
-  background: #fef3c7;
-  color: #b45309;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  background: #E8F7EE;
+  color: #147A45;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-brk span {
-  font-size: 7px;
-  font-weight: 950;
-  letter-spacing: 0.08em;
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-brk strong {
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 700;
   line-height: 1;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-close {
   width: 32px !important;
   height: 32px !important;
-  border: 1px solid rgba(209, 216, 226, 0.78);
-  background: rgba(255, 255, 255, 0.68) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  border: 1px solid #E6EAF0;
+  background: #F4F6FA !important;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-close:hover {
-  background: #fff !important;
+  background: #FFFFFF !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-warning-btn {
-  border-color: rgba(217, 119, 6, 0.24) !important;
+  border-color: #E6EAF0 !important;
   border-radius: 999px !important;
-  background: rgba(254, 243, 199, 0.72) !important;
-  color: #b45309 !important;
-  font-weight: 850 !important;
+  background: #F4F6FA !important;
+  color: #64748B !important;
+  font-weight: 650 !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-divider {
@@ -5850,83 +5838,87 @@ button,
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-body {
   padding: 12px 12px 12px 18px !important;
+  background: #F4F6FA;
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-body::-webkit-scrollbar {
-  width: 7px;
+  width: 6px;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-body::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.55);
+  background: rgba(148, 163, 184, 0.45);
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-primary {
   min-height: 42px;
-  border: 1px solid color-mix(in srgb, var(--placement-pad-accent, #64748b) 28%, transparent);
-  border-radius: 14px !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 12px 20px -18px var(--placement-pad-accent, #64748b);
-  font-weight: 900 !important;
+  border: 0;
+  border-radius: 12px !important;
+  background: #007AFF !important;
+  box-shadow: none;
+  font-weight: 650 !important;
   letter-spacing: -0.01em;
 }
 
+.sb-sheetbuilder-placement-pad .sb-placement-pad-primary:hover:not(:disabled) {
+  background: #0066D6 !important;
+}
+
 .sb-sheetbuilder-placement-pad .sb-placement-pad-picker {
-  border: 1px solid rgba(220, 226, 235, 0.86);
+  border: 1px solid #E6EAF0;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.7);
+  background: #FFFFFF;
   overflow: hidden;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-section {
-  padding: 10px;
-  border: 1px solid rgba(220, 226, 235, 0.86);
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  padding: 12px;
+  border: 1px solid #E6EAF0;
+  border-radius: 16px;
+  background: #FFFFFF;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-section-title {
-  color: #7b8797 !important;
-  font-size: 9px !important;
-  font-weight: 950 !important;
-  letter-spacing: 0.11em !important;
+  color: #64748B !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
   text-transform: uppercase;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-task-row {
   min-height: 34px;
-  border-color: rgba(224, 229, 237, 0.95) !important;
-  border-radius: 11px !important;
-  background: rgba(255, 255, 255, 0.88) !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  border-color: #E6EAF0 !important;
+  border-radius: 12px !important;
+  background: #FFFFFF !important;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-task-row span:last-child {
-  color: #5f6b7c !important;
+  color: #334155 !important;
   font-size: 12px;
-  font-weight: 750 !important;
+  font-weight: 550 !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-task-dot {
   width: 6px !important;
   height: 6px !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-add-task,
 .sb-sheetbuilder-placement-pad .sb-placement-pad-sweeper {
   border-radius: 12px !important;
-  font-weight: 850 !important;
+  font-weight: 650 !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-add-task {
-  border-color: color-mix(in srgb, var(--placement-pad-accent, #007aff) 28%, transparent) !important;
-  background: color-mix(in srgb, var(--placement-pad-accent, #007aff) 7%, white) !important;
-  color: var(--placement-pad-accent, #007aff) !important;
+  border-color: rgba(0, 122, 255, 0.28) !important;
+  background: #EEF4FF !important;
+  color: #007AFF !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-sweeper {
@@ -5935,37 +5927,45 @@ button,
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-intel {
-  border-radius: 15px !important;
-  border-color: rgba(220, 226, 235, 0.9) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  border-radius: 16px !important;
+  border-color: #E6EAF0 !important;
+  background: #FFFFFF !important;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-footer {
   padding: 10px 10px 10px 16px !important;
-  border-top: 1px solid rgba(220, 226, 235, 0.9) !important;
-  background: rgba(248, 250, 252, 0.78) !important;
+  border-top: 1px solid #E6EAF0 !important;
+  background: #FFFFFF !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-action {
   min-height: 32px;
-  border-radius: 11px !important;
-  border-color: rgba(205, 213, 225, 0.9) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  color: #4b5563 !important;
-  font-size: 10.5px !important;
-  font-weight: 850 !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border-radius: 10px !important;
+  border-color: #E6EAF0 !important;
+  background: #F4F6FA !important;
+  color: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-action:hover {
   color: #111827 !important;
-  background: #fff !important;
+  background: #FFFFFF !important;
 }
 
 .sb-sheetbuilder-placement-pad .sb-placement-pad-action-danger {
-  border-color: rgba(255, 59, 48, 0.22) !important;
-  background: rgba(255, 59, 48, 0.075) !important;
+  border-color: rgba(255, 59, 48, 0.18) !important;
+  background: #FFF5F5 !important;
   color: #ff3b30 !important;
+}
+
+.sb-sheetbuilder-tasks-pad {
+  background: #FFFFFF;
+  border: 1px solid #E6EAF0;
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 32px -24px rgba(15, 23, 42, 0.28);
 }
 
 /* The package ShiftCard owns its own border and accent rail. Its draggable
@@ -5991,8 +5991,7 @@ button,
 }
 
 /* SheetBuilder refinement: the placement experience is a persistent inspector.
-   It occupies layout space on desktop and uses the uploaded package's clean,
-   white panel treatment instead of covering a placement card. */
+   Same modern desk as the flyout pad — cool canvas, white cards, no glass. */
 .placement-dock {
   position: fixed;
   top: var(--sb-sheet-topbar-h, 54px);
@@ -6004,9 +6003,9 @@ button,
   max-width: min(308px, calc(100vw - 24px));
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid #dfe4eb;
-  background: #fff;
-  box-shadow: -18px 0 44px -32px rgba(15, 23, 42, 0.48);
+  border-left: 1px solid #E6EAF0;
+  background: #FFFFFF;
+  box-shadow: -8px 0 24px -20px rgba(15, 23, 42, 0.28);
 }
 
 .placement-dock-body,
@@ -6030,30 +6029,33 @@ button,
 .placement-dock .sb-sheetbuilder-placement-pad {
   border: 0;
   border-radius: 0;
-  background: #fff;
+  background: #FFFFFF;
   box-shadow: none;
 }
 
 .placement-dock .sb-placement-pad-rail {
-  display: none;
+  display: block;
+  width: 4px;
+  border-radius: 0;
 }
 
 .placement-dock .sb-placement-pad-header {
   padding: 16px 14px 12px !important;
-  background: #fff;
+  background: #FFFFFF;
 }
 
 .placement-dock-tabs {
   gap: 4px !important;
   padding: 8px 12px !important;
-  background: #fff;
+  background: #FFFFFF;
+  border-bottom-color: #E6EAF0 !important;
 }
 
 .placement-dock-tabs button {
   min-height: 34px !important;
-  border-radius: 9px !important;
+  border-radius: 10px !important;
   font-size: 11px !important;
-  font-weight: 800 !important;
+  font-weight: 650 !important;
 }
 
 .placement-dock .sb-placement-pad-body {
@@ -6419,10 +6421,10 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
     height: min(54dvh, 640px);
     max-height: calc(100dvh - var(--sb-sheet-topbar-h, 58px) - 12px);
     padding-top: 10px;
-    border: 1px solid #dfe4eb;
+    border: 1px solid #E6EAF0;
     border-bottom: 0;
     border-radius: 20px 20px 0 0;
-    box-shadow: 0 -18px 46px -28px rgba(15, 23, 42, 0.62);
+    box-shadow: 0 -8px 24px -18px rgba(15, 23, 42, 0.28);
   }
 
   .placement-dock::before {

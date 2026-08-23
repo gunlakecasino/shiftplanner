@@ -32,8 +32,8 @@ export function PlacementDockTabs({
           className={cn(
             "sb-interactive min-h-11 flex-1 rounded-xl px-3 text-[14px] font-semibold tracking-tight transition-colors",
             active === tab.id
-              ? "bg-[#1C1C1E] text-white shadow-sm"
-              : "bg-black/[0.04] text-neutral-600 hover:bg-black/[0.07]",
+              ? "bg-[#007AFF] text-white"
+              : "bg-[#F4F6FA] text-[#64748B] hover:bg-[#EEF1F6]",
           )}
         >
           {tab.label}

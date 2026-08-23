@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { X, Plus, Sparkles } from "lucide-react";
+import { X, Plus } from "lucide-react";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { normalizeGender } from "@/lib/shiftbuilder/placement";
@@ -254,31 +254,28 @@ function FitIntelBlock({
     : styles;
 
   return (
-    <div className="sb-placement-pad-intel rounded-2xl border border-black/[0.06] bg-neutral-50/90 overflow-hidden">
-      <div
-        className="px-3 py-2.5 border-b border-black/[0.04]"
-        style={{ background: styles.bg }}
-      >
+    <div className="sb-placement-pad-intel rounded-2xl border border-[#E6EAF0] bg-white overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-[#E6EAF0] bg-white">
         <div className="flex flex-wrap items-center gap-1.5 mb-1">
           <span
-            className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${styles.badge}`}
+            className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${styles.badge}`}
           >
             {fitVerdictLabel(prerendered.fitVerdict)}
           </span>
-          <span className="text-[8px] font-medium uppercase tracking-wide text-white/70">
+          <span className="text-[10px] font-medium uppercase tracking-[0.04em] text-[#94A3B8]">
             rotation fit
           </span>
           {typeof prerendered.healthPoints === "number" && (
-            <span className="ml-auto text-[10px] font-semibold tabular-nums text-white/90">
+            <span className="ml-auto text-[10px] font-semibold tabular-nums text-[#64748B]">
               {prerendered.healthPoints.toFixed(0)}pt
             </span>
           )}
         </div>
-        <p className="text-[12px] font-semibold leading-snug" style={{ color: styles.text }}>
+        <p className="text-[12px] font-semibold leading-snug text-[#111827]">
           {prerendered.fitSummary}
         </p>
         {prerendered.fitFactLine ? (
-          <p className="mt-0.5 text-[10px] leading-snug text-white/75 tabular-nums">
+          <p className="mt-0.5 text-[10px] leading-snug text-[#64748B] tabular-nums">
             {prerendered.fitFactLine}
           </p>
         ) : null}
@@ -306,13 +303,10 @@ function FitIntelBlock({
       )}
 
       {structured?.headline && (
-        <div className="px-3 py-2 border-b border-black/[0.04] bg-white/80">
-          <div className="flex items-center gap-1 mb-0.5">
-            <Sparkles className="w-3 h-3 text-[#2F5C7C]" />
-            <span className="text-[8px] font-bold uppercase tracking-[0.12em] text-[#2F5C7C]/90">
-              xAI
-            </span>
-          </div>
+        <div className="px-3 py-2 border-b border-[#E6EAF0] bg-white">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[#64748B] mb-0.5">
+            Fit note
+          </p>
           <p className="text-[12px] font-semibold text-neutral-900 leading-snug">
             {structured.headline}
           </p>
@@ -341,9 +335,9 @@ function FitIntelBlock({
               onMoreDetails();
             }}
             disabled={loading || !assigned}
-            className="text-[10px] font-semibold px-2.5 py-1 rounded-full border border-[#2F5C7C]/25 text-[#2F5C7C] bg-white hover:bg-[#F8FAFC] disabled:opacity-50"
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-full border border-[#E6EAF0] text-[#007AFF] bg-white hover:bg-[#F4F6FA] disabled:opacity-50"
           >
-            {loading ? "Analyzing…" : structured?.headline ? "Full reasoning" : "xAI insight"}
+            {loading ? "Analyzing…" : structured?.headline ? "Full reasoning" : "Fit details"}
           </button>
         ) : (
           <button
@@ -366,19 +360,19 @@ function FitIntelBlock({
         <div className="px-3 pb-3 space-y-2 text-[11px] leading-snug text-neutral-700">
           {structured.whyTonight && (
             <div>
-              <p className="text-[8px] font-bold uppercase tracking-wide text-[#2F5C7C]/70">Tonight</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[#64748B]">Tonight</p>
               <p className="mt-0.5">{structured.whyTonight}</p>
             </div>
           )}
           {structured.rotationNote && (
             <div>
-              <p className="text-[8px] font-bold uppercase tracking-wide text-[#2F5C7C]/70">Rotation</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[#64748B]">Rotation</p>
               <p className="mt-0.5">{structured.rotationNote}</p>
             </div>
           )}
           {(structured.swapRecommendations?.length ?? 0) > 0 && (
             <div>
-              <p className="text-[8px] font-bold uppercase tracking-wide text-[#2F5C7C]/70">Swap lanes</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[#64748B]">Swap lanes</p>
               <ul className="mt-0.5 space-y-0.5">
                 {(structured.swapRecommendations ?? []).map((s, i) => (
                   <li key={i}>
@@ -391,7 +385,7 @@ function FitIntelBlock({
           )}
           {(structured.watchouts?.length ?? 0) > 0 && (
             <div>
-              <p className="text-[8px] font-bold uppercase tracking-wide text-amber-700/80">Watchouts</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.04em] text-[#64748B]">Watchouts</p>
               <ul className="mt-0.5 list-disc pl-3">
                 {(structured.watchouts ?? []).map((w, i) => (
                   <li key={i}>{w}</li>
@@ -1388,8 +1382,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               type="button"
               disabled={isCurrentNightLocked}
               onClick={() => setAssignMode(true)}
-              className="sb-placement-pad-primary mt-3 w-full py-2.5 text-[12px] font-bold text-white disabled:opacity-50"
-              style={{ background: accent }}
+              className="sb-placement-pad-primary mt-3 w-full py-2.5 text-[12px] font-semibold text-white disabled:opacity-50"
+              style={{ background: "#007AFF" }}
             >
               Change team member
             </button>
@@ -1398,7 +1392,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
         {!a.tmName && !showTmPicker && (
           <div className="py-2">
-            <button disabled={isCurrentNightLocked} onClick={() => setAssignMode(true)} className="sb-placement-pad-primary w-full rounded-2xl py-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: accent }}>
+            <button disabled={isCurrentNightLocked} onClick={() => setAssignMode(true)} className="sb-placement-pad-primary w-full rounded-2xl py-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#007AFF" }}>
               Assign team member
             </button>
           </div>
@@ -1531,9 +1525,9 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                           disabled={hasSweeper || isCurrentNightLocked}
                           className="sb-placement-pad-sweeper w-full text-[11px] py-[5px] rounded-xl flex items-center justify-center gap-1.5 font-semibold"
                           style={{
-                            background: hasSweeper ? '#f3f4f6' : '#fef3c7',
-                            color: hasSweeper ? '#9ca3af' : '#b45309',
-                            border: hasSweeper ? '1px solid #e5e7eb' : '1px solid #fcd34d',
+                            background: hasSweeper ? '#F4F6FA' : '#EEF4FF',
+                            color: hasSweeper ? '#94A3B8' : '#007AFF',
+                            border: hasSweeper ? '1px solid #E6EAF0' : '1px solid rgba(0,122,255,0.22)',
                             cursor: hasSweeper ? 'default' : 'pointer',
                           }}
                         >

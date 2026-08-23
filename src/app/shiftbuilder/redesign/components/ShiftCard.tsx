@@ -69,7 +69,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
                     className="text-[13px] font-semibold tracking-[0.04em]"
                     style={{ color: `${accentColor}99` }}
                   >
-                    ASSIGN TM
+                    Assign TM
                   </span>
                   <span className="no-print text-[10px] mt-0.5 text-[#94A3B8]">Drop to assign</span>
                 </div>
