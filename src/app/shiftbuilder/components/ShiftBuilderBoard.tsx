@@ -6,9 +6,6 @@ import {
   premiumSpring,
   premiumBuilderCardHost,
   premiumButton,
-  premiumPresenceReduced,
-  premiumDaySwitchStagger,
-  premiumDaySwitchStaggerReduced,
 } from "@/lib/premiumSpring";
 import ZoneCard from "./ZoneCard";
 import RRCard from "./RRCard";
@@ -64,26 +61,17 @@ function sectionCountClass(filled: number, isTodayBoard: boolean): string {
   return `count ${tone}${today}`;
 }
 
-/** Enter-only fade for day navigation — no exit (avoids doubled grid children + layout thrash). */
+/** Stable hosts — no remount fade. Day paper motion lives on CSS, not card keys. */
 function builderDayCardMotionProps(
-  idx: number,
-  reducedMotion: boolean | null,
-  allowDayEnter: boolean,
+  _idx: number,
+  _reducedMotion: boolean | null,
+  _allowDayEnter: boolean,
 ) {
-  if (!allowDayEnter || reducedMotion) {
-    return {
-      initial: false as const,
-      animate: { opacity: 1 },
-      ...premiumBuilderCardHost,
-    };
-  }
-  const stagger = reducedMotion ? premiumDaySwitchStaggerReduced(idx) : premiumDaySwitchStagger(idx);
   return {
-    initial: { opacity: 0 },
+    initial: false as const,
     animate: { opacity: 1 },
-    transition: stagger.transition,
     ...premiumBuilderCardHost,
-  } as const;
+  };
 }
 
 function slotShowsFilled(
@@ -1490,7 +1478,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     </div>
                   ) : (
                     <motion.div
-                      key={`${dayTransitionKey}-${key}`}
+                      key={key}
                       className={`${gridHostClass} sb-day-card-host`}
                       data-slot-key={key}
                       data-placement-host={key}
@@ -1632,7 +1620,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     </div>
                   ) : (
                     <motion.div
-                      key={`${dayTransitionKey}-${key}`}
+                      key={key}
                       className={`${gridHostClass} sb-day-card-host`}
                       data-slot-key={key}
                       data-pad-host={rrHostId}
@@ -1787,7 +1775,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
                       return (
                         <motion.div
-                          key={`${dayTransitionKey}-${key}`}
+                          key={key}
                           className={`${gridHostClass} sb-day-card-host`}
                           data-slot-key={key}
                           data-placement-host={key}
@@ -1934,7 +1922,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                               <div className={overlapGridClass}>
                                 {activeSlotKeys.map((slotKey, i) => (
                                   <motion.div
-                                    key={`${dayTransitionKey}-${slotKey}`}
+                                    key={slotKey}
                                     className={`${gridHostClass} sb-day-card-host`}
                                     data-slot-key={slotKey}
                                     data-placement-host={slotKey}

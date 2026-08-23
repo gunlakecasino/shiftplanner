@@ -115,6 +115,65 @@ export function shouldApplyNightBoardQueryToStore(): boolean {
   return !isLiveBoardGestureActive();
 }
 
+type BoardAssignmentRow = {
+  tmId?: string | null;
+  tmName?: string | null;
+  isLocked?: boolean;
+  breakGroup?: number;
+};
+
+/** Placement identity — poll/refetch is a visual no-op when these match. */
+export function assignmentPlacementEqual(
+  a?: BoardAssignmentRow | null,
+  b?: BoardAssignmentRow | null,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return !a && !b;
+  return (
+    (a.tmId ?? null) === (b.tmId ?? null) &&
+    (a.tmName ?? null) === (b.tmName ?? null) &&
+    !!a.isLocked === !!b.isLocked &&
+    (a.breakGroup ?? 0) === (b.breakGroup ?? 0)
+  );
+}
+
+/**
+ * Diff-only assignment merge. Unchanged slots keep their previous object
+ * identity so memoized cards do not remount on the ~20s poll.
+ */
+export function reconcileBoardAssignments(
+  current: Record<string, any>,
+  incoming: Record<string, any>,
+): { next: Record<string, any>; changed: boolean } {
+  const incomingKeys = Object.keys(incoming);
+  const currentKeys = Object.keys(current);
+  const next: Record<string, any> = {};
+  let changed = incomingKeys.length !== currentKeys.length;
+
+  for (const key of incomingKeys) {
+    const prev = current[key];
+    const inc = incoming[key];
+    if (assignmentPlacementEqual(prev, inc)) {
+      next[key] = prev ?? inc;
+    } else {
+      next[key] = inc;
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    for (const key of currentKeys) {
+      if (!(key in incoming)) {
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  if (!changed) return { next: current, changed: false };
+  return { next, changed: true };
+}
+
 /** Route leave / Escape-cancel: clear gesture + leftover pendingDrag overlay. */
 export function resetLiveBoardGesture(): void {
   liveBoardGestureActive = false;

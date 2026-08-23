@@ -3,14 +3,12 @@ import {
   subscribeBoardAssignmentsDayKey,
 } from "@/lib/shiftbuilder/liveCache";
 
-/** Minimum veil hold before reveal — also waits for hydrated assignments.
- *  Held a full 1.75s so a switched-to night has time to load in completely
- *  before the board resolves. */
-export const DAY_CONTENT_VEIL_MS = 1750;
-const UNBLUR_MS = 220;
-/** Hard ceiling if data never hydrates — comfortably past the 1.75s min so a
- *  genuinely slow night still gets to finish loading rather than force-reveal. */
-const SAFETY_CAP_MS = 4000;
+/** Paper-layer shared-axis hold. Chrome + color rails stay put.
+ *  Reveal waits for max(this, data ready), then a matching CSS settle. */
+export const DAY_CONTENT_VEIL_MS = 200;
+const UNBLUR_MS = 200;
+/** Hard ceiling if the next night never hydrates — keep it near the motion budget. */
+const SAFETY_CAP_MS = 400;
 
 export const DAY_CONTENT_VEIL_CLASS = "sb-day-content-veil";
 export const DAY_CONTENT_READY_CLASS = "sb-day-content-ready";
@@ -113,7 +111,8 @@ function tryReveal(force = false) {
 }
 
 /**
- * Card shells stay fixed; inner assignment content blurs until max(250ms, data ready).
+ * Card shells + color rails stay fixed; paper names shared-axis until
+ * max(~200ms, data ready). Never a full-canvas fade.
  */
 export function beginDayCardContentVeil(opts?: {
   targetDayKey?: string;

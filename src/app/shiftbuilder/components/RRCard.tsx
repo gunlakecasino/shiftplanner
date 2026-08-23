@@ -160,6 +160,7 @@ const RRSide: React.FC<{
     assignmentState = {
       kind: "draft",
       proposedName: draftInfo.proposedTmName,
+      proposedTmId: draftInfo.proposedTmId,
       previousName: draftInfo.previousTmName,
     };
   } else if (hasTM) {

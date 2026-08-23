@@ -114,6 +114,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
     assignmentState = {
       kind: "draft",
       proposedName: draftInfo!.proposedTmName,
+      proposedTmId: draftInfo?.proposedTmId,
       previousName: draftInfo?.previousTmName,
     };
   } else if (hasTM) {

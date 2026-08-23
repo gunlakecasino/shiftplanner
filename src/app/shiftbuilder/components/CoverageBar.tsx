@@ -127,7 +127,7 @@ const CoverageBar = React.memo(function CoverageBar({
             e.stopPropagation();
             onRemoveTask(slotKey, task.taskLabel, task.id);
           }}
-          className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-all sb-tablet-touch-target"
+          className="sb-interactive ml-1 leading-none font-bold flex-shrink-0 transition-opacity sb-tablet-touch-target"
           style={{
             color: goldBanner
               ? hovered
