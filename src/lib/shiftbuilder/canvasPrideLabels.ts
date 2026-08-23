@@ -170,8 +170,8 @@ const COVERAGE_CHIP_TONES: Record<string, CoverageChipTone> = {
   "#4b7be8": { surface: "#D7E8FF", ink: "#2449A8", border: "rgba(36, 73, 168, 0.20)" },
   "#a2845e": { surface: "#EDE4D6", ink: "#5C4330", border: "rgba(92, 67, 48, 0.22)" },
   "#9b6a45": { surface: "#EDE4D6", ink: "#5C4330", border: "rgba(92, 67, 48, 0.22)" },
-  "#34c759": { surface: "#D4EEDD", ink: "#176B32", border: "rgba(23, 107, 50, 0.22)" },
-  "#4caf7d": { surface: "#D4EEDD", ink: "#176B32", border: "rgba(23, 107, 50, 0.22)" },
+  "#34c759": { surface: "#E3EBE4", ink: "#3D5344", border: "rgba(61, 83, 68, 0.20)" },
+  "#4caf7d": { surface: "#E3EBE4", ink: "#3D5344", border: "rgba(61, 83, 68, 0.20)" },
 };
 
 export function coverageChipTone(accent: string): CoverageChipTone {

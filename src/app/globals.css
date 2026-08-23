@@ -6684,7 +6684,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 
 /* ==========================================================================
    Calm desk paper — live board cards only.
-   Header deferred to PR #9. Golden print metrics are untouched.
+   Header lives here (PR #9 conflicts). Golden print metrics are untouched.
    ========================================================================== */
 
 .sb-builder-shell.sb-canvas-builder {
@@ -6887,6 +6887,149 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 
 .sb-sheetbuilder-redesign .sb-night-action-pill,
 .sb-sheetbuilder-redesign .sb-night-action-pill__segment {
-  min-width: 58px;
+  min-width: 64px;
   justify-content: center;
+}
+
+/* ==========================================================================
+   Calm desk — measured sit (live zds acceptance).
+   Live canvas only. Does not touch Golden print metrics.
+   ========================================================================== */
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+  padding: 0 10px 12px 12px !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header {
+  min-height: 22px !important;
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  gap: 8px !important;
+  align-items: baseline !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header .label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header .label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header .label {
+  color: #2F2B24 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  line-height: 1.2 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-canvas-slot-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-side-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-slot-header > span:first-child,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-slot-header > div:first-child > span:first-child {
+  color: color-mix(in srgb, var(--card-accent, #8a8378) 52%, #4A4034) !important;
+  filter: saturate(0.62) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card {
+  overflow: hidden !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--chips {
+  position: relative !important;
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  padding: 4px 10px 10px !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip {
+  position: relative !important;
+  inset: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  width: auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-task-scroll,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card-tasks {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent);
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list .sb-list-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-task-scroll .sb-list-row {
+  flex: 0 0 auto;
+  max-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-meta-pills {
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  max-width: 100%;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .ml-auto,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-meta-pills .ml-auto {
+  margin-left: 0 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-pinned-footer {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  box-sizing: border-box;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-pinned-footer__page {
+  justify-self: end;
+  padding-right: 0 !important;
+}
+
+.sb-sheetbuilder-redesign .sb-topbar-actions {
+  gap: 8px;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pills {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pill:not(.sb-night-action-pill--split) {
+  flex: 1 1 0;
+  min-width: 64px;
+  padding-inline: 10px;
+}
+
+.sb-sheetbuilder-redesign .sb-sheetbuilder-roster-alert {
+  top: 1px;
+  right: 1px;
+  min-width: 13px;
+  height: 13px;
+  font-size: 8px;
+  box-shadow: 0 0 0 1px #1e2025;
+}
+
+.sb-sheetbuilder-redesign .sb-month-status-diamond {
+  background: #6B7A6A;
 }

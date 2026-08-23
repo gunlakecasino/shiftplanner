@@ -270,6 +270,46 @@ describe("SheetBuilder calm desk paper", () => {
   });
 });
 
+describe("SheetBuilder calm desk measured sit", () => {
+  it("shares one section-label baseline and letter-spacing for ZONES and AUXILIARY", () => {
+    expect(globalsCss).toContain("Calm desk — measured sit (live zds acceptance)");
+    expect(globalsCss).toContain("padding: 0 10px 12px 12px !important");
+    expect(globalsCss).toMatch(
+      /\.sb-with-aux-sidebar > section:nth-child\(3\) \.sheet-section-header \.label \{[\s\S]*?letter-spacing: 0\.14em !important/,
+    );
+    expect(globalsCss).toContain("color: #2F2B24 !important");
+  });
+
+  it("keeps covering chips inset and fades duty lists instead of mid-glyph clip", () => {
+    const shiftCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+      "utf8",
+    );
+    expect(shiftCard).toContain("sb-desk-card-tasks");
+    expect(shiftCard).not.toContain("mt-auto min-w-0 flex flex-col gap-1");
+    expect(globalsCss).toContain("mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent)");
+    expect(globalsCss).toContain(".assignment-card .sb-coverage-bar");
+    expect(globalsCss).toMatch(
+      /\.assignment-card \.sb-coverage-bar,[\s\S]*?position: relative !important/,
+    );
+  });
+
+  it("keeps RR pills on the left axis and matches footer page padding to the SBS line", () => {
+    expect(rrCard).toContain("sb-rr-meta-pills");
+    expect(rrCard).toContain("flex-col items-start");
+    expect(globalsCss).toContain("sb-rr-card-header .ml-auto");
+    expect(globalsCss).toContain(".sb-builder-pinned-footer {\n  padding-left: 16px !important");
+  });
+
+  it("evens Engine/Draft/Print width and insets the roster badge off the glyph", () => {
+    expect(floatingNav).toContain("minWidth: 64");
+    expect(floatingNav).not.toContain("Bell");
+    expect(globalsCss).toContain("min-width: 64px");
+    expect(globalsCss).toContain(".sb-sheetbuilder-roster-alert {\n  top: 1px;\n  right: 1px");
+    expect(globalsCss).toContain(".sb-month-status-diamond {\n  background: #6B7A6A");
+  });
+});
+
 describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
   it("uses honest gendered RR titles instead of truncated RR 6 WOMEN'S", () => {
     expect(rrCard).toContain("formatCanvasRrSideLabel");

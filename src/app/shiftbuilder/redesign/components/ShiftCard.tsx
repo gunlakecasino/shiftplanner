@@ -24,7 +24,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
   );
 
   const taskBlock = hasTasks ? (
-    <div className="mt-auto min-w-0 flex flex-col gap-1">
+    <div className="sb-desk-card-tasks mt-1 min-w-0 min-h-0 flex-1 flex flex-col gap-1 overflow-hidden">
       {taskContent ?? notes?.map((note, index) => (
         <div key={`${note}-${index}`} className="flex items-start gap-1 min-w-0">
           <span

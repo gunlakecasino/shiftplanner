@@ -150,7 +150,7 @@ function nightActionClusterStyle(): CSSProperties {
 function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
   return {
     height: 28,
-    minWidth: 58,
+    minWidth: 64,
     padding: "0 12px",
     borderRadius: 6,
     border: 0,

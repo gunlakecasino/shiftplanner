@@ -104,7 +104,7 @@ describe("coverageChipTone", () => {
     expect(coverageChipTone("#ff3b30").ink).toBe("#8A1C16");
     expect(coverageChipTone("#C05A98").ink).toBe("#7D3A68");
     expect(coverageChipTone("#007aff").ink).toBe("#004A9E");
-    expect(coverageChipTone("#34c759").ink).toBe("#176B32");
+    expect(coverageChipTone("#34c759").ink).toBe("#3D5344");
     expect(coverageChipTone("#a2845e").surface).not.toBe("#ffffff");
   });
 });
