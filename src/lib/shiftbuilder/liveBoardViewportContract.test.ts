@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -474,11 +474,14 @@ describe("SheetBuilder chrome match (light topbar)", () => {
     );
     expect(chrome).toContain("Assign TM");
     expect(chrome).toContain("font-medium tracking-[0.01em] text-[#94A3B8]");
-    expect(chrome).toContain("text-[9px] font-normal text-[#B0B8C4]");
+    expect(chrome).not.toContain("Drop to assign");
+    expect(chrome).not.toContain("south");
     expect(chrome).not.toContain("font-semibold tracking-[0.02em] text-[#64748B]");
-    expect(shiftCard).toContain("text-[12px] font-medium tracking-[0.01em] text-[#94A3B8]");
+    expect(shiftCard).toContain("<UnassignedInvite");
+    expect(shiftCard).not.toContain("Drop to assign");
     expect(shiftCard).not.toContain("${accentColor}99");
     expect(globalsCss).toContain(".sb-unassigned-invite");
+    expect(globalsCss).toContain("--sb-invite-min-h-zone: 44px");
     expect(globalsCss).toContain("background: transparent !important");
   });
 
@@ -546,12 +549,87 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.269"');
+    expect(version).toContain('"1.270"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
     expect(shiftBuilderClient).toContain("sb-draft-frame");
     expect(globalsCss).toContain(".sb-draft-frame,");
+  });
+});
+
+describe("SheetBuilder P1 empty craft / pad / microstates / cmdk ghosts", () => {
+  const placementPad = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/PlacementPad.tsx"),
+    "utf8",
+  );
+  const tasksPad = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/TasksPad.tsx"),
+    "utf8",
+  );
+  const padMotion = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/padMotion.ts"),
+    "utf8",
+  );
+  const draftPill = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/DraftStatusPill.tsx"),
+    "utf8",
+  );
+  const emptySlotPath = resolve(
+    process.cwd(),
+    "src/app/shiftbuilder/components/state/EmptySlot.tsx",
+  );
+
+  it("uses one quiet Assign TM invite and kills the drop-hint stack", () => {
+    const chrome = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    const primitives = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/builderPrimitives.tsx"),
+      "utf8",
+    );
+    expect(chrome).toContain("Assign TM");
+    expect(chrome).not.toContain("Drop to assign");
+    expect(chrome).not.toContain("south");
+    expect(primitives).not.toContain("UnassignedDropHint");
+    expect(existsSync(emptySlotPath)).toBe(false);
+    expect(globalsCss).toContain("--sb-invite-min-h-zone: 44px");
+    expect(globalsCss).toContain("--sb-invite-min-h-rr: 32px");
+  });
+
+  it("does not ship a command palette or advertise Engine / R in header chrome", () => {
+    expect(shiftBuilderClient).not.toContain("HeaderOverflow");
+    expect(shiftBuilderClient).not.toContain("LazyCommandPalette");
+    expect(shiftBuilderClient).not.toContain("Command Palette");
+    expect(floatingNav).not.toContain("Run Engine");
+    expect(floatingNav).not.toContain('"Engine"');
+    expect(floatingNav).not.toContain(">⌘K<");
+  });
+
+  it("opens pads with shared ≤280ms motion that reverses and honors reduced motion", () => {
+    expect(padMotion).toContain("PAD_MOTION_MS = 280");
+    expect(padMotion).toContain("padFlyoutPresence");
+    expect(padMotion).toContain("padOriginFromHost");
+    expect(placementPad).toContain("padFlyoutPresence");
+    expect(tasksPad).toContain("padFlyoutPresence");
+    expect(tasksPad).not.toContain("scale: 0.96");
+    expect(tasksPad).not.toContain("transition-all");
+    expect(placementPad).not.toContain("transition-all");
+  });
+
+  it("gives Draft / Print / day-strip focus, pressed, and apply/print busy", () => {
+    expect(floatingNav).toContain("printBusy");
+    expect(floatingNav).toContain("draftApplyBusy");
+    expect(floatingNav).toContain("Printing…");
+    expect(floatingNav).toContain("Applying…");
+    expect(draftPill).toContain("Applying…");
+    expect(draftPill).toContain("aria-busy");
+    expect(globalsCss).toContain(".sb-day-strip-btn:focus-visible");
+    expect(globalsCss).toContain(".sb-night-action-pill:focus-visible");
+    expect(globalsCss).toContain('.sb-night-action-pill[aria-busy="true"]');
+    expect(shiftBuilderClient).toContain("setDraftApplyBusy");
+    expect(shiftBuilderClient).toContain("await confirmDialog(");
   });
 });
 
@@ -588,7 +666,7 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
       resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
       "utf8",
     );
-    expect(shiftCard).toContain("Assign TM");
+    expect(shiftCard).toContain("<UnassignedInvite");
     expect(shiftCard).not.toContain("ASSIGN TM");
     expect(shiftCard).not.toContain("grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]");
     expect(shiftCard).not.toContain("whitespace-nowrap");

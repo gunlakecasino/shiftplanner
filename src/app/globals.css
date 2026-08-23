@@ -891,8 +891,9 @@ body {
   --sb-name-size-rr: 18px;
   --sb-name-size-aux: 18px;
   --sb-task-size: 9px;
-  --sb-invite-min-h-zone: 110px;
-  --sb-invite-min-h-rr: 72px;
+  --sb-invite-min-h-zone: 44px;
+  --sb-invite-min-h-rr: 32px;
+  --sb-invite-min-h-aux: 28px;
   --sb-grid-gap: clamp(6px, 0.9vw, 14px);
 
   width: 100%;
@@ -2681,14 +2682,14 @@ body.sb-roster-open .sb-stage-host {
   opacity: 0;
 }
 .sb-draft-frame-active::after {
-  animation: sb-draft-breathe 3.2s ease-in-out infinite;
+  animation: sb-draft-breathe 3.2s var(--sb-spring-gentle) infinite;
 }
 @keyframes sb-draft-breathe {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 0.95; }
 }
 .sb-draft-pill-dot {
-  animation: sb-draft-breathe 3.2s ease-in-out infinite;
+  animation: sb-draft-breathe 3.2s var(--sb-spring-gentle) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .sb-draft-frame-active::after,
@@ -5523,9 +5524,9 @@ button,
   border-radius: 14px;
   background: transparent;
   transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    transform 140ms ease;
+    background-color var(--sb-motion-instant) var(--sb-spring-snappy),
+    color var(--sb-motion-instant) var(--sb-spring-snappy),
+    transform var(--sb-motion-instant) var(--sb-spring-snappy);
 }
 
 .sb-day-strip-btn--inactive:hover {
@@ -5536,8 +5537,21 @@ button,
   transform: scale(0.96);
 }
 
+.sb-day-strip-btn:focus-visible,
+.sb-day-strip-btn--inactive:focus-visible,
+.sb-day-strip-btn--active:focus-visible {
+  outline: 2px solid #94A3B8;
+  outline-offset: 2px;
+}
+
 .sb-day-strip-btn--active {
   margin-inline: 2px;
+}
+
+.sb-day-strip-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
 }
 
 .sb-run-day-btn {
@@ -5558,9 +5572,57 @@ button,
   overflow: hidden;
 }
 
-.sb-night-action-pill:disabled {
+.sb-night-action-pill:disabled,
+.sb-night-action-pill__segment:disabled,
+.sb-night-action-pill__apply:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.sb-night-action-pill:focus-visible,
+.sb-night-action-pill__segment:focus-visible,
+.sb-night-action-pill__apply:focus-visible {
+  outline: 2px solid #94A3B8;
+  outline-offset: 2px;
+}
+
+.sb-night-action-pill:active:not(:disabled),
+.sb-night-action-pill__segment:active:not(:disabled),
+.sb-night-action-pill__apply:active:not(:disabled) {
+  transform: scale(0.97);
+  background: #EEF1F6;
+}
+
+.sb-night-action-pill[aria-busy="true"],
+.sb-night-action-pill__apply[aria-busy="true"] {
+  opacity: 0.72;
+  cursor: progress;
+}
+
+.sb-draft-pill-btn {
+  transition:
+    background-color var(--sb-motion-instant) var(--sb-spring-snappy),
+    color var(--sb-motion-instant) var(--sb-spring-snappy),
+    opacity var(--sb-motion-instant) var(--sb-spring-snappy),
+    transform var(--sb-motion-instant) var(--sb-spring-snappy);
+}
+
+.sb-draft-pill-btn:focus-visible {
+  outline: 2px solid #94A3B8;
+  outline-offset: 2px;
+}
+
+.sb-draft-pill-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.sb-draft-pill-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sb-draft-pill-btn[aria-busy="true"] {
+  cursor: progress;
 }
 
 .sb-topbar-notification-btn {
@@ -7017,11 +7079,17 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-unassigned-invite {
   align-items: flex-start !important;
   justify-content: center;
-  min-height: 0 !important;
+  min-height: var(--sb-invite-min-h-zone);
   max-height: none !important;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-unassigned-invite[data-invite-size="rr"] {
+  min-height: var(--sb-invite-min-h-rr);
+}
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-unassigned-invite[data-invite-size="aux"] {
+  min-height: var(--sb-invite-min-h-aux);
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-block,
@@ -7376,8 +7444,15 @@ body.sb-tablet-dock-open .sb-canvas-veil--active {
 }
 
 .sb-sheetbuilder-redesign .sb-night-action-pill:hover:not(:disabled),
-.sb-sheetbuilder-redesign .sb-night-action-pill__segment:hover:not(:disabled) {
+.sb-sheetbuilder-redesign .sb-night-action-pill__segment:hover:not(:disabled),
+.sb-sheetbuilder-redesign .sb-night-action-pill__apply:hover:not(:disabled) {
   background: #FFFFFF;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pill:active:not(:disabled),
+.sb-sheetbuilder-redesign .sb-night-action-pill__segment:active:not(:disabled),
+.sb-sheetbuilder-redesign .sb-night-action-pill__apply:active:not(:disabled) {
+  background: #EEF1F6;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-unassigned-invite,
@@ -7386,7 +7461,10 @@ body.sb-tablet-dock-open .sb-canvas-veil--active {
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  outline: none !important;
+}
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-unassigned-invite:focus-visible {
+  outline: 2px solid #94A3B8;
+  outline-offset: 2px;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-unassigned-invite span {

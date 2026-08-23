@@ -258,7 +258,7 @@ export function dbToUi(slot_key: string, slot_type: string, rr_side: string | nu
 }
 
 /**
- * UI slot key → human-readable label for the Command Palette header and any
+ * UI slot key → human-readable label for pads, pickers, and any
  * other display surface that needs a friendly slot name.
  *
  * Examples:

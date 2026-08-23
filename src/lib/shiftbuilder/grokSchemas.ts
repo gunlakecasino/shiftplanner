@@ -12,7 +12,7 @@
 import { z } from "zod";
 
 // ========================================================
-// Structured Suggestions (Command Palette "Ask Grok")
+// Structured Suggestions (operator "Ask Grok" — no palette UI)
 // ========================================================
 
 export const GrokActionSchema = z.object({

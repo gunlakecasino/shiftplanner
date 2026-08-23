@@ -170,7 +170,7 @@ export function WeekHealthTracker({
                 key={index}
                 type="button"
                 onClick={() => onSelectDay?.(index)}
-                className={`flex flex-row items-baseline gap-1 rounded-xl transition-all active:scale-[0.98] ${
+                className={`flex flex-row items-baseline gap-1 rounded-xl transition-transform transition-opacity active:scale-[0.98] ${
                   isChromeSlot || isHeaderInline ? "px-2 py-1" : "px-2.5 py-1.5"
                 }`}
                 style={{
@@ -221,7 +221,7 @@ export function WeekHealthTracker({
               key={index}
               type="button"
               onClick={() => onSelectDay?.(index)}
-              className={`flex items-center gap-0.5 rounded-xl px-1 py-0.5 min-w-[28px] transition-all active:scale-[0.985] ${
+              className={`flex items-center gap-0.5 rounded-xl px-1 py-0.5 min-w-[28px] transition-transform transition-opacity active:scale-[0.985] ${
                 isSelected ? "ring-1 ring-white/40" : ""
               }`}
               style={{

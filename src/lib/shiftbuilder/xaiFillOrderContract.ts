@@ -223,7 +223,7 @@ export function getXaiSwapHardRules(): string {
 
 - **swap** = bilateral exchange ONLY. Both slots must already have a TM assigned tonight (fromSlot AND toSlot occupied).
 - NEVER suggest swapping, moving, sliding, or placing someone into an **empty**, **open**, **unassigned**, or **vacant** slot.
-- Empty / unassigned slot → use **assign** (Command Palette) or **rankedAssignees** / fitSummary on the placement pad — \`swapRecommendations\` MUST be [].
+- Empty / unassigned slot → use **assign** or **rankedAssignees** / fitSummary on the placement pad — \`swapRecommendations\` MUST be [].
 - Deterministic rotation "Swap lanes" use ↔ between two named occupants. Refine those; do not invent one-sided moves into gaps.
 - "Move X to open Z4" or "swap into empty WRR6" is forbidden — say "assign X to Z4" instead if Z4 is empty.
 - needs_swap verdict requires a real bilateral lane (two people, two filled slots), not a move into a gap.

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Bold,
   Italic,
@@ -17,7 +17,8 @@ import {
   Circle,
   Ban,
 } from "lucide-react";
-import { premiumSpring, premiumTap } from "@/lib/premiumSpring";
+import { premiumTap } from "@/lib/premiumSpring";
+import { padDockPresence, padFlyoutPresence, padOriginFromHost, queryPadHostRect } from "./padMotion";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { usePortalPlacementStyle, type PlacementPadAnchor } from "./PlacementPad";
 import { TASK_COLOR_SPHERES } from "./TaskRow";
@@ -414,7 +415,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
 
   const toolBtn = (active: boolean) =>
     [
-      "sb-interactive flex h-7 w-7 items-center justify-center rounded-lg border transition-all active:scale-[0.96]",
+      "sb-interactive flex h-7 w-7 items-center justify-center rounded-lg border transition-transform transition-opacity active:scale-[0.96]",
       active
         ? "border-[#007AFF]/35 bg-[#007AFF]/[0.12] text-[#007AFF]"
         : "border-transparent bg-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700",
@@ -473,7 +474,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                 key={t.id}
                 type="button"
                 onClick={() => selectExistingTask(t.id)}
-                className={`sb-interactive shrink-0 max-w-[120px] truncate text-[10px] px-2 py-1 rounded-full font-semibold transition-all ${
+                className={`sb-interactive shrink-0 max-w-[120px] truncate text-[10px] px-2 py-1 rounded-full font-semibold transition-transform transition-opacity ${
                   active
                     ? "bg-[#007AFF] text-white"
                     : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200/90"
@@ -686,13 +687,19 @@ const TasksPad: React.FC<TasksPadProps> = ({
     </div>
   );
 
+  const flyoutMotion = padFlyoutPresence(
+    reducedMotion,
+    padOriginFromHost(queryPadHostRect(hostId), portalStyle, 312, 420),
+    anchor,
+  );
+
   const content = (
     <motion.div
       key="tasks-pad"
-      initial={reducedMotion || isDock ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 4 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={reducedMotion || isDock ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: -2 }}
-      transition={premiumSpring}
+      initial={isDock ? false : flyoutMotion.initial}
+      animate={isDock ? { opacity: 1 } : flyoutMotion.animate}
+      exit={isDock ? { opacity: 0 } : flyoutMotion.exit}
+      transition={isDock ? flyoutMotion.transition : flyoutMotion.transition}
       className={`sb-tasks-pad flex flex-col ${
         isDock
           ? "placement-dock-inner h-full min-h-0 flex-1 overflow-hidden rounded-none border-0 shadow-none bg-transparent"
@@ -721,15 +728,17 @@ const TasksPad: React.FC<TasksPadProps> = ({
   // Tablet dock shell — full-height inspector (same chrome as PlacementDock).
   if (isDock) {
     if (typeof document === "undefined") return null;
+    const dockMotion = padDockPresence(reducedMotion);
     return createPortal(
       <motion.aside
         className="placement-dock no-print"
         role="dialog"
         aria-label={`Tasks dock — ${slotMeta.label}`}
         data-tasks-dock
-        initial={reducedMotion ? false : { x: 24, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={premiumSpring}
+        initial={dockMotion.initial}
+        animate={dockMotion.animate}
+        exit={dockMotion.exit}
+        transition={dockMotion.transition}
       >
         <div className="placement-dock-header flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-4 py-3 bg-white/95 dark:bg-black/40">
           <div
@@ -769,38 +778,21 @@ const TasksPad: React.FC<TasksPadProps> = ({
   if (!usePortal) {
     if (typeof document === "undefined") return null;
     return createPortal(
-      <AnimatePresence>
-        <div
-          key="overlay"
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/25 backdrop-blur-[2px]"
-          style={{ WebkitBackdropFilter: "blur(2px)" }}
-          onClick={requestClose}
-          onPointerDown={(e) => {
-            if (e.target === e.currentTarget) requestClose();
-          }}
-        >
-          {content}
-        </div>
-      </AnimatePresence>,
-      document.body,
-    );
-  }
-
-  return createPortal(
-    <AnimatePresence>
       <div
         key="overlay"
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/15"
         onClick={requestClose}
         onPointerDown={(e) => {
           if (e.target === e.currentTarget) requestClose();
         }}
-        className="fixed inset-0 z-[205] bg-black/15"
-        aria-hidden
-      />
-      {content}
-    </AnimatePresence>,
-    document.body,
-  );
+      >
+        {content}
+      </div>,
+      document.body,
+    );
+  }
+
+  return createPortal(content, document.body);
 };
 
 export default TasksPad;

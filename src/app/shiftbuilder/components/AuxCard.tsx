@@ -498,7 +498,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             isDuplicate={isDuplicate}
             otherSlotsForTm={otherSlotsForTm}
             inviteSize="aux"
-            emptyPresentation="label"
             criticalRepeat={isCriticalRepeatFit(fitChip)}
             placementTrail={placementTrail}
             placementTrailMatchSlotKey={def.key}

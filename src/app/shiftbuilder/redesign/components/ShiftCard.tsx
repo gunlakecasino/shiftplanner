@@ -1,6 +1,7 @@
 import type { MouseEvent } from "react";
 import { ZONE_COLORS } from "../tokens";
 import type { ShiftCardProps } from "../types";
+import { UnassignedInvite } from "../../components/assignmentCardChrome";
 
 export function ShiftCard({ zone, label, name, secondName, notes, unassigned, coverage, projectPills, nameMeta, taskContent, footer, noChip, onClick }: ShiftCardProps) {
   const colors = ZONE_COLORS[zone] || ZONE_COLORS[1];
@@ -64,12 +65,13 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
               </div>
             ) : (
               <div className="flex-1 min-h-0 flex flex-col">
-                <div className="flex-1 flex flex-col items-start justify-center min-h-0">
-                  <span className="text-[12px] font-medium tracking-[0.01em] text-[#94A3B8]">
-                    Assign TM
-                  </span>
-                  <span className="no-print text-[9px] font-normal mt-0.5 text-[#B0B8C4]">Drop to assign</span>
-                </div>
+                <UnassignedInvite
+                  size="zone"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onClick?.();
+                  }}
+                />
                 {taskBlock}
               </div>
             )}
