@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-08-23 — Grok Build — SheetBuilder PR B (night actions seen)
+
+**Task**: After PR A quiet chrome, surface the remaining night actions. No auth / PIN / RLS. No engine or Golden print edits. No production Apply.
+
+**Changes**:
+- `FloatingNav` shows three velvet-glass pills in the top bar: **Engine** (optimize blue), **Draft / Apply** (gold; Draft toggle when empty), **Print** (quiet). Reuses `velvetGlassPillStyle` — no third palette.
+- Apply on the Draft pill calls `onSaveAllDraft` only. `DraftStatusPill` still uses the same `applyDraft()` path. No second mutation.
+- More menu is maintenance: Clear / Refresh / official-flag (Publish Day) / Graves Schedule. Print-preview toggle stays so builder vs print-preview still works. Night actions and task-copy leftovers left the menu.
+- Live canvas reads as paper on a desk: workspace/desk stays `#e9eaef`; fluid viewport + workspace are `--sb-paper` with a quiet border and drop shadow. Golden 1056×816 / `goldenPrint.css` untouched.
+- iPad landscape (~1024) density: night pills stay labeled; notification + topbar publish chip hide so Engine / Draft / Print remain seen without More.
+
+**Tests**: PR B chrome contract in `liveBoardViewportContract.test.ts`. `pnpm test` + tsc for the slice.
+
+**Sacred held**: Golden 1056×816, Draft gold frame after Run Engine, Engine confirm copy, `runNightEngine`, one Apply path, no silent official-flag.
+
+**Status**: PR B night actions seen. Stacked on PR A (`cursor/sheetbuilder-chrome-slim-9329`).
+
+---
+
 ## 2026-08-23 — Grok Build — SheetBuilder PR A (chrome slim + heartbeat)
 
 **Task**: Hide retired grave chrome on `/sheetbuilder`. Rewrite agent bootstrap. No auth / PIN / RLS. No engine or print edits. No production Apply.

@@ -65,14 +65,10 @@ describe("SheetBuilder chrome slim (PR A)", () => {
     expect(floatingNav).not.toContain("<strong>Projects</strong>");
   });
 
-  it("More menu keeps the canvas loop and drops retired chrome", () => {
-    expect(floatingNav).toContain("Run Day Placements");
-    expect(floatingNav).toContain("Apply to Live");
-    expect(floatingNav).toContain("Discard Draft");
+  it("More menu drops retired chrome", () => {
     expect(floatingNav).toContain("Graves Schedule");
     expect(floatingNav).toContain("Refresh Day");
     expect(floatingNav).toContain("Clear Day");
-    expect(floatingNav).toContain("View Print Preview");
     expect(floatingNav).not.toContain(">Optimize Week<");
     expect(floatingNav).not.toContain("Grave Cover Guide");
     expect(floatingNav).not.toContain("Weekly View");
@@ -99,5 +95,54 @@ describe("SheetBuilder chrome slim (PR A)", () => {
     expect(middleware).toContain('url.pathname.startsWith("/sheetbuilder/dev")');
     expect(middleware).toContain('url.pathname === "/sheetbuilder/ai"');
     expect(middleware).toContain('url.pathname === "/shiftbuilder/ai"');
+  });
+});
+
+describe("SheetBuilder night actions (PR B)", () => {
+  it("surfaces Engine, Draft, and Print as velvet glass pills", () => {
+    expect(floatingNav).toContain("velvetGlassPillStyle");
+    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).toContain("sb-night-action-pill--draft");
+    expect(floatingNav).toContain("sb-night-action-pill--print");
+    expect(floatingNav).toContain(">Engine<");
+    expect(floatingNav).toContain(">Draft<");
+    expect(floatingNav).toContain(">Print<");
+    expect(floatingNav).toContain("aria-label=\"Night actions\"");
+  });
+
+  it("routes Apply through onSaveAllDraft only", () => {
+    expect(floatingNav).toContain("onClick={onSaveAllDraft}");
+    expect(floatingNav).not.toContain("onClick={() => {\n                      onSaveAllDraft();");
+    expect(floatingNav).not.toContain("void applyDraft");
+    expect(floatingNav).not.toContain("applyDraft(");
+  });
+
+  it("keeps More as maintenance: Clear / Refresh / official-flag / Graves Schedule", () => {
+    expect(floatingNav).toContain("Maintenance");
+    expect(floatingNav).toContain("Clear Day");
+    expect(floatingNav).toContain("Refresh Day");
+    expect(floatingNav).toContain("Graves Schedule");
+    expect(floatingNav).toContain("Publish Day");
+    expect(floatingNav).toContain("View Print Preview");
+    expect(floatingNav).not.toContain("Run Day Placements");
+    expect(floatingNav).not.toContain("Apply to Live");
+    expect(floatingNav).not.toContain("Discard Draft");
+    expect(floatingNav).not.toContain("Copy Tasks from Prior Week");
+    expect(floatingNav).not.toContain("Apply Overlap Tasks");
+  });
+
+  it("does not invent a third accent palette", () => {
+    expect(floatingNav).toContain("var(--sb-optimize-ink)");
+    expect(floatingNav).toContain("var(--sb-gold-ink)");
+    expect(floatingNav).not.toContain("--sb-night-accent");
+    expect(floatingNav).not.toContain("#339CFF");
+  });
+
+  it("desk chrome gives the live artboard a paper sheet without touching Golden print", () => {
+    expect(globalsCss).toContain(".sb-night-action-pill");
+    expect(globalsCss).toContain("0 10px 28px -10px rgba(15, 23, 42, 0.22)");
+    expect(globalsCss).toContain(".sb-sheetbuilder-redesign .sb-builder-fluid-viewport");
+    expect(globalsCss).toContain("var(--sb-paper, #ffffff)");
+    expect(globalsCss).not.toMatch(/\.print-artboard\s*\{[^}]*sb-paper-desk/);
   });
 });
