@@ -158,12 +158,23 @@ export async function buildNightSecondaryBundle(
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  let callOffsRes = callOffsFirst;
+  let callOffsRes: {
+    data: Array<{ tm_id?: string | null; reason?: string | null; restore_seat?: unknown }> | null;
+    error: { message: string } | null;
+  } = callOffsFirst;
   if (callOffsRes.error && /restore_seat/i.test(callOffsRes.error.message)) {
-    callOffsRes = await supabase
+    const fallback = await supabase
       .from("call_offs")
       .select("tm_id, reason")
       .eq("night_date", isoDate);
+    callOffsRes = {
+      data: fallback.data as Array<{
+        tm_id?: string | null;
+        reason?: string | null;
+        restore_seat?: unknown;
+      }> | null,
+      error: fallback.error,
+    };
   }
   if (callOffsRes.error) {
     console.warn(

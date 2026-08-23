@@ -2077,21 +2077,22 @@ export async function unmarkTmCallOffServer(params: {
   const client = adminClient();
   const { tmId, date, nightId } = params;
 
-  let existing = await client
+  const existing = await client
     .from("call_offs")
     .select("restore_seat")
     .eq("tm_id", tmId)
     .eq("night_date", date)
     .maybeSingle();
-  if (existing.error && /restore_seat/i.test(existing.error.message)) {
-    existing = { data: null, error: null } as typeof existing;
-  }
-  if (existing.error) {
+  const missingSeatColumn =
+    !!existing.error && /restore_seat/i.test(existing.error.message);
+  if (existing.error && !missingSeatColumn) {
     throw new Error(`unmarkTmCallOff: read failed: ${existing.error.message}`);
   }
-  const restoreSeat = parseRestoreSeat(
-    (existing.data as { restore_seat?: unknown } | null)?.restore_seat,
-  );
+  const restoreSeat = missingSeatColumn
+    ? null
+    : parseRestoreSeat(
+        (existing.data as { restore_seat?: unknown } | null)?.restore_seat,
+      );
   const seatLabel = restoreSeatLabel(restoreSeat) ?? undefined;
 
   const { error } = await client

@@ -14,7 +14,7 @@ export const MARKED_OFF_RAIL_LABEL = "Marked Off";
 export type RestoreSeatSnapshot = {
   slotKey: string;
   slotType: string;
-  rrSide: string | null;
+  rrSide: "mens" | "womens" | null;
   isLocked: boolean;
   uiKey: string;
 };
