@@ -1,5 +1,5 @@
 /**
- * Overlap standing-pool helpers for Projects → Defaults (PR5).
+ * Overlap standing-pool helpers for Settings → Card Defaults.
  *
  * Seats within AM or PM are fungible; standing tasks are a **band pool**.
  * - Read: union any `overlap_am_*` / `overlap_pm_*` (and bare `overlap_am` / `overlap_pm`).

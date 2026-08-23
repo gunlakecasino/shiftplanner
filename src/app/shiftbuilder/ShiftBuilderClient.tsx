@@ -254,7 +254,6 @@ import {
 } from "./components/placementPadHelpers";
 import { DragFitContext, computeDragFitMap } from "@/lib/shiftbuilder/dragFit";
 import DraftStatusPill from "./components/DraftStatusPill";
-import { useBoardTaskSummary } from "./hooks/useBoardTaskSummary";
 import {
   allWeekPlacementHistoriesCached,
   ensureWeekPlacementHistories,
@@ -689,13 +688,6 @@ function AuthedShiftBuilder() {
 
   // Back-compat aliases
   const currentNight = shiftData.currentNight;
-
-  // Board task awareness ("brain behind the board"): open Ops Tasks due by the
-  // viewed night → floating pill + per-card badges + placement-pad note.
-  useBoardTaskSummary(
-    formatLocalDateISO(selectedDay.date),
-    permissions?.canAccessTasks ?? false,
-  );
 
   React.useLayoutEffect(() => {
     ensureOpsStatusBar();

@@ -14,9 +14,6 @@ import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
-import { CardTaskBadge } from "./CardTaskBadge";
-import { CardProjectPills } from "./CardProjectPills";
-import { rrDbSlotComposite } from "@/lib/shiftbuilder/slotCatalog";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
@@ -108,8 +105,6 @@ const RRSide: React.FC<{
   ) => void;
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
-  showProjectPills?: boolean;
-  projectSlotKey?: string;
 }> = ({
   slotKey,
   assignment,
@@ -132,8 +127,6 @@ const RRSide: React.FC<{
   onSwapCoverageSides,
   fitChip,
   placementTrail,
-  showProjectPills = false,
-  projectSlotKey,
 }) => {
   const a = assignment || {};
   // Draft-aware TM identity, mirroring ZoneCard/OverlapSlot: in draft mode a
@@ -203,15 +196,6 @@ const RRSide: React.FC<{
           criticalRepeat={isCriticalRepeatFit(fitChip)}
           placementTrail={placementTrail}
           placementTrailMatchSlotKey={slotKey}
-          projectPills={
-            showProjectPills && hasTM ? (
-              <CardProjectPills
-                tmId={slotTm.tmId}
-                slotKey={projectSlotKey}
-                className="mb-1"
-              />
-            ) : undefined
-          }
           onSwapCoverageSides={
             showDigitalAssists &&
             coveredBy.length === 2 &&
@@ -310,7 +294,7 @@ function RRSideShell({
 }) {
   return (
     <div
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col flex-1 rounded-2xl h-full min-h-0 ${isEmpty ? "empty sb-card-empty" : ""} ${showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""}`}
+      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col flex-1 rounded-2xl h-full min-h-0 ${isEmpty ? "empty sb-card-empty" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -471,11 +455,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         coverageTasks={wCoverageTasks}
         slotKey={wKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
-        taskBadge={
-          showTaskBadge ? (
-            <CardTaskBadge tmId={wA.tmId} slotKey={rrDbSlotComposite(def.num, "womens")} />
-          ) : null
-        }
         body={(
           <RRSide
             slotKey={wKey}
@@ -485,8 +464,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             coveredBy={wCoveredBy}
             fitChip={fitChipW}
             placementTrail={placementTrailW}
-            showProjectPills={showTaskBadge}
-            projectSlotKey={rrDbSlotComposite(def.num, "womens")}
             {...sideProps}
           />
         )}
@@ -504,11 +481,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         coverageTasks={mCoverageTasks}
         slotKey={mKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
-        taskBadge={
-          showTaskBadge ? (
-            <CardTaskBadge tmId={mA.tmId} slotKey={rrDbSlotComposite(def.num, "mens")} />
-          ) : null
-        }
         body={(
           <RRSide
             slotKey={mKey}
@@ -518,8 +490,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             coveredBy={mCoveredBy}
             fitChip={fitChipM}
             placementTrail={placementTrailM}
-            showProjectPills={showTaskBadge}
-            projectSlotKey={rrDbSlotComposite(def.num, "mens")}
             {...sideProps}
           />
         )}

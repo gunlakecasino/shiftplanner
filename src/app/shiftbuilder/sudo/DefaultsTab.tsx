@@ -7,8 +7,8 @@
  * Sections: Zones | Restrooms | AUX | AM Overlaps | PM Overlaps.
  * Each row: accent strip, icon + label, BreakBadge (click to cycle + auto-save).
  *
- * Standing task pools for OL live in Projects → Defaults (AM/PM Overlap Pool)
- * and are applied via Apply Overlap Tasks — not from this tab.
+ * Standing OL task pools are edited in the Standing tasks section below
+ * and applied via Apply Overlap Tasks.
  *
  * There is no per-night push or override; changes become the effective defaults.
  */
@@ -22,7 +22,7 @@ import { SudoTabLoading } from "./SudoGlass";
 import { useConfirm } from "../components/ConfirmDialog";
 // Break-default helpers are dynamically imported inside the handlers that use them.
 // This prevents the heavy data.ts module from being part of the top-level static import graph of Sudo tabs (Turbopack HMR fix).
-// NOTE: task-chip defaults were retired by the cutover — they now live in Projects → Defaults.
+// Standing task chips live in OverlapPoolDefaultsPanel (ops_work_items).
 import type { SlotDefault } from "@/lib/shiftbuilder/data";
 import {
   ZONE_DEFS,
@@ -43,6 +43,7 @@ import {
   graveBreakGroupSlotDefaults,
 } from "@/lib/shiftbuilder/graveBreakGroupDefaults";
 import { sudoIosClasses, sudoPushButtonClasses } from "./sudoIosTheme";
+import { OverlapPoolDefaultsPanel } from "./OverlapPoolDefaultsPanel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Slot descriptor — flattened list of all manageable slots
@@ -133,21 +134,21 @@ function buildSlotDefs(): SlotDef[] {
   }
 
   // AM Overlaps — single break-default row (stored under overlap_am_0).
-  // Standing task chips for the band pool are configured in Projects → Defaults.
+  // Standing task chips for the band pool are in Standing tasks below.
   out.push({
     compositeKey: `overlap_am_0|`,
     dbKey: `overlap_am_0`,
     dbType: "overlap",
     rrSide: "",
     label: "AM Overlaps",
-    sublabel: "Break default · tasks in Projects → Defaults",
+    sublabel: "Break default · standing tasks below",
     icon: "◆",
     accent: "#059669",
     section: "am-overlap",
   });
 
   // PM Overlaps — per-card break defaults (seats still need break groups).
-  // Task standing pool is Projects → Defaults → PM Overlap Pool (overlap_pm_0).
+  // Task standing pool is the PM Overlap Pool in Standing tasks below.
   for (let i = 0; i < 6; i++) {
     const uiKey = `OL-PM-${i}`;
     const dbKey = `overlap_pm_${i}`;
@@ -347,7 +348,7 @@ export function DefaultsTab({ isDark = false }: DefaultsTabProps) {
             Break group default (click to cycle: 1 → 2 → 3 → OL → –)
           </span>
           <span>· Defaults apply automatically to every night</span>
-          <span>· Standing OL tasks: Projects → Defaults (Apply Overlap for staffed seats)</span>
+          <span>· Standing OL tasks: edit below, then Apply Overlap for staffed seats</span>
         </div>
       </div>
 
@@ -388,6 +389,7 @@ export function DefaultsTab({ isDark = false }: DefaultsTabProps) {
             );
           })
         )}
+        <OverlapPoolDefaultsPanel canManage />
       </div>
     </div>
   );
@@ -446,7 +448,7 @@ function SlotRow({
         <span className={cn("text-[8px]", ios.legend)}>break</span>
       </div>
 
-      {/* Task chips retired — default tasks now live in Projects → Defaults. */}
+      {/* Task chips live in Standing tasks below. */}
       <div className="flex-1 min-w-0 mt-0.5" />
     </div>
   );

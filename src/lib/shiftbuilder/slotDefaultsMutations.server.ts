@@ -9,7 +9,7 @@ function adminClient() {
 }
 
 const SLOT_DEFAULT_TASKS_RETIRED =
-  "slot_default_tasks was dropped by the defaults cutover — default task chips are now Ops Tasks (ops_work_items), managed in Projects → Defaults.";
+  "slot_default_tasks was dropped by the defaults cutover — default task chips are now Ops Tasks (ops_work_items), managed in Settings → Card Defaults.";
 
 /** @deprecated Retired by the cutover — slot_default_tasks no longer exists. */
 export async function addSlotDefaultTaskServer(_params: {

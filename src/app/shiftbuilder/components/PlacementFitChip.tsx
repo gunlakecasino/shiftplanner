@@ -217,7 +217,6 @@ export function PlacementFitChip({ fit, xaiFit, compact = false }: PlacementFitC
         exit={{ opacity: 0, scale: 0.85 }}
         transition={premiumSpring}
       >
-        {isXai && <span className="opacity-60 mr-px" style={{ fontSize: "6.5px", letterSpacing: "0" }}>✧</span>}
         {displayText}
       </motion.span>
     </AnimatePresence>

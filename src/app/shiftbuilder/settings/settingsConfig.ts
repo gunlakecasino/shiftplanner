@@ -40,7 +40,7 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     shortLabel: "Cards",
     section: "operations",
     icon: Layers,
-    description: "Default tasks and markers pushed to nights",
+    description: "Break groups and standing OL / slot task defaults",
   },
   {
     id: "engine",

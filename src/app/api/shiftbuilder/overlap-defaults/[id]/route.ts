@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
-import { requireTasksAccess } from "../../_lib/requireTasksAccess.server";
+import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import { rowToWorkItem, WORK_ITEM_COLUMNS } from "@/lib/tasks/mapping";
 
 type RouteParams = { params: Promise<{ id: string }> };
+
+async function requireDefaultsAccess(request: NextRequest) {
+  const session = await requireOpsPermission(request, "canAccessSudo");
+  if (!session.ok) {
+    return { ok: false as const, response: NextResponse.json({ error: session.error }, { status: session.status }) };
+  }
+  const admin = createAdminClientSafe();
+  if (!admin) {
+    return { ok: false as const, response: NextResponse.json({ error: "Service role not configured" }, { status: 500 }) };
+  }
+  return { ok: true as const, admin, actor: session.actor };
+}
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (!isSameOriginOpsRequest(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  const access = await requireTasksAccess(request, "manage");
+  const access = await requireDefaultsAccess(request);
   if (!access.ok) return access.response;
   const { admin, actor } = access;
 
@@ -24,7 +37,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (typeof body.taskColor === "string" || body.taskColor === null) patch.task_color = body.taskColor;
   if (typeof body.active === "boolean") patch.active = body.active;
   if (typeof body.isCoverage === "boolean") patch.is_coverage = body.isCoverage;
-  // Phase D: priority + day-of-week + fine rank for OL standing pools
   if (typeof body.priority === "string") {
     const p = body.priority.trim().toLowerCase();
     if (["low", "normal", "high", "urgent"].includes(p)) patch.priority = p;
@@ -67,20 +79,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     .single();
 
   if (error) {
-    console.error("[projects/defaults] update error:", error);
+    console.error("[overlap-defaults] update error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({ default: rowToWorkItem(data) });
 }
 
-/** Hard-delete a slot-default (it's a template, not tracked history). */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (!isSameOriginOpsRequest(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await params;
-  const access = await requireTasksAccess(request, "manage");
+  const access = await requireDefaultsAccess(request);
   if (!access.ok) return access.response;
 
   const { error } = await access.admin
@@ -90,7 +101,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     .eq("is_slot_default", true);
 
   if (error) {
-    console.error("[projects/defaults] delete error:", error);
+    console.error("[overlap-defaults] delete error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

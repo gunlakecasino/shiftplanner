@@ -4,6 +4,35 @@
 
 ---
 
+## 2026-08-23 — Grok — SheetBuilder de-gimmick + Projects kill
+
+**Task**: Raise the refinement bar on `/sheetbuilder`. Quiet Apple-professional ops tool — paper is the product, chrome is a desk. Kill the unused Projects product. Delete dead Timefold UI (not `engine/optimizer.ts`). Engine stays buried. No Golden print / engine rewrite / production Apply. TasksPad + `night_slot_tasks` stay.
+
+**Gimmicks removed (canvas + chrome)**:
+- Fake zone status orbs (`ZONE_STATUS`) and decorative kebab icons on live zone cards
+- Tinted zone-label pills; labels are Inter Tight type in zone color only
+- Empty-card frost/gradient wash and dashed gold borders — flat white paper
+- Optimize-blue hover rings on RR/Aux, optimize-blue draft frames (now gold)
+- Day-strip neon bloom, glowing today diamond, fit-dot halo, + rotate hover
+- Sparkles / icons on Engine·Draft·Print — one quiet type cluster
+- Projects pills, task-count badges, Timefold overlay/sheet, Request Board modal
+- Projects routes/API/pages; `/sheetbuilder/projects` and `/shiftbuilder/projects` redirect to canvas
+
+**Kept / moved**:
+- Standing OL defaults live in Settings → Card Defaults (`OverlapPoolDefaultsPanel` + `/api/shiftbuilder/overlap-defaults`)
+- Apply Overlap Tasks still reads `ops_work_items`
+- Golden print “Projects” scribble column unchanged
+- TasksPad / `night_slot_tasks` unchanged
+- Engine confirm + `runNightEngine` unchanged; Apply still `onSaveAllDraft` only
+
+**Tests**: desk-refine / Projects / de-gimmick contracts in `liveBoardViewportContract.test.ts`; settings + postPin + tablet (Reports portrait media dropped — Reports was out of scope).
+
+**Sacred held**: Golden 1056×816, `engine/optimizer.ts`, Draft→Apply, no production Apply, PIN/RLS.
+
+**Status**: Version 1.252. Rebased onto `origin/main` after Marked Off Restore #6 (`c6476c7`). RosterRail Marked Off copy from #6 kept.
+
+---
+
 ## 2026-08-23 — Grok Build — SheetBuilder Call-off Restore honesty / Marked Off
 
 **Task**: Restore was returning the TM to tonight's roster only while copy could be read as seat restore. Brian also named the language flaw: UI says Mark unavailable, path writes `call_offs`, rail said Called Off. Sole user, no auth/PIN/RLS. No engine/Golden/production Apply.

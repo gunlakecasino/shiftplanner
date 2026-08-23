@@ -27,17 +27,17 @@ export interface ShiftBuilderPermissions {
    * stored as utility_ops_super + this flag. Prefer isPublishedOnlyViewer() in app code.
    */
   canEditPublishedOnly: boolean;
-  /** /shiftbuilder/projects — view projects, tasks, and their own assigned work. */
+  /** Reserved bit — Projects app retired. Standing OL tasks live in Card Defaults. */
   canAccessTasks: boolean;
   /** Create/edit/assign/delete any Ops Task or Project; complete tasks assigned to others. */
   canManageTasks: boolean;
   /** Mark tasks assigned to *you* complete without full canManageTasks. */
   canCompleteOwnTasks: boolean;
   /**
-   * Submit task/project *requests* from the main board (owner-scoped intake).
+   * Submit task *requests* from the main board (owner-scoped intake).
    * A narrow door, independent of canAccessTasks: the requester can create and
    * manage only the items they themselves created; requests land pending a
-   * manager's approval. Does not grant the full /shiftbuilder/projects surface.
+   * manager's approval. The Projects app is retired.
    */
   canRequestTasks: boolean;
 }

@@ -75,9 +75,9 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   },
   {
     key: "canAccessTasks",
-    label: "Access Projects & Tasks",
+    label: "Access Tasks (reserved)",
     group: "Viewing",
-    description: "Open /shiftbuilder/projects — view projects, tasks, and assigned work",
+    description: "Reserved — Projects app retired; Card Defaults owns standing OL tasks",
   },
   {
     key: "canManageTasks",

@@ -32,7 +32,6 @@ import {
 } from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { CardTaskZone } from "./CardTaskZone";
-import { CardProjectPills } from "./CardProjectPills";
 import { ShiftCard as PackageShiftCard } from "../redesign/components/ShiftCard";
 
 export interface ZoneCardProps {
@@ -324,14 +323,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         label={def.label}
         name={assignmentState.kind === "covered" ? "" : displayName || "Unassigned"}
         notes={packageNotes}
-        projectPills={
-          showTaskBadge && hasTM ? (
-            <CardProjectPills
-              tmId={slotTm.tmId}
-              slotKey={`zone_${zoneNumber}`}
-            />
-          ) : undefined
-        }
         nameMeta={
           hasTM ? (
             <TmPlacementTrail labels={placementTrail} matchSlotKey={def.key} />
