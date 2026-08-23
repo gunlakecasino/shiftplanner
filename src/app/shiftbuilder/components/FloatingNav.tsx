@@ -25,7 +25,6 @@ import {
   Eraser,
   CalendarDays,
   RefreshCw,
-  Bell,
   ClipboardList,
 } from "lucide-react";
 
@@ -151,7 +150,8 @@ function nightActionClusterStyle(): CSSProperties {
 function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
   return {
     height: 28,
-    padding: "0 10px",
+    minWidth: 58,
+    padding: "0 12px",
     borderRadius: 6,
     border: 0,
     background: "transparent",
@@ -162,6 +162,7 @@ function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
     fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
     cursor: "pointer",
     whiteSpace: "nowrap",
@@ -258,7 +259,6 @@ export default function FloatingNav(props: FloatingNavProps) {
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const selectedDay = days.find((d) => d.id === selectedDayId);
-  const activeColor = "#22c55e";
   const chromeText = "#f4f4f5";
   const mutedChromeText = "rgba(244,244,245,0.66)";
   const chromeDivider = "rgba(255,255,255,0.12)";
@@ -270,7 +270,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     `Roster · ${rosterPlacedCount}/${rosterScheduledCount} placed` +
     (rosterOpenCount > 0 ? ` · ${rosterOpenCount} open` : "") +
     (rosterCalledOffCount > 0 ? ` · ${rosterCalledOffCount} marked off` : "");
-  const notificationCount = rosterCalledOffCount;
 
   const firstDay = days[0]?.date || new Date();
   const monthLabel = `${MONTHS[firstDay.getMonth()]} ${firstDay.getFullYear()}`;
@@ -525,33 +524,33 @@ export default function FloatingNav(props: FloatingNavProps) {
                     key={day.id}
                     type="button"
                     onClick={() => onDaySelect(day.id, day.date || new Date())}
-                    className="sb-day-strip-btn sb-day-strip-btn--active flex flex-col items-center justify-center shrink-0 transition-transform active:scale-95"
+                    className="sb-day-strip-btn sb-day-strip-btn--active flex flex-col items-center justify-center shrink-0"
                     style={{
-                      background: activeColor,
-                      borderRadius: 999,
-                      width: 42,
-                      height: 42,
-                      gap: 0,
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.16)",
+                      background: "transparent",
+                      borderRadius: 0,
+                      width: 36,
+                      height: 44,
+                      gap: 3,
+                      boxShadow: "none",
+                      borderBottom: "1px solid rgba(244,244,245,0.88)",
                     }}
                   >
                     <span
                       style={{
-	                        fontSize: 8,
-	                        fontWeight: 900,
-                        color: "rgba(255,255,255,0.76)",
+                        fontSize: 9,
+                        fontWeight: 850,
+                        color: "rgba(244,244,245,0.72)",
                         letterSpacing: "0.08em",
                         lineHeight: 1,
-                        marginBottom: 2,
                       }}
                     >
                       {day.shortLabel || SHORT_MONTHS[day.date?.getMonth() ?? 0]}
                     </span>
                     <span
                       style={{
-	                        fontSize: 18,
-	                        fontWeight: 950,
-                        color: "#fff",
+                        fontSize: 14,
+                        fontWeight: 850,
+                        color: "#f4f4f5",
                         lineHeight: 1,
                         letterSpacing: "0",
                       }}
@@ -700,30 +699,6 @@ export default function FloatingNav(props: FloatingNavProps) {
             )}
           </div>
 
-          <button
-            type="button"
-            className="sb-topbar-notification-btn icon-btn sb-interactive flex items-center justify-center rounded-full"
-            style={{
-              color: mutedChromeText,
-              background: "rgba(255,255,255,0.04)",
-            }}
-            title={
-              notificationCount > 0
-                ? `${notificationCount} roster notifications`
-                : "No roster notifications"
-            }
-            aria-label={
-              notificationCount > 0
-                ? `${notificationCount} roster notifications`
-                : "No roster notifications"
-            }
-          >
-            <Bell size={15} strokeWidth={2} />
-            {notificationCount > 0 && (
-              <span className="sb-topbar-notification-badge">{notificationCount}</span>
-            )}
-          </button>
-
           <div className="relative" ref={rosterMenuRef}>
             <button
               type="button"
@@ -760,51 +735,21 @@ export default function FloatingNav(props: FloatingNavProps) {
 
           </div>
 
-          {onViewChange && (
-            <button
-              type="button"
-              className="icon-btn sb-interactive flex items-center justify-center w-7 h-7 rounded-full"
-              style={{
-                color: currentView === "breaks" ? "#fff" : mutedChromeText,
-                background:
-                  currentView === "breaks"
-                    ? `${activeColor}66`
-                    : undefined,
-              }}
-              onClick={() => onViewChange(currentView === "breaks" ? "deployment" : "breaks")}
-              title={currentView === "breaks" ? "Deployment board" : "Overlap sheet"}
-              aria-label={currentView === "breaks" ? "Back to deployment board" : "Open overlap sheet"}
-              aria-pressed={currentView === "breaks"}
-            >
-              <Layers size={14} strokeWidth={1.8} />
-            </button>
-          )}
-
           {showPublishControls ? (
             <button
               type="button"
-              className="sb-topbar-publish icon-btn sb-interactive flex items-center gap-1.5 rounded-full px-2.5 py-1"
-              style={{ fontSize: 10, fontWeight: 700, color: chromeText, letterSpacing: "0.06em" }}
+              className="sb-topbar-publish icon-btn sb-interactive flex items-center rounded-full px-2 py-1"
+              style={{ fontSize: 11, fontWeight: 550, color: mutedChromeText, letterSpacing: "0.01em" }}
               onClick={onToggleDayPublished}
               disabled={!canPublishDay || publishDayBusy}
               aria-busy={publishDayBusy}
               title={isDayPublished ? "Unpublish this day" : "Publish this day"}
             >
-              <span
-                className="live-dot shrink-0"
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: isDayPublished ? "#22c55e" : "#f59e0b",
-                  display: "inline-block",
-                }}
-              />
-              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
+              {isDayPublished ? "Published" : "Unpublished"}
             </button>
           ) : (
             <span
-              className="sb-topbar-publish flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide opacity-80"
+              className="sb-topbar-publish flex items-center rounded-full px-2 py-1 text-[11px] font-medium tracking-normal opacity-80"
               style={{ color: mutedChromeText }}
               title={
                 isDayPublished
@@ -812,17 +757,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   : "Unpublished — floor viewers cannot open this night"
               }
             >
-              <span
-                className="shrink-0"
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: isDayPublished ? "#22c55e" : "#f59e0b",
-                  display: "inline-block",
-                }}
-              />
-              {isDayPublished ? "PUBLISHED" : "UNPUBLISHED"}
+              {isDayPublished ? "Published" : "Unpublished"}
             </span>
           )}
 
@@ -915,6 +850,19 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {onViewChange && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onViewChange(currentView === "breaks" ? "deployment" : "breaks");
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Layers size={14} />
+                    {currentView === "breaks" ? "Deployment board" : "Overlap sheet"}
+                  </button>
+                )}
                 <div
                   className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
                 >

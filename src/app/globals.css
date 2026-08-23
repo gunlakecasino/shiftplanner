@@ -6829,3 +6829,64 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3)::after {
   background: linear-gradient(180deg, rgba(244, 239, 230, 0) 0%, rgba(244, 239, 230, 0.92) 70%, #F4EFE6 100%);
 }
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header {
+  min-height: 22px;
+  margin: 0 0 8px;
+  padding: 0;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header .label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header .label {
+  color: #3F3A32 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  line-height: 1.2 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip {
+  position: relative !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  overflow: hidden;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list .sb-list-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-task-scroll .sb-list-row {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-meta-pills {
+  justify-content: flex-start;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-pinned-footer {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-pinned-footer__page {
+  justify-self: end;
+  text-align: right;
+  padding-right: 0;
+}
+
+.sb-sheetbuilder-redesign .sb-day-strip-btn--active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pill,
+.sb-sheetbuilder-redesign .sb-night-action-pill__segment {
+  min-width: 58px;
+  justify-content: center;
+}

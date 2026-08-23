@@ -132,14 +132,6 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
         disabled={submitting}
         autoComplete="off"
       />
-      <div className="sb-auth-slots" aria-hidden="true">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className={cn("sb-auth-slot", i < value.length && "sb-auth-slot--filled")}
-          />
-        ))}
-      </div>
     </div>
   );
 
@@ -149,28 +141,17 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={descId}
-      className="sb-modal-enter sb-auth-card sb-auth-card--wide sb-auth-card--setup"
-      style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+      className="sb-auth-card sb-auth-card--desk sb-auth-card--wide"
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <div className="sb-auth-accent" aria-hidden="true" />
-
-      <div className="relative px-7 pt-7 pb-5">
-        <div className="flex items-start gap-4">
-          <div className="sb-auth-icon" aria-hidden="true">
-            <span className="ms" style={{ fontSize: 22 }}>
-              pin
-            </span>
-          </div>
-          <div className="min-w-0 pt-0.5">
-            <h2 id={titleId} className="sb-auth-title">
-              Set your personal PIN
-            </h2>
-            <p id={descId} className="sb-auth-subtitle mt-1.5">
-              Welcome, {operatorName}. Re-enter your temporary PIN, then choose a private
-              6-digit ops PIN. Avoid sequences like 123456.
-            </p>
-          </div>
-        </div>
+      <div className="relative px-7 pt-7 pb-4">
+        <h2 id={titleId} className="sb-auth-title">
+          Set your personal PIN
+        </h2>
+        <p id={descId} className="sb-auth-subtitle mt-1.5">
+          Welcome, {operatorName}. Re-enter your temporary PIN, then choose a private
+          6-digit ops PIN. Avoid sequences like 123456.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="relative px-7 pb-7 space-y-4">

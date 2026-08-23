@@ -306,7 +306,7 @@ function RRSideShell({
       <CardAccentStripe color={color} />
 
       {/* Refined header to match ZoneCard exactly for visual uniformity */}
-      <div className="sb-card-slot-header sb-rr-card-header px-3 pt-2 flex items-start gap-1.5">
+      <div className="sb-card-slot-header sb-rr-card-header px-3 pt-2 flex flex-col items-start gap-1">
         <span
           className="sb-rr-side-label sb-canvas-slot-label text-[10px] font-bold tracking-[0.04em] min-w-0"
           style={{ color: cardAccentInk(color) }}
@@ -314,9 +314,8 @@ function RRSideShell({
         >
           {sideLabel}
         </span>
-        <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+        <div className="sb-rr-meta-pills flex items-center gap-1 flex-wrap min-w-0">
           {taskBadge}
-          {/* Status badge - dynamic (via PlacementFitChip). Omit for covered + unassigned. */}
           {!isCovered && !isEmpty && (
             <PlacementFitChip fit={fitChip} compact />
           )}

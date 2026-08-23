@@ -254,15 +254,19 @@ describe("SheetBuilder calm desk paper", () => {
     expect(globalsCss).toContain("Calm desk paper — live board cards only");
     expect(globalsCss).toContain("--sb-card-paper: #FBF7F0");
     expect(globalsCss).toContain("sb-coverage-chip");
-    expect(globalsCss).toContain("Header deferred to PR #9");
     expect(globalsCss).not.toMatch(/\.print-artboard\s*\{[^}]*sb-card-paper/);
   });
 
-  it("does not rewrite FloatingNav night actions in this pass", () => {
+  it("quiets the header: velvet night actions, no dead bell, Published as text", () => {
     expect(floatingNav).toContain("velvetGlassPillStyle");
     expect(floatingNav).toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
+    expect(floatingNav).not.toContain("Bell");
+    expect(floatingNav).not.toContain("sb-topbar-notification-btn");
+    expect(floatingNav).toContain('"Published"');
+    expect(floatingNav).not.toContain('"PUBLISHED"');
+    expect(floatingNav).toContain("Overlap sheet");
   });
 });
 

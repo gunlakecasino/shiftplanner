@@ -50,8 +50,6 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [errorFlash, setErrorFlash] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -79,7 +77,6 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
 
     if (result.success && result.user) {
       if (!result.requiresPinChange) {
-        setSuccess(true);
         const permissions = getEffectivePermissions(result.user);
         const destination = postPinDestination(pathname, permissions);
         if (destination !== pathname) {
@@ -89,27 +86,12 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
       }
     } else {
       setError(result.error || "Incorrect PIN. Try again.");
-      const el = inputRef.current;
-      if (el) {
-        el.classList.add("animate-shake");
-        setTimeout(() => el.classList.remove("animate-shake"), 420);
-      }
-      setErrorFlash(true);
-      setTimeout(() => setErrorFlash(false), 550);
       setPin("");
       inputRef.current?.focus();
     }
     setIsSubmitting(false);
   }, [isComplete, submitting, login, pin, onAuthenticated, pathname, router]);
 
-  // handlePinChange schedules handleSubmit 60ms out, but handleSubmit is
-  // recreated every render (useCallback deps include `pin`/`isComplete`).
-  // The setTimeout closure would otherwise capture *this* render's
-  // handleSubmit — bound to the pin/isComplete from *before* the just-typed
-  // digit takes effect — so its guard (`!isComplete`) always failed and the
-  // auto-submit silently no-opped. Routing through a ref that's kept current
-  // means the timeout always invokes the latest handleSubmit once React has
-  // committed the new pin.
   const handleSubmitRef = useRef(handleSubmit);
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
@@ -134,70 +116,44 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={descId}
-      className="sb-modal-enter sb-auth-card sb-auth-card--access"
-      style={{ fontFamily: "var(--font-atkinson), var(--font-geist-sans)" }}
+      className="sb-auth-card sb-auth-card--desk"
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <div className="sb-auth-accent" aria-hidden="true" />
-
-      <div className="relative px-7 pt-7 pb-5">
-        <div className="flex items-start gap-4">
-          <div className="sb-auth-icon" aria-hidden="true">
-            <span className="ms" style={{ fontSize: 22 }}>
-              lock
-            </span>
-          </div>
-          <div className="min-w-0 pt-0.5">
-            <h2 id={titleId} className="sb-auth-title">
-              SheetBuilder Access
-            </h2>
-            <p id={descId} className="sb-auth-subtitle mt-1.5">
-              Enter your 6-digit ops PIN
-            </p>
-          </div>
-        </div>
+      <div className="relative px-7 pt-7 pb-4">
+        <h2 id={titleId} className="sb-auth-title">
+          SheetBuilder
+        </h2>
+        <p id={descId} className="sb-auth-subtitle mt-1">
+          Ops PIN
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="relative px-7 pb-7 space-y-4">
         <div>
           <label htmlFor={inputId} className="sb-auth-label">
-            6-Digit PIN
+            6-digit PIN
           </label>
-          <div className="sb-auth-input-wrap">
-            <input
-              ref={inputRef}
-              id={inputId}
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={pin}
-              onChange={(e) => handlePinChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && isComplete) {
-                  void handleSubmit(e);
-                }
-              }}
-              className={cn("sb-auth-input", error && "sb-auth-input--error")}
-              placeholder="••••••"
-              disabled={submitting || success}
-              autoComplete="one-time-code"
-              aria-invalid={!!error}
-              aria-describedby={error ? "pin-gate-error" : undefined}
-            />
-          </div>
-          <div className="sb-auth-slots" aria-hidden="true">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                style={{ "--sb-slot-i": i } as React.CSSProperties}
-                className={cn(
-                  "sb-auth-slot",
-                  i < pin.length && "sb-auth-slot--filled",
-                  errorFlash && "sb-auth-slot--error-flash",
-                )}
-              />
-            ))}
-          </div>
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            value={pin}
+            onChange={(e) => handlePinChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && isComplete) {
+                void handleSubmit(e);
+              }
+            }}
+            className={cn("sb-auth-input", error && "sb-auth-input--error")}
+            placeholder="••••••"
+            disabled={submitting}
+            autoComplete="one-time-code"
+            aria-invalid={!!error}
+            aria-describedby={error ? "pin-gate-error" : undefined}
+          />
         </div>
 
         {error ? (
@@ -209,33 +165,15 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
         <div className="flex items-center gap-3 pt-1">
           <button
             type="submit"
-            disabled={!isComplete || submitting || success}
+            disabled={!isComplete || submitting}
             className={cn(
               "sb-interactive sb-auth-primary sb-auth-primary--grow",
-              success
-                ? "sb-auth-primary--success"
-                : isComplete && !submitting
-                  ? "sb-auth-primary--active"
-                  : "sb-auth-primary--disabled",
+              isComplete && !submitting
+                ? "sb-auth-primary--active"
+                : "sb-auth-primary--disabled",
             )}
           >
-            {success ? (
-              <span key="success" className="sb-auth-primary__icon-pop inline-flex items-center gap-2">
-                <span className="ms" style={{ fontSize: 16 }} aria-hidden="true">
-                  check_circle
-                </span>
-                SIGNED IN
-              </span>
-            ) : submitting ? (
-              <BuilderBusyLabel>VERIFYING</BuilderBusyLabel>
-            ) : (
-              <>
-                <span className="ms" style={{ fontSize: 16 }} aria-hidden="true">
-                  login
-                </span>
-                ENTER
-              </>
-            )}
+            {submitting ? <BuilderBusyLabel>Checking</BuilderBusyLabel> : "Enter"}
           </button>
 
           <button
@@ -245,12 +183,9 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
               setError(null);
               inputRef.current?.focus();
             }}
-            disabled={submitting || success}
-            className="sb-interactive sb-auth-secondary disabled:opacity-45 inline-flex items-center gap-1.5"
+            disabled={submitting}
+            className="sb-interactive sb-auth-secondary disabled:opacity-45"
           >
-            <span className="ms" style={{ fontSize: 14 }} aria-hidden="true">
-              backspace
-            </span>
             Clear
           </button>
         </div>

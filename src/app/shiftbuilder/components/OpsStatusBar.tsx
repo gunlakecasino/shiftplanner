@@ -102,7 +102,7 @@ function readTelemetry(): {
   const latencyText = lat != null ? `${lat}ms` : "—";
 
   const rtColor =
-    rt === "LIVE" ? "#22c55e" : rt === "SYNCING" ? "#eab308" : "#ef4444";
+    rt === "LIVE" ? "#6B7A6A" : rt === "SYNCING" ? "#8A8378" : "#8A1C16";
 
   let ai30Tokens = 0;
   let ai30Cost = 0;
@@ -180,7 +180,7 @@ export function updateOpsStatusBarContent(): void {
   if (rtLabelEl) rtLabelEl.textContent = pollLabel(t.rt);
   if (dotEl) {
     dotEl.style.background = t.rtColor;
-    dotEl.style.boxShadow = `0 0 4px ${t.rtColor}`;
+    dotEl.style.boxShadow = "none";
   }
 
   pill.title = `Board poll (~20s): ${pollLabel(t.rt)} · day switch ${t.perfText} · server ${t.latencyText} · xAI 30d ${t.ai30Tokens} tok (~$${t.ai30Cost.toFixed(4)}, ${t.ai30Calls} calls) · session ${t.sessionTokens} tok (~$${t.sessionCost.toFixed(4)}, ${t.sessionCalls} calls)`;
