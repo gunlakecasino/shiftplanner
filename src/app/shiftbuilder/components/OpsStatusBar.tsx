@@ -34,14 +34,14 @@ function getPillShellStyles(): string {
     right: max(10px, env(safe-area-inset-right, 0px)) !important;
     z-index: ${OPS_PILL_Z} !important;
     font-family: var(--font-ui, var(--font-inter-tight), system-ui, sans-serif) !important;
-    font-size: 10px !important;
-    line-height: 1.25 !important;
-    background: #FFFFFF !important;
-    color: #64748B !important;
-    border: 1px solid #E6EAF0 !important;
-    border-radius: 999px !important;
+    font-size: 8px !important;
+    line-height: 1.2 !important;
+    background: transparent !important;
+    color: #94A3B8 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
     pointer-events: auto !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+    box-shadow: none !important;
     user-select: none !important;
     display: flex !important;
     flex-direction: row !important;
@@ -55,12 +55,12 @@ function buildOpsStatusBarShell(pill: HTMLDivElement): void {
   pill.innerHTML = `
     <div
       style="
-        display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
-        font:inherit;line-height:1.3;white-space:nowrap;
+        display:inline-flex;align-items:center;gap:4px;padding:1px 4px;
+        font:inherit;line-height:1.2;white-space:nowrap;
       "
     >
-      <span style="display:inline-flex;align-items:center;gap:3px;font-weight:600">
-        <span data-ops-rt-dot style="display:inline-block;width:6px;height:6px;border-radius:999px;background:#eab308"></span>
+      <span style="display:inline-flex;align-items:center;gap:4px;font-weight:500;letter-spacing:0.04em">
+        <span data-ops-rt-dot style="display:inline-block;width:4px;height:4px;border-radius:999px;background:#94A3B8"></span>
         <span data-ops-rt-label>SYNCING</span>
       </span>
     </div>
@@ -100,7 +100,7 @@ function readTelemetry(): {
   const latencyText = lat != null ? `${lat}ms` : "—";
 
   const rtColor =
-    rt === "LIVE" ? "#6B7A6A" : rt === "SYNCING" ? "#8A8378" : "#8A1C16";
+    rt === "LIVE" ? "#8A9A8C" : rt === "SYNCING" ? "#A8B2C1" : "#B09190";
 
   let ai30Tokens = 0;
   let ai30Cost = 0;

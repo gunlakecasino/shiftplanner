@@ -124,13 +124,13 @@ describe("SheetBuilder desk refine + Projects retirement", () => {
     expect(shiftBuilderClient).not.toContain("useTimefoldOptimize");
   });
 
-  it("keeps Engine / Draft / Print as one quiet velvet cluster without sparkle chrome", () => {
+  it("keeps Draft / Print as one quiet velvet cluster without sparkle chrome", () => {
     expect(floatingNav).toContain("nightActionClusterStyle");
     expect(floatingNav).not.toContain("velvetGlassPillStyle");
-    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
-    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).not.toContain("Sparkles");
@@ -171,14 +171,14 @@ describe("SheetBuilder desk refine + Projects retirement", () => {
 });
 
 describe("SheetBuilder night actions (PR B)", () => {
-  it("surfaces Engine, Draft, and Print as velvet glass pills", () => {
+  it("surfaces Draft and Print as velvet glass pills", () => {
     expect(floatingNav).toContain("nightActionClusterStyle");
     expect(floatingNav).not.toContain("velvetGlassPillStyle");
-    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
-    expect(floatingNav).toContain("Running…");
-    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).not.toContain("Running…");
+    expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).toContain("aria-label=\"Night actions\"");
@@ -206,7 +206,7 @@ describe("SheetBuilder night actions (PR B)", () => {
   });
 
   it("does not invent a third accent palette", () => {
-    expect(floatingNav).toContain("var(--sb-optimize-ink)");
+    expect(floatingNav).not.toContain("var(--sb-optimize-ink)");
     expect(floatingNav).toContain("var(--sb-gold-ink)");
     expect(floatingNav).not.toContain("--sb-night-accent");
     expect(floatingNav).not.toContain("#339CFF");
@@ -297,8 +297,8 @@ describe("SheetBuilder modern lightweight desk", () => {
     expect(floatingNav).toContain("nightActionClusterStyle");
     expect(floatingNav).not.toContain("velvetGlassPillStyle");
     expect(floatingNav).not.toContain("backdropFilter");
-    expect(floatingNav).toContain('background: "#1E1F24"');
-    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).toContain('background: "#FFFFFF"');
+    expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).not.toContain("Bell");
@@ -340,7 +340,7 @@ describe("SheetBuilder modern lightweight desk measured sit", () => {
     expect(globalsCss).toContain(".sb-builder-pinned-footer {\n  padding-left: 16px !important");
   });
 
-  it("evens Engine/Draft/Print width and insets the roster badge off the glyph", () => {
+  it("evens Draft/Print width and insets the roster badge off the glyph", () => {
     expect(floatingNav).toContain("minWidth: 68");
     expect(floatingNav).not.toContain("Bell");
     expect(globalsCss).toContain("min-width: 68px");
@@ -418,10 +418,79 @@ describe("SheetBuilder placement pad modern desk", () => {
       /\.sb-sheetbuilder-roster-popover \{[\s\S]*?background: #FFFFFF/,
     );
     expect(globalsCss).not.toContain("background: #292936");
-    expect(opsStatus).toContain("background: #FFFFFF !important");
-    expect(opsStatus).toContain("border-radius: 999px !important");
+    expect(opsStatus).toContain("background: transparent !important");
+    expect(opsStatus).toContain("color: #94A3B8 !important");
     expect(opsStatus).not.toContain("background: #1E1F24 !important");
     expect(opsStatus).not.toContain("color: #C8C4BA !important");
+  });
+});
+
+describe("SheetBuilder chrome match (light topbar)", () => {
+  const opsStatus = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/OpsStatusBar.tsx"),
+    "utf8",
+  );
+
+  it("makes the topbar the same light product as the cool desk", () => {
+    expect(floatingNav).toContain('background: "#FFFFFF"');
+    expect(floatingNav).toContain('borderBottom: "1px solid #E6EAF0"');
+    expect(floatingNav).toContain('chromeText = "#0F172A"');
+    expect(floatingNav).toContain('mutedChromeText = "#64748B"');
+    expect(floatingNav).toContain('background: "#F4F6FA"');
+    expect(floatingNav).not.toContain('background: "#1E1F24"');
+    expect(floatingNav).not.toContain("bg-[#1E1F24]");
+    expect(floatingNav).not.toContain("bg-[#1d1d20]");
+    expect(floatingNav).not.toContain("backdropFilter");
+    expect(globalsCss).toContain("SheetBuilder chrome match — light topbar");
+    expect(globalsCss).toContain(".sb-sheetbuilder-redesign .sb-sheetbuilder-topbar {\n  background: #FFFFFF !important;");
+    expect(globalsCss).not.toContain("#F4EFE6");
+    expect(globalsCss).not.toContain("#FBF7F0");
+    expect(globalsCss).not.toContain("#E8E0D2");
+  });
+
+  it("keeps Draft / Print, date strip, Published, and account chrome", () => {
+    expect(floatingNav).toContain("nightActionClusterStyle");
+    expect(floatingNav).not.toContain("sb-night-action-pill--engine");
+    expect(floatingNav).toContain("sb-night-action-pill--draft");
+    expect(floatingNav).toContain("sb-night-action-pill--print");
+    expect(globalsCss).toContain(".sb-night-action-pill:not(.sb-night-action-pill--split) {\n  flex: 0 0 auto;");
+    expect(floatingNav).toContain("sb-topbar-day-strip");
+    expect(floatingNav).toContain("sb-day-strip-btn--active");
+    expect(floatingNav).toContain('borderBottom: "2px solid #0F172A"');
+    expect(floatingNav).toContain('"Published"');
+    expect(floatingNav).toContain("{userInitials}");
+    expect(floatingNav).toContain("Account menu");
+    expect(floatingNav).toContain("More actions");
+  });
+
+  it("softens empty Assign TM invites without touching filled-card type", () => {
+    const chrome = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    const shiftCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+      "utf8",
+    );
+    expect(chrome).toContain("Assign TM");
+    expect(chrome).toContain("font-medium tracking-[0.01em] text-[#94A3B8]");
+    expect(chrome).toContain("text-[9px] font-normal text-[#B0B8C4]");
+    expect(chrome).not.toContain("font-semibold tracking-[0.02em] text-[#64748B]");
+    expect(shiftCard).toContain("text-[12px] font-medium tracking-[0.01em] text-[#94A3B8]");
+    expect(shiftCard).not.toContain("${accentColor}99");
+    expect(globalsCss).toContain(".sb-unassigned-invite");
+    expect(globalsCss).toContain("background: transparent !important");
+  });
+
+  it("mutes SYNCED footer chrome so it does not compete with the board", () => {
+    expect(opsStatus).toContain("font-size: 8px !important");
+    expect(opsStatus).toContain("background: transparent !important");
+    expect(opsStatus).toContain("color: #94A3B8 !important");
+    expect(opsStatus).toContain("font-weight:500");
+    expect(opsStatus).toContain("width:4px;height:4px");
+    expect(opsStatus).not.toContain("background: #FFFFFF !important");
+    expect(opsStatus).not.toContain("border: 1px solid #E6EAF0 !important");
+    expect(globalsCss).toContain("#ops-status-bar");
   });
 });
 

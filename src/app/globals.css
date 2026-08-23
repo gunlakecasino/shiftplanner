@@ -3812,7 +3812,7 @@ button,
 /* ==========================================================================
    SheetBuilder redesign shell — first production pass
    Keeps the existing board/engine internals intact while moving the operator
-   experience toward the supplied SheetBuilder package: dark command bar,
+   experience toward the supplied SheetBuilder package: quiet light command bar,
    pale digital workspace, compact board frame, and right utility rail.
    ========================================================================== */
 
@@ -3829,11 +3829,11 @@ button,
 }
 
 .sb-sheetbuilder-redesign .sb-sheetbuilder-topbar .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(15, 23, 42, 0.05) !important;
 }
 
 .sb-sheetbuilder-redesign .sb-sheetbuilder-topbar .icon-btn:active {
-  background: rgba(255, 255, 255, 0.16) !important;
+  background: rgba(15, 23, 42, 0.08) !important;
 }
 
 .sb-sheetbuilder-redesign .sb-stage-host {
@@ -5415,7 +5415,7 @@ button,
 .sb-sheetbuilder-launch-trigger:hover,
 .sb-sheetbuilder-launch-trigger[aria-expanded="true"] {
   border-color: transparent;
-  background: rgba(255, 255, 255, 0.08);
+  background: #F4F6FA;
   box-shadow: none;
 }
 
@@ -5449,7 +5449,7 @@ button,
 }
 
 .sb-day-strip-btn--inactive:hover {
-  background: rgba(255, 255, 255, 0.055);
+  background: #F4F6FA;
 }
 
 .sb-day-strip-btn--inactive:active {
@@ -5528,18 +5528,18 @@ button,
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: rgba(244, 244, 245, 0.9);
+  color: #334155;
   padding: 6px 8px;
   text-decoration: none;
 }
 
 .sb-sheetbuilder-launchpad-card:hover {
-  background: rgba(255, 255, 255, 0.055);
-  color: #fff;
+  background: #F4F6FA;
+  color: #0F172A;
 }
 
 .sb-sheetbuilder-launchpad-card:active {
-  background: rgba(255, 255, 255, 0.08);
+  background: #EEF1F6;
 }
 
 .sb-sheetbuilder-launchpad-card-icon {
@@ -5550,7 +5550,7 @@ button,
   justify-content: center;
   border: 0;
   background: transparent;
-  color: rgba(244, 244, 245, 0.72);
+  color: #64748B;
   box-shadow: none;
 }
 
@@ -5558,7 +5558,7 @@ button,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #fff;
+  color: #0F172A;
   font-size: 13px;
   font-weight: 550;
   letter-spacing: 0;
@@ -5570,12 +5570,12 @@ button,
   min-width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #E6EAF0;
   box-shadow: none;
 }
 
 .sb-sheetbuilder-roster-toggle[aria-pressed="true"] {
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: #C5CDD8;
   box-shadow: none;
 }
 
@@ -5594,7 +5594,7 @@ button,
   font-size: 9px;
   font-weight: 950;
   line-height: 1;
-  box-shadow: 0 0 0 2px #1E1F24;
+  box-shadow: 0 0 0 2px #FFFFFF;
 }
 
 .sb-sheetbuilder-roster-popover {
@@ -6443,7 +6443,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
     touch-action: manipulation;
   }
 
-  /* Night-action pills stay labeled and compact so Engine / Draft / Print
+  /* Night-action pills stay labeled and compact so Draft / Print
      remain visible at iPad landscape (~1024) without opening More. */
   .sb-sheetbuilder-topbar .sb-night-action-pill,
   .sb-sheetbuilder-topbar .sb-night-action-pill__segment,
@@ -6868,8 +6868,8 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 
 /* ==========================================================================
    Modern lightweight desk — live board cards only.
-   Header lives here (PR #9 conflicts). Golden print metrics are untouched.
-   Zone / restroom color rails stay on the uniform code — do not recolor.
+   Light topbar chrome is in the chrome-match pass below. Golden print metrics
+   are untouched. Zone / restroom color rails stay on the uniform code.
    ========================================================================== */
 
 .sb-builder-shell.sb-canvas-builder {
@@ -6939,6 +6939,9 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   justify-content: center;
   min-height: 0 !important;
   max-height: none !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-block,
@@ -7222,10 +7225,12 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign .sb-night-action-pills {
   display: inline-flex;
   align-items: stretch;
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .sb-sheetbuilder-redesign .sb-night-action-pill:not(.sb-night-action-pill--split) {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: 68px;
   padding-inline: 10px;
 }
@@ -7236,7 +7241,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   min-width: 13px;
   height: 13px;
   font-size: 8px;
-  box-shadow: 0 0 0 1px #1e2025;
+  box-shadow: 0 0 0 1px #FFFFFF;
 }
 
 .sb-sheetbuilder-redesign .sb-month-status-diamond {
@@ -7269,4 +7274,82 @@ body.sb-tablet-dock-open .builder-workspace,
 body.sb-tablet-dock-open .sb-canvas-veil,
 body.sb-tablet-dock-open .sb-canvas-veil--active {
   background: #F4F6FA !important;
+}
+
+/* ==========================================================================
+   SheetBuilder chrome match — light topbar + quiet invites + muted sync.
+   Live canvas chrome only. Cards / rails / Golden print stay as they are.
+   White / #F4F6FA enterprise chrome. No dusty cream. No glass blur.
+   ========================================================================== */
+
+.sb-sheetbuilder-redesign .sb-sheetbuilder-topbar {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #E6EAF0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pills {
+  background: #F4F6FA;
+  border: 1px solid #E6EAF0;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pill:hover:not(:disabled),
+.sb-sheetbuilder-redesign .sb-night-action-pill__segment:hover:not(:disabled) {
+  background: #FFFFFF;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-unassigned-invite,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card.empty .sb-unassigned-invite,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card.sb-card-empty .sb-unassigned-invite {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-unassigned-invite span {
+  font-weight: 500;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-unassigned-hint {
+  font-size: 9px;
+  font-weight: 400;
+  color: #B0B8C4;
+  opacity: 0.78;
+}
+
+.sb-help-fab {
+  top: calc(env(safe-area-inset-top, 0px) + 11px);
+  width: 32px;
+  height: 32px;
+  border: 1px solid #E6EAF0;
+  background: #FFFFFF;
+  color: #64748B;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.sb-help-fab:hover {
+  transform: none;
+  background: #F4F6FA;
+  box-shadow: none;
+}
+
+#ops-status-bar {
+  font-size: 8px !important;
+  background: transparent !important;
+  color: #94A3B8 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-pinned-footer {
+  border-top-color: #E6EAF0;
+  background: transparent;
+  color: #94A3B8;
 }
