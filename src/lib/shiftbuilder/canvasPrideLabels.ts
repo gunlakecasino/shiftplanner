@@ -190,6 +190,8 @@ export function formatCanvasCoverageChip(taskLabel: string): string {
     .replace(/^\+\s*/, "")
     .replace(/^AND\s+/i, "")
     .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(covering\s+)+/i, "")
     .trim();
   if (!body) return "Covering";
 

@@ -82,6 +82,12 @@ describe("formatCanvasCoverageChip", () => {
     );
   });
 
+  it("does not prefix Covering onto a label that already says Covering", () => {
+    expect(formatCanvasCoverageChip("Covering Zone 9")).toBe("Covering Zone 9");
+    expect(formatCanvasCoverageChip("covering covering Zone 9")).toBe("Covering Zone 9");
+    expect(formatCanvasCoverageChip("And Covering Zone 9")).toBe("Covering Zone 9");
+  });
+
   it("does not leak a women's coverage label onto men's copy", () => {
     expect(formatCanvasCoverageChip("And Women's Restroom 6")).toBe(
       "Covering Women's 6",
