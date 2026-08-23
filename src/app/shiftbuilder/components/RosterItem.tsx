@@ -61,7 +61,7 @@ const RosterItem = React.memo(function RosterItem({
     .join(" ");
 
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={rowClass}>
+    <div ref={setNodeRef} {...listeners} {...attributes} tabIndex={0} className={rowClass}>
       <div className={`sb-roster-avatar ${avatarClass}`}>{initials}</div>
 
       <div className="min-w-0 flex-1">

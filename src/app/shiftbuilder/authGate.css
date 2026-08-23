@@ -315,7 +315,34 @@
   justify-content: center;
   padding: 0;
   overflow: hidden;
-  background: #F4F6FA;
+  background:
+    radial-gradient(90% 64% at 18% 0%, rgba(255, 255, 255, 0.88) 0%, transparent 58%),
+    linear-gradient(180deg, #F4F6FA 0%, #EEF2F7 52%, #E8EDF4 100%);
+}
+
+.sb-auth-visual__wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 34%),
+    radial-gradient(120% 80% at 80% 110%, rgba(15, 23, 42, 0.05) 0%, transparent 46%);
+}
+
+.sb-auth-visual__desk {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(72%, 440px);
+  height: min(78%, 640px);
+  padding: 22px 20px 28px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 28px 56px -36px rgba(15, 23, 42, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
 .sb-auth-visual__art {
@@ -326,6 +353,7 @@
   object-position: center;
   pointer-events: none;
   user-select: none;
+  border-radius: 14px;
 }
 
 @media (max-width: 860px) {

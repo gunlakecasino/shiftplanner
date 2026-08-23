@@ -516,9 +516,10 @@ export default function FloatingNav(props: FloatingNavProps) {
           </button>
 
           <div className="sb-topbar-day-strip flex items-center justify-around flex-1 px-1">
-            {days.map((day) => {
+            {days.map((day, dayIndex) => {
               const isSelected = day.id === selectedDayId;
               const isToday = !!day.isToday;
+              const isNextDay = !isSelected && days[dayIndex - 1]?.id === selectedDayId;
               const letter = day.dayLetter || DAY_LETTERS[(day.date?.getDay() ?? 0) % 7];
               const dateNum = day.dateNum ?? day.label;
 
@@ -571,7 +572,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   type="button"
                   onClick={() => onDaySelect(day.id, day.date || new Date())}
                   onMouseEnter={() => onDayHover?.(day.id, day.date || new Date())}
-                  className="sb-interactive sb-day-strip-btn sb-day-strip-btn--inactive flex flex-col items-center justify-center shrink-0"
+                  className={`sb-interactive sb-day-strip-btn sb-day-strip-btn--inactive flex flex-col items-center justify-center shrink-0${isNextDay ? " sb-day-strip-btn--ahead" : ""}`}
                   style={{
                     width: 36,
                     height: 44,
@@ -593,7 +594,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           <button
             type="button"
             onClick={onNextWeek}
-            className="icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0"
+            className={`icon-btn sb-interactive sb-week-nav-btn flex items-center justify-center w-5 h-5 rounded-full shrink-0${days[days.length - 1]?.id === selectedDayId ? " sb-week-nav-btn--ahead" : ""}`}
             style={{ color: mutedChromeText }}
             title="Next GRAVE week"
             aria-label="Next GRAVE week"

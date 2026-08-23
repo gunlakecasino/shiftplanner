@@ -57,12 +57,15 @@ function PinSessionError({
 function AuthFloorVisual() {
   return (
     <aside className="sb-auth-visual" aria-hidden="true">
-      <img
-        className="sb-auth-visual__art"
-        src="/sheetbuilder/auth-gate-side.png"
-        alt=""
-        draggable={false}
-      />
+      <div className="sb-auth-visual__wash" />
+      <div className="sb-auth-visual__desk">
+        <img
+          className="sb-auth-visual__art"
+          src="/sheetbuilder/auth-gate-side.png"
+          alt=""
+          draggable={false}
+        />
+      </div>
     </aside>
   );
 }
