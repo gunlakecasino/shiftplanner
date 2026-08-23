@@ -329,7 +329,7 @@ export function UnassignedInvite({
       key="unassigned-invite"
       role="button"
       tabIndex={0}
-      className={`sb-unassigned-invite sb-interactive flex items-center justify-start text-[#94A3B8] tracking-[0.01em] rounded-[8px] cursor-pointer w-full flex-1 min-h-0 ${cfg.padding}`}
+      className={`sb-unassigned-invite sb-interactive flex items-center justify-start text-[#94A3B8] tracking-[0.01em] rounded-[8px] cursor-pointer w-full shrink-0 ${cfg.padding}`}
       data-invite-size={size}
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
@@ -922,7 +922,7 @@ export function SlotAssignmentBody({
           />
         )
       ) : showDigitalAssists && emptyPresentation === "invite" && onUnassignedClick ? (
-        <div key="unassigned" className="flex-1 flex flex-col justify-center min-h-0">
+        <div key="unassigned" className="flex flex-col justify-start min-h-0">
           <UnassignedInvite
             size={inviteSize}
             onClick={onUnassignedClick}

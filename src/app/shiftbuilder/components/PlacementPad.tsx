@@ -1317,11 +1317,9 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const usePortalLocal = !isDock && !!hostId && !!portalStyleLocal;
 
   useLayoutEffect(() => {
-    if (isDock || !hostId) {
-      setPadOrigin(null);
-      return;
-    }
-    setPadOrigin(padOriginFromHost(queryPadHostRect(hostId), portalStyleLocal, PAD_W, 420));
+    if (isDock || !hostId) return;
+    const next = padOriginFromHost(queryPadHostRect(hostId), portalStyleLocal, PAD_W, 420);
+    if (next) setPadOrigin(next);
   }, [isDock, hostId, portalStyleLocal]);
 
   const refinedCard = (

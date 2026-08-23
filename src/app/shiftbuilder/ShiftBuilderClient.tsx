@@ -798,6 +798,7 @@ function AuthedShiftBuilder() {
   const [publishWeekBusy, setPublishWeekBusy] = useState(false);
   const [applyOverlapTasksBusy, setApplyOverlapTasksBusy] = useState(false);
   const [draftApplyBusy, setDraftApplyBusy] = useState(false);
+  const [draftApplyConfirming, setDraftApplyConfirming] = useState(false);
 
   // Active drag state declared early so it can be safely read in measurement/zoom setup
   // (before the onDrag* handler definitions later in the file).
@@ -1253,15 +1254,21 @@ function AuthedShiftBuilder() {
           APPLY_TO_LIVE_DISCARD_POINT,
         ];
 
-    const okToApply = await confirmDialog(
-      APPLY_TO_LIVE_CONFIRM,
-      {
-        title: `Apply ${changeCount} draft change${changeCount === 1 ? "" : "s"} to the live board?`,
-        confirmLabel: APPLY_TO_LIVE_CONFIRM_LABEL,
-        summary,
-        summaryPoints,
-      },
-    );
+    setDraftApplyConfirming(true);
+    let okToApply = false;
+    try {
+      okToApply = await confirmDialog(
+        APPLY_TO_LIVE_CONFIRM,
+        {
+          title: `Apply ${changeCount} draft change${changeCount === 1 ? "" : "s"} to the live board?`,
+          confirmLabel: APPLY_TO_LIVE_CONFIRM_LABEL,
+          summary,
+          summaryPoints,
+        },
+      );
+    } finally {
+      setDraftApplyConfirming(false);
+    }
     if (!okToApply) {
       return;
     }
@@ -8133,6 +8140,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             : undefined
         }
         draftApplyBusy={draftApplyBusy}
+        draftApplyConfirming={draftApplyConfirming}
         onDiscardDraft={stableDiscardDraft}
         permissions={permissions}
       />
@@ -9164,6 +9172,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         <DraftStatusPill
           count={draftSlotCount}
           applying={draftApplyBusy || engineRunPhase !== "idle"}
+          confirming={draftApplyConfirming}
           onApply={() => { void applyDraft(); }}
           onDiscard={discardDraft}
           onReviewChanges={() => {
