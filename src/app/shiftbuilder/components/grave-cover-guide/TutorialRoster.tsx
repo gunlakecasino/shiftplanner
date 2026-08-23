@@ -114,7 +114,7 @@ export function TutorialRoster({
               <span className="sb-roster-section__left min-w-0">
                 <MsIcon name="chevron_right" />
                 <span className="sb-roster-section__label sb-roster-section__label--warn truncate">
-                  Called Off
+                  Marked Off
                 </span>
               </span>
               <span className="sb-roster-section__count sb-roster-section__count--warn">{calledOff.length}</span>

@@ -391,6 +391,7 @@ export async function POST(request: NextRequest) {
         const result = await unmarkTmCallOffServer({
           tmId: String(body.tmId),
           date: String(body.date),
+          nightId: body.nightId != null ? String(body.nightId) : null,
         });
         await bustCache(body);
         return NextResponse.json(result);

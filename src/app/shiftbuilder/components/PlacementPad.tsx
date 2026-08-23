@@ -1348,7 +1348,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
         {a.tmName && onMarkUnavailable && (
           <div className="mt-2.5">
-            <button onClick={(e) => { e.stopPropagation(); void onMarkUnavailable(a.tmId, a.tmName, "called_off"); }} className="sb-placement-pad-warning-btn text-[10px] font-semibold px-3 py-1 rounded-lg border border-yellow-300 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 active:scale-95 transition-all">
+            <button onClick={(e) => { e.stopPropagation(); void onMarkUnavailable(a.tmId, a.tmName, "unavailable"); }} className="sb-placement-pad-warning-btn text-[10px] font-semibold px-3 py-1 rounded-lg border border-yellow-300 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 active:scale-95 transition-all">
               Mark unavailable
             </button>
           </div>

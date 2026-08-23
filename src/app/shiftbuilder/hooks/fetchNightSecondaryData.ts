@@ -4,6 +4,7 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { normalizeTaskTextStyle } from "@/lib/shiftbuilder/taskTextStyle";
 import { zoneHistoryMapFromRecord, type ZoneHistoryRecord } from "@/lib/shiftbuilder/zoneHistory";
 import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
+import type { RestoreSeatSnapshot } from "@/lib/shiftbuilder/markedOffRestore";
 
 type NightSecondaryApiPayload = {
   notes?: string;
@@ -11,6 +12,10 @@ type NightSecondaryApiPayload = {
   breakAssignments?: unknown[];
   cardBorders?: Record<string, string>;
   calledOffIds?: string[];
+  markedOffByTmId?: Record<
+    string,
+    { reason: string | null; restoreSeat: RestoreSeatSnapshot | null }
+  >;
   rawBreakRows?: unknown[];
   recentZoneHistory?: ZoneHistoryRecord;
   sideTasks?: PrintSideTask[];
@@ -58,6 +63,7 @@ function hydrateSecondaryPayload(data: NightSecondaryApiPayload) {
     cardBorders: data.cardBorders ?? {},
     recentZoneHistory: zoneHistoryMapFromRecord(data.recentZoneHistory),
     calledOffIds: new Set<string>(data.calledOffIds ?? []),
+    markedOffByTmId: data.markedOffByTmId ?? {},
     rawBreakRows: mappedBreaks,
     sideTasks: data.sideTasks ?? [],
   };
@@ -77,6 +83,10 @@ function emptyNightSecondaryResult(accessBlocked = false) {
     cardBorders: {} as Record<string, string>,
     recentZoneHistory: null,
     calledOffIds: new Set<string>(),
+    markedOffByTmId: {} as Record<
+      string,
+      { reason: string | null; restoreSeat: RestoreSeatSnapshot | null }
+    >,
     rawBreakRows: [] as ReturnType<typeof mapBreakAssignmentRow>[],
     sideTasks: [] as PrintSideTask[],
     accessBlocked,

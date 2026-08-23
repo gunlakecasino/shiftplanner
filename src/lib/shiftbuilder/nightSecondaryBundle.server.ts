@@ -6,6 +6,7 @@ import { fetchRecentZoneHistoryServer } from "./zoneHistory.server";
 import type { ZoneHistoryRecord } from "./zoneHistory";
 import { normalizeTaskTextStyle } from "./taskTextStyle";
 import { mapPrintSideTasks, type PrintSideTaskRow } from "./printSideTasks";
+import { parseRestoreSeat } from "./markedOffRestore";
 
 function getSupabase(): SupabaseClient {
   const client = createAdminClientSafe();
@@ -81,6 +82,13 @@ export type NightSecondaryBundlePayload = {
   breakAssignments: ReturnType<typeof mapBreakAssignment>[];
   cardBorders: Record<string, string>;
   calledOffIds: string[];
+  markedOffByTmId: Record<
+    string,
+    {
+      reason: string | null;
+      restoreSeat: import("./markedOffRestore").RestoreSeatSnapshot | null;
+    }
+  >;
   rawBreakRows: ReturnType<typeof mapBreakAssignment>[];
   recentZoneHistory: ZoneHistoryRecord;
   sideTasks: ReturnType<typeof mapPrintSideTasks>;
@@ -101,7 +109,7 @@ export async function buildNightSecondaryBundle(
       : fetchRecentZoneHistoryServer(anchorDate, 7, supabase),
   ]);
 
-  const [notesRes, tasksRes, breaksRes, bordersRes, callOffsRes, sideTasksRes] = await Promise.all([
+  const [notesRes, tasksRes, breaksRes, bordersRes, callOffsFirst, sideTasksRes] = await Promise.all([
     nightId
       ? supabase.from("nights").select("notes").eq("id", nightId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -127,10 +135,13 @@ export async function buildNightSecondaryBundle(
       : Promise.resolve({ data: [], error: null }),
     // call_offs is keyed by night_date (not night_id). Without this, Mark
     // unavailable only clears board slots; the roster never learns they are
-    // called off and they reappear under "On Sheet — Not Placed" after poll.
+    // marked off and they reappear under "On Sheet — Not Placed" after poll.
     printOnly
       ? Promise.resolve({ data: [], error: null })
-      : supabase.from("call_offs").select("tm_id").eq("night_date", isoDate),
+      : supabase
+          .from("call_offs")
+          .select("tm_id, reason, restore_seat")
+          .eq("night_date", isoDate),
     options.includeSideTasks
       ? supabase
           .from("ops_work_items")
@@ -147,6 +158,13 @@ export async function buildNightSecondaryBundle(
       : Promise.resolve({ data: [], error: null }),
   ]);
 
+  let callOffsRes = callOffsFirst;
+  if (callOffsRes.error && /restore_seat/i.test(callOffsRes.error.message)) {
+    callOffsRes = await supabase
+      .from("call_offs")
+      .select("tm_id, reason")
+      .eq("night_date", isoDate);
+  }
   if (callOffsRes.error) {
     console.warn(
       "[nightSecondaryBundle] call_offs fetch failed",
@@ -188,10 +206,25 @@ export async function buildNightSecondaryBundle(
     }
   }
 
+  const markedOffByTmId: NightSecondaryBundlePayload["markedOffByTmId"] = {};
   const calledOffIds = Array.from(
     new Set(
-      ((callOffsRes.data ?? []) as Array<{ tm_id?: string | null }>)
-        .map((r) => (typeof r.tm_id === "string" ? r.tm_id.trim() : ""))
+      (
+        (callOffsRes.data ?? []) as Array<{
+          tm_id?: string | null;
+          reason?: string | null;
+          restore_seat?: unknown;
+        }>
+      )
+        .map((r) => {
+          const tmId = typeof r.tm_id === "string" ? r.tm_id.trim() : "";
+          if (!tmId) return "";
+          markedOffByTmId[tmId] = {
+            reason: r.reason ?? null,
+            restoreSeat: parseRestoreSeat(r.restore_seat),
+          };
+          return tmId;
+        })
         .filter(Boolean),
     ),
   );
@@ -202,6 +235,7 @@ export async function buildNightSecondaryBundle(
     breakAssignments: mappedBreaks,
     cardBorders,
     calledOffIds,
+    markedOffByTmId,
     rawBreakRows: mappedBreaks,
     recentZoneHistory,
     sideTasks: mapPrintSideTasks(sideTaskRows, nameMap),
