@@ -7225,10 +7225,12 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign .sb-night-action-pills {
   display: inline-flex;
   align-items: stretch;
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .sb-sheetbuilder-redesign .sb-night-action-pill:not(.sb-night-action-pill--split) {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: 68px;
   padding-inline: 10px;
 }

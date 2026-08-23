@@ -453,6 +453,7 @@ describe("SheetBuilder chrome match (light topbar)", () => {
     expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
+    expect(globalsCss).toContain(".sb-night-action-pill:not(.sb-night-action-pill--split) {\n  flex: 0 0 auto;");
     expect(floatingNav).toContain("sb-topbar-day-strip");
     expect(floatingNav).toContain("sb-day-strip-btn--active");
     expect(floatingNav).toContain('borderBottom: "2px solid #0F172A"');
