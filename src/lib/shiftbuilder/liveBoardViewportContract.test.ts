@@ -104,7 +104,8 @@ describe("SheetBuilder night actions (PR B)", () => {
     expect(floatingNav).toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
-    expect(floatingNav).toContain(">Engine<");
+    expect(floatingNav).toContain("Running…");
+    expect(floatingNav).toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).toContain("aria-label=\"Night actions\"");
