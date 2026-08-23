@@ -76,6 +76,17 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Live board + mutation APIs — never let a CDN or browser reuse a
+      // pre-drag night bundle after an assignment write.
+      {
+        source: "/api/shiftbuilder/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, no-cache, no-store, must-revalidate",
+          },
+        ],
+      },
     ];
   },
 };

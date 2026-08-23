@@ -13,6 +13,7 @@ import {
   liveAssignmentsStore,
   mirrorMainAssignmentsToLiveStore,
   setBoardAssignmentsDayKey,
+  shouldApplyNightBoardQueryToStore,
 } from "@/lib/shiftbuilder/liveCache";
 import {
   invalidateNightBoardQueries,
@@ -119,6 +120,7 @@ export function useShiftData(
 
   const storeAssignments = useAssignments();
   const storeDraftAssignments = useDraftAssignments();
+  const pendingDrag = useShiftBuilderStore((s) => s.pendingDrag);
   const selectedDateKey = formatLocalDateISO(selectedDay.date);
   const stabilizedDateKeyRef = React.useRef(selectedDateKey);
   const rosterStabilizedForDateRef = React.useRef<string | null>(null);
@@ -339,7 +341,11 @@ export function useShiftData(
   React.useEffect(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
     if (hydratedAssignmentsDayRef.current === dayKey) return;
-    if (queryColdLoading || currentNight.isCoreFetching) return;
+    // Background poll/refetch must not block remount hydration — waiting on
+    // isCoreFetching made Settings↔canvas paint a cold veil for a full RTT.
+    if (queryColdLoading) return;
+    if (currentNight.isCorePlaceholder) return;
+    if (!shouldApplyNightBoardQueryToStore()) return;
 
     if (nightAccessBlocked) {
       useShiftBuilderStore.getState().setAssignments({});
@@ -396,11 +402,12 @@ export function useShiftData(
   }, [
     selectedDay.date,
     queryColdLoading,
-    currentNight.isCoreFetching,
+    currentNight.isCorePlaceholder,
     currentNight.queryClient,
     currentNight.assignments,
     bumpLiveAssignVersion,
     nightAccessBlocked,
+    pendingDrag,
   ]);
 
   // Public helpers for action paths (applyDraft, drag persist, engine runs, etc.)

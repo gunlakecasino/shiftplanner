@@ -5,6 +5,10 @@ import { normalizeTaskTextStyle } from "@/lib/shiftbuilder/taskTextStyle";
 import { zoneHistoryMapFromRecord, type ZoneHistoryRecord } from "@/lib/shiftbuilder/zoneHistory";
 import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
 import type { RestoreSeatSnapshot } from "@/lib/shiftbuilder/markedOffRestore";
+import {
+  bindNightBoardAbortSignal,
+  isNightBoardAbortError,
+} from "@/lib/shiftbuilder/nightBoardAbort";
 
 type NightSecondaryApiPayload = {
   notes?: string;
@@ -73,6 +77,8 @@ export type FetchNightSecondaryOptions = {
   publishedOnlyPolicy?: boolean;
   /** Request only notes, printable tasks, and side-task rows. */
   printOnly?: boolean;
+  /** TanStack Query cancel signal — abort in-flight fetches on route/day change. */
+  signal?: AbortSignal;
 };
 
 function emptyNightSecondaryResult(accessBlocked = false) {
@@ -108,20 +114,20 @@ export async function fetchNightSecondaryData(
     // after a mutation + revalidate (Safari and other caches can be stubborn).
     const bust = `&_=${Date.now()}`;
     const purposeQs = options?.printOnly ? "&purpose=print" : "";
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    const abort = bindNightBoardAbortSignal(20_000, options?.signal);
     let res: Response;
     try {
       res = await fetch(`/api/shiftbuilder/night-secondary?date=${dateStr}${purposeQs}${bust}`, {
         credentials: "same-origin",
         cache: "no-store",
-        signal: controller.signal,
+        signal: abort.signal,
       });
     } catch (error) {
-      if (controller.signal.aborted) throw new Error(`Night secondary timed out for ${dateStr}`);
+      if (options?.signal?.aborted || isNightBoardAbortError(error)) throw error;
+      if (abort.wasTimeout()) throw new Error(`Night secondary timed out for ${dateStr}`);
       throw error;
     } finally {
-      window.clearTimeout(timeout);
+      abort.cleanup();
     }
     if (res.status === 403) {
       return emptyNightSecondaryResult(true);
@@ -132,6 +138,7 @@ export async function fetchNightSecondaryData(
     const data = (await res.json()) as NightSecondaryApiPayload;
     return hydrateSecondaryPayload(data);
   } catch (e) {
+    if (options?.signal?.aborted || isNightBoardAbortError(e)) throw e;
     if (options?.publishedOnlyPolicy) {
       console.warn("[fetchNightSecondaryData] session API failed under policy — fail closed", e);
       return emptyNightSecondaryResult(true);

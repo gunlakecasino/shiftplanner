@@ -178,6 +178,10 @@ import {
   getBoardAssignmentsDayKey,
   buildPadAssignmentsFromStore,
   nightDateKey,
+  beginLiveBoardGesture,
+  endLiveBoardGesture,
+  resetLiveBoardGesture,
+  cancelNightBoardQueries,
 } from "@/lib/shiftbuilder/liveCache";
 import {
   GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
@@ -2442,7 +2446,7 @@ function AuthedShiftBuilder() {
     const dayKey = nightDateKey(selectedDay.date);
     if (hydratedAuxDayRef.current === dayKey) return;
     // Wait for the real night-core payload (not keepPreviousData / in-flight).
-    if (boardColdLoading || currentNight.isCoreFetching || currentNight.isCorePlaceholder) {
+    if (boardColdLoading || currentNight.isCorePlaceholder) {
       return;
     }
 
@@ -2454,7 +2458,6 @@ function AuthedShiftBuilder() {
   }, [
     selectedDay.date,
     boardColdLoading,
-    currentNight.isCoreFetching,
     currentNight.isCorePlaceholder,
     currentNight.auxDefs,
     currentNight.nightId,
@@ -2706,6 +2709,16 @@ function AuthedShiftBuilder() {
 
   // Release live cache registration when ShiftBuilder unmounts
   React.useEffect(() => retainLiveCacheMount(), []);
+
+  // Leaving the canvas (Settings / Team / Help) must drop in-flight night
+  // fetches and any leftover drag overlay so a stale poll cannot paint later.
+  React.useEffect(() => {
+    return () => {
+      resetLiveBoardGesture();
+      const qc = currentNight.queryClient;
+      if (qc) cancelNightBoardQueries(qc);
+    };
+  }, [currentNight.queryClient]);
 
   // Day/week nav provided by useDayNavigation hook (Phase 2 extraction)
   // Prefetch logic moved or kept minimal in caller if needed.
@@ -5350,6 +5363,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     const d = event.active.data.current as any;
     if (!d) return;
 
+    // Pause night poll + abort in-flight refetches so a 20s tick cannot
+    // overwrite the optimistic board mid-gesture (snap-back).
+    beginLiveBoardGesture();
+    const qc = currentNight.queryClient;
+    if (qc) cancelNightBoardQueries(qc);
+
     if (d.type === "tm") {
       setActiveDrag({ kind: "tm", label: d.tmName, tmId: d.tmId });
     }
@@ -5431,6 +5450,13 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   // stable under the cursor — same feel as TM/name drags with the drag ghost.
   const onDragOver = undefined;
 
+  const onDragCancel = () => {
+    currentDragKindRef.current = null;
+    currentDragFromSlotRef.current = null;
+    setActiveDrag(null);
+    resetLiveBoardGesture();
+  };
+
   const onDragEnd = (event: DragEndEvent) => {
     // Capture using ref first (reliable across stale closures), fallback to state.
     const wasCoverageRequest = currentDragKindRef.current === "coverage-request" || activeDrag?.kind === "coverage-request";
@@ -5438,6 +5464,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     currentDragKindRef.current = null;
     currentDragFromSlotRef.current = null;
     setActiveDrag(null);
+    endLiveBoardGesture();
     
     // Always clear pending drag when the gesture ends.
     // Defensive access due to known Turbopack + Zustand HMR quirks in this project.
@@ -8344,6 +8371,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       <InteractiveStage
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
+        onDragCancel={onDragCancel}
         onDragOver={onDragOver}
         activeDrag={activeDrag}
         isDark={isDark}

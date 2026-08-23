@@ -2,6 +2,10 @@ import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { defaultAuxDefsForNewNight } from "@/lib/shiftbuilder/auxLayout";
+import {
+  bindNightBoardAbortSignal,
+  isNightBoardAbortError,
+} from "@/lib/shiftbuilder/nightBoardAbort";
 
 type NightCoreApiPayload = {
   nightId: string | null;
@@ -78,6 +82,8 @@ export type FetchNightCoreOptions = {
   publishedOnlyPolicy?: boolean;
   /** Skip board-only roster/history payload work when hydrating a print sheet. */
   printOnly?: boolean;
+  /** TanStack Query cancel signal — abort in-flight fetches on route/day change. */
+  signal?: AbortSignal;
 };
 
 /**
@@ -90,20 +96,20 @@ async function fetchNightCoreViaApi(dateStr: string, options?: FetchNightCoreOpt
   // Add unique bust param to ensure browser / any intermediate layers don't serve a stale response
   // even with cache: "no-store". Server still keys on date only.
   const bust = `&_=${Date.now()}`;
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 20_000);
+  const abort = bindNightBoardAbortSignal(20_000, options?.signal);
   let res: Response;
   try {
     res = await fetch(`/api/shiftbuilder/night-core?date=${dateStr}${policyQs}${purposeQs}${bust}`, {
       credentials: "same-origin",
       cache: "no-store",
-      signal: controller.signal,
+      signal: abort.signal,
     });
   } catch (error) {
-    if (controller.signal.aborted) throw new Error(`Night core timed out for ${dateStr}`);
+    if (options?.signal?.aborted || isNightBoardAbortError(error)) throw error;
+    if (abort.wasTimeout()) throw new Error(`Night core timed out for ${dateStr}`);
     throw error;
   } finally {
-    window.clearTimeout(timeout);
+    abort.cleanup();
   }
   if (res.status === 403) {
     return emptyNightCoreResult(true);
@@ -125,6 +131,7 @@ export async function fetchNightCoreData(
   try {
     return await fetchNightCoreViaApi(dateStr, options);
   } catch (e) {
+    if (options?.signal?.aborted || isNightBoardAbortError(e)) throw e;
     // Viewer/today policy: fail closed to blocked/empty rather than throwing into print paths.
     if (options?.todayPolicy || options?.publishedOnlyPolicy) {
       console.warn("[fetchNightCoreData] session API failed under policy — fail closed", e);

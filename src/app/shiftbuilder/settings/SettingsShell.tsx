@@ -220,7 +220,7 @@ export function SettingsShell() {
   }, [searchParams]);
 
   const { weekStart, selectedDay } = React.useMemo(() => resolveWeekContext(), [dataEpoch]);
-  const currentNight = useCurrentNight(selectedDay);
+  const currentNight = useCurrentNight(selectedDay, { poll: false });
   const currentNightId = currentNight.nightId ?? null;
 
   const onDataChanged = React.useCallback(() => {

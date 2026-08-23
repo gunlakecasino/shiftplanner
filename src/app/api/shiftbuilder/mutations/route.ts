@@ -202,7 +202,10 @@ export async function POST(request: NextRequest) {
     const retired = retiredBatchPlannerResponse();
     return NextResponse.json(
       { error: BATCH_PLANNER_RETIRED_ERROR },
-      { status: retired.status },
+      {
+        status: retired.status,
+        headers: { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
+      },
     );
   }
   const permission = ACTION_PERMISSIONS[action];
