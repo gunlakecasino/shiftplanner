@@ -18,7 +18,8 @@ function task(partial: Partial<NightSlotTask> & { slotKey: string }): NightSlotT
     catalogTaskId: null,
     sortOrder: 0,
     color: null,
-    isCoverage: false,
+    isCoverage: partial.isCoverage ?? false,
+    coverageSide: partial.coverageSide ?? null,
   };
 }
 
@@ -86,26 +87,89 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
     ]);
   });
 
-  it("shows restroom-to-restroom coverage on both halves of the target restroom", () => {
+  it("keeps women's restroom-to-restroom coverage on the women's half only", () => {
     const assignments = {
-      WRR1: {
-        tmId: "darlene",
-        tmName: "Darlene",
+      WRR6: {
+        tmId: "amanda",
+        tmName: "Amanda",
         additionalCoverageSlots: ["WRR7"],
       },
+      MRR6: { tmId: "gary", tmName: "Gary" },
+      MRR7: { tmId: "drew", tmName: "Drew" },
     };
 
     const mapped = mapNightTasksToUiKeys([], [], assignments);
     const coveredBy = buildCoveredByIndex(assignments, mapped);
 
-    expect(mapped.WRR1).toMatchObject([
-      { taskLabel: "And Restroom 7", isCoverage: true },
+    expect(mapped.WRR6).toMatchObject([
+      { taskLabel: "And Women's Restroom 7", isCoverage: true },
     ]);
+    expect(mapped.MRR6).toBeUndefined();
     expect(coveredBy.WRR7).toMatchObject([
-      { tmName: "Darlene", sourceKey: "WRR1", isSynthetic: true },
+      { tmName: "Amanda", sourceKey: "WRR6", isSynthetic: true },
     ]);
+    expect(coveredBy.MRR7).toBeUndefined();
+  });
+
+  it("maps a persisted women's RR coverage row onto WRR only", () => {
+    const assignments = {
+      WRR6: { tmId: "amanda", tmName: "Amanda" },
+      MRR6: { tmId: "gary", tmName: "Gary" },
+    };
+    const mapped = mapNightTasksToUiKeys(
+      [
+        task({
+          slotKey: "rr_6",
+          slotType: "rr",
+          rrSide: "womens",
+          taskLabel: "And Women's Restroom 7",
+          isCoverage: true,
+        }),
+      ],
+      [],
+      assignments,
+    );
+    const coveredBy = buildCoveredByIndex(assignments, mapped);
+
+    expect(mapped.WRR6?.filter((row) => row.isCoverage)).toHaveLength(1);
+    expect(mapped.MRR6).toBeUndefined();
+    expect(coveredBy.WRR7).toMatchObject([{ tmName: "Amanda", sourceKey: "WRR6" }]);
+    expect(coveredBy.MRR7).toBeUndefined();
+  });
+
+  it("keeps men's restroom-to-restroom coverage on the men's half only", () => {
+    const assignments = {
+      MRR6: {
+        tmId: "gary",
+        tmName: "Gary",
+        additionalCoverageSlots: ["MRR7"],
+      },
+      WRR6: { tmId: "amanda", tmName: "Amanda" },
+    };
+
+    const mapped = mapNightTasksToUiKeys([], [], assignments);
+    const coveredBy = buildCoveredByIndex(assignments, mapped);
+
+    expect(mapped.MRR6).toMatchObject([
+      { taskLabel: "And Men's Restroom 7", isCoverage: true },
+    ]);
+    expect(mapped.WRR6).toBeUndefined();
     expect(coveredBy.MRR7).toMatchObject([
-      { tmName: "Darlene", sourceKey: "WRR1", isSynthetic: true },
+      { tmName: "Gary", sourceKey: "MRR6", isSynthetic: true },
+    ]);
+    expect(coveredBy.WRR7).toBeUndefined();
+  });
+
+  it("keeps zone-to-zone coverage projection unchanged", () => {
+    const assignments = {
+      Z3: { tmId: "kathy", tmName: "Kathy", additionalCoverageSlots: ["Z4"] },
+    };
+    const mapped = mapNightTasksToUiKeys([], [], assignments);
+    expect(mapped.Z3).toMatchObject([
+      { taskLabel: "And Zone 4", isCoverage: true },
+    ]);
+    expect(buildCoveredByIndex(assignments, mapped).Z4).toMatchObject([
+      { tmName: "Kathy", sourceKey: "Z3", isSynthetic: true },
     ]);
   });
 

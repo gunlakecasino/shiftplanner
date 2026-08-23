@@ -144,7 +144,11 @@ export function mapNightTasksToUiKeys(
     const seenTargets = new Set<string>();
     tasksByUiKey[sourceKey] = tasks.filter((task) => {
       if (!task.isCoverage) return true;
-      const targetKey = parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey);
+      const targetKey = parseCoverageTargetFromTaskLabel(
+        task.taskLabel,
+        labelToKey,
+        sourceKey,
+      );
       if (!targetKey) return true;
       if (seenTargets.has(targetKey)) return false;
       seenTargets.add(targetKey);
@@ -168,7 +172,8 @@ export function mapNightTasksToUiKeys(
       const alreadyProjected = existing.some(
         (task) =>
           task.isCoverage &&
-          parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey) === targetKey,
+          parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey, sourceKey) ===
+          targetKey,
       );
       if (alreadyProjected) continue;
 

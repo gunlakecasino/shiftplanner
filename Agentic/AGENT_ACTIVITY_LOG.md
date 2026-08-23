@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-08-23 — Grok Build — SheetBuilder RR coverage gender leak
+
+**Task**: Brian 2026-08-23 — assigning coverage from a women's restroom to another women's restroom (WRR6 → WRR7) also marked the men's half as covering / covered. Same-gender RR→RR must stay on that half only. No Golden print CSS, no engine rewrite, no Projects, no Apply, no auth/PIN.
+
+**Root cause (verified)**:
+1. `getSlotCoverageLabel(WRR7)` / `MRR7` both returned genderless `"Restroom 7"`.
+2. `buildCoverageLabelIndex` registered that label onto **MRR** first (and `RR_DEFS.label` `"RR 7"` → MRR), so `"And Restroom 7"` parsed as men's.
+3. `expandCoverageToKeys` then mirrored covered-by onto both MRR7 and WRR7 (comment called this intentional).
+4. `dbToUi` still maps null `rr_side` RR rows to MRR; new coverage writes now force `rr_side` from the gendered source key.
+
+**Changes**:
+- Gendered coverage labels: `"Women's Restroom 7"` / `"Men's Restroom 7"` in `getSlotCoverageLabel` + label index (both halves registered; genderless `"RR 7"` no longer pinned to men's).
+- `expandCoverageToKeys` is identity — no RR gender mirror.
+- `parseCoverageTargetFromTaskLabel` takes `sourceKey`. Legacy `"And Restroom 7"` inherits the source half when source is MRR/WRR; zone/aux sources stay unresolved (do not invent a gender). Explicit gendered labels never expand to the other half.
+- `persistSlotForCoverageSource` used by `handleCmdkAddCoverage` — WRR/MRR always persist `rr_side` (`womens`/`mens`).
+- `mapNightTasksToUiKeys` passes source key into parse so synthetic + stored banners stay on the correct half.
+- Regression tests: Brian's WRR6→WRR7 (banner + covered-by stay on women's); men's MRR6→MRR7; legacy parse; persist `rr_side`; zone→zone unchanged; explicit Zone→WRR does not leak to MRR.
+
+**Tests**: Failing before the helper fix (8 failures including Brian's case); passing after. Related coverage / mapNightTasks / palette suites green. Unrelated pre-existing `tabletResponsiveContract` reports-class assertion still fails on main.
+
+**Status**: Ready for review. Live board `buildCoveredByIndex` now keeps same-gender RR coverage on the named half.
+
+---
+
 ## 2026-08-23 — Grok Build — SheetBuilder PR C (iPad Undo toast)
 
 **Task**: Covering operator is on iPad. After a successful live occupied→occupied swap or roster-drop unassign, show a short Undo toast that replays the existing history snapshot. Desktop Cmd+Z already persists. Stacked on PR B (`cursor/sheetbuilder-night-actions-426c`). No auth / PIN / RLS. No engine or Golden print edits. No production Apply. Call-off Restore unchanged.

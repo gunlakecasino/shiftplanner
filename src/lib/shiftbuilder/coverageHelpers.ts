@@ -1,6 +1,6 @@
 import { ZONE_DEFS, RR_DEFS, getRRAccent, getZoneColor } from "@/lib/shiftbuilder/constants";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
-import { slotKeyToLabel } from "@/lib/shiftbuilder/slot-keys";
+import { slotKeyToLabel, uiToDb, type DbSlot } from "@/lib/shiftbuilder/slot-keys";
 
 export type CoverageSide = "A" | "B";
 
@@ -24,14 +24,13 @@ export function getSlotAccentColor(uiKey: string): string {
   return "#6B7280";
 }
 
-/** Returns a human-readable label for a slot (e.g. "Zone 3", "Restroom 7", or custom text). */
+/** Returns a human-readable label for a slot (e.g. "Zone 3", "Women's Restroom 7"). */
 export function getSlotCoverageLabel(uiKey: string): string {
   if (uiKey.startsWith("custom:")) return uiKey.slice(7);
   if (uiKey === "Z9SR") return "Zone 9 Smoking Room";
   if (uiKey.startsWith("Z")) return `Zone ${uiKey.slice(1)}`;
-  if (uiKey.startsWith("MRR") || uiKey.startsWith("WRR")) {
-    return `Restroom ${uiKey.replace(/^[MW]RR/, "")}`;
-  }
+  if (uiKey.startsWith("WRR")) return `Women's Restroom ${uiKey.slice(3)}`;
+  if (uiKey.startsWith("MRR")) return `Men's Restroom ${uiKey.slice(3)}`;
   return uiKey;
 }
 
@@ -85,11 +84,26 @@ export function formatCoveragePositionLabel(
   return covererCount > 1 && side ? `${suffix}${side}` : suffix;
 }
 
-/** For an RR key (MRR7, WRR7) return both sides. For others return [key]. */
+/**
+ * Coverage targets stay on the exact UI key they resolve to.
+ * Gendered restroom halves (MRR / WRR) must never mirror onto each other.
+ */
 export function expandCoverageToKeys(uiKey: string): string[] {
-  if (uiKey.startsWith("MRR")) return [uiKey, `WRR${uiKey.slice(3)}`];
-  if (uiKey.startsWith("WRR")) return [`MRR${uiKey.slice(3)}`, uiKey];
   return [uiKey];
+}
+
+/**
+ * Persist slot for a coverage write. MRR / WRR always carry rr_side so a
+ * null-side row cannot land on men's via dbToUi.
+ */
+export function persistSlotForCoverageSource(sourceKey: string): DbSlot {
+  const rrMatch = sourceKey.match(/^([MW])RR(\d+)$/);
+  if (rrMatch) {
+    const db = uiToDb(sourceKey);
+    const rr_side = rrMatch[1] === "W" ? "womens" : "mens";
+    return { ...db, slot_type: "rr", rr_side };
+  }
+  return uiToDb(sourceKey);
 }
 
 type CoverageTaskRow = {
@@ -115,8 +129,12 @@ export function buildCoverageLabelIndex(auxDefs: AuxDef[] = []): Map<string, str
   }
 
   for (const rr of RR_DEFS) {
-    register(getSlotCoverageLabel(`MRR${rr.num}`), `MRR${rr.num}`);
-    register(rr.label, `MRR${rr.num}`);
+    const mrr = `MRR${rr.num}`;
+    const wrr = `WRR${rr.num}`;
+    register(getSlotCoverageLabel(mrr), mrr);
+    register(getSlotCoverageLabel(wrr), wrr);
+    register(slotKeyToLabel(mrr), mrr);
+    register(slotKeyToLabel(wrr), wrr);
   }
 
   register(getSlotCoverageLabel("ADM"), "ADM");
@@ -141,16 +159,71 @@ export function buildCoverageLabelIndex(auxDefs: AuxDef[] = []): Map<string, str
   return map;
 }
 
-/** Parse `And Zone 2` / `And Z9 Smoking Room` → target UI slot key. */
+function restroomNumberFromLabel(raw: string): string | null {
+  if (/^1\s*\+\s*2$/.test(raw)) return "1";
+  return /^\d+$/.test(raw) ? raw : null;
+}
+
+function isWomensRestroomToken(token: string): boolean {
+  return /^women'?s$/i.test(token.replace(/[\u2018\u2019\u02BC]/g, "'"));
+}
+
+/**
+ * Resolve a restroom coverage label. Gendered labels stay on that half.
+ * Legacy "Restroom 7" / "RR 7" inherit the source half when the source is
+ * already MRR/WRR — never both. Zone/aux sources stay unresolved so we do
+ * not invent a gender.
+ */
+export function parseRestroomCoverageLabel(
+  label: string,
+  sourceKey?: string,
+): string | null {
+  const normalized = label
+    .replace(/[\u2018\u2019\u02BC]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const gendered = normalized.match(
+    /^(women's|womens|men's|mens)\s+(?:restroom|rr)\s+(1\s*\+\s*2|\d+)$/i,
+  );
+  if (gendered) {
+    const num = restroomNumberFromLabel(gendered[2]);
+    if (!num) return null;
+    return isWomensRestroomToken(gendered[1]) ? `WRR${num}` : `MRR${num}`;
+  }
+
+  const paren = normalized.match(
+    /^(?:restroom|rr)\s+(1\s*\+\s*2|\d+)\s*\((women's|womens|men's|mens)\)$/i,
+  );
+  if (paren) {
+    const num = restroomNumberFromLabel(paren[1]);
+    if (!num) return null;
+    return isWomensRestroomToken(paren[2]) ? `WRR${num}` : `MRR${num}`;
+  }
+
+  const genderless = normalized.match(/^(?:restroom|rr)\s+(1\s*\+\s*2|\d+)$/i);
+  if (genderless) {
+    const num = restroomNumberFromLabel(genderless[1]);
+    if (!num) return null;
+    if (sourceKey?.startsWith("WRR")) return `WRR${num}`;
+    if (sourceKey?.startsWith("MRR")) return `MRR${num}`;
+    return null;
+  }
+
+  return null;
+}
+
+/** Parse `And Zone 2` / `And Women's Restroom 7` → target UI slot key. */
 export function parseCoverageTargetFromTaskLabel(
   taskLabel: string,
   labelToKey: Map<string, string>,
+  sourceKey?: string,
 ): string | null {
   const trimmed = taskLabel.trim();
   if (!/^and\s+/i.test(trimmed)) return null;
   const label = trimmed.replace(/^and\s+/i, "").trim();
   if (!label) return null;
-  return labelToKey.get(label) ?? null;
+  return labelToKey.get(label) ?? parseRestroomCoverageLabel(label, sourceKey);
 }
 
 function sideSortOrder(side: CoverageSide | null | undefined): number {
@@ -215,24 +288,23 @@ export function buildCoveredByIndex(
 
     for (const t of tasks) {
       if (!t.isCoverage) continue;
-      const targetKey = parseCoverageTargetFromTaskLabel(t.taskLabel, labelToKey);
+      const targetKey = parseCoverageTargetFromTaskLabel(
+        t.taskLabel,
+        labelToKey,
+        sourceKey,
+      );
       if (!targetKey) continue;
 
-      // Restroom coverage is expressed with one human-facing label
-      // ("Restroom 7"), but the board renders separate women's and men's
-      // slots. Mirror the same covered state onto both halves.
-      for (const expandedTargetKey of expandCoverageToKeys(targetKey)) {
-        if (!index[expandedTargetKey]) index[expandedTargetKey] = [];
-        index[expandedTargetKey].push({
-          tmName,
-          tmId: row?.tmId,
-          side: t.coverageSide ?? null,
-          sourceKey,
-          taskLabel: t.taskLabel,
-          taskId: t.id,
-          isSynthetic: t.id?.startsWith("coverage:") === true,
-        });
-      }
+      if (!index[targetKey]) index[targetKey] = [];
+      index[targetKey].push({
+        tmName,
+        tmId: row?.tmId,
+        side: t.coverageSide ?? null,
+        sourceKey,
+        taskLabel: t.taskLabel,
+        taskId: t.id,
+        isSynthetic: t.id?.startsWith("coverage:") === true,
+      });
     }
   }
 
