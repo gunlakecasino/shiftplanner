@@ -44,8 +44,7 @@ import {
   offerHistoryUndoToast,
   runSharedHistoryUndo,
 } from "@/lib/shiftbuilder/historyUndoToast";
-// Command palette (and its hook) are loaded dynamically on first open to shrink
-// the static dependency graph of this very large file and stop Turbopack module factory errors.
+// Command palette is buried (Wave 3). Desk keys live in useDeskKeyboard.
 
 import {
   // Single source of truth — do NOT re-declare these locally in this file.
@@ -64,10 +63,8 @@ import {
 } from "@/lib/shiftbuilder/auxLayout";
 import { canonicalizeAuxSlotKeyForTrail } from "@/lib/shiftbuilder/constants";
 
-// tmCommands functions are dynamically imported below to avoid pulling heavy deps
-// (e.g. useCommandActions transitive) into the static module graph of this giant file.
-// This follows the established pattern to prevent Turbopack "module factory is not available" HMR errors.
-// See comments around other await import() sites.
+// tmCommands functions are dynamically imported below to keep this giant file's
+// static graph small (Turbopack HMR factory errors). Palettes stay unmounted.
 // Legacy runWeightedPlanner is dynamically imported only behind sb_legacy_engine=1 (dev); production uses unified engine/adapters.
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 // EngineRulesContext extracted; import removed to clean unused.
@@ -139,14 +136,13 @@ import { useCurrentNight } from "./hooks/useCurrentNight";
 import WeeklyOverview from "./components/WeeklyOverview";
 // useShiftData: small, data-only orchestration hook (Slice 1 of Production Stabilization).
 // It wraps useCurrentNight + store + liveCache for hydration/effective values.
-// Intentionally tiny with no UI/CommandPalette/useCommandActions transitive deps.
-// Added as part of shrinking the static module graph of this giant file.
-// See the long comments below about Lazy* + effect-driven dynamic imports for
-// anything that must not be required at Client evaluation time.
+// Intentionally tiny — no palette / command-parser deps.
 import { useShiftData } from "./hooks/useShiftData";
 import { useShiftBuilderIdleResume } from "./hooks/useShiftBuilderIdleResume";
 import { useAuxLayout } from "./hooks/useAuxLayout";
 import { useDayNavigation } from "./hooks/useDayNavigation";
+import { useDeskKeyboard } from "./hooks/useDeskKeyboard";
+import { KeyboardCheatsheet } from "./components/KeyboardCheatsheet";
 import { useEngineRunner } from "./hooks/useEngineRunner";
 import { useConfirm } from "./components/ConfirmDialog";
 import { WeekEngineResultsSheet } from "./components/WeekEngineResultsSheet";
@@ -3312,7 +3308,7 @@ function AuthedShiftBuilder() {
     [],
   );
 
-  const handleCmdkAddTask = React.useCallback(
+  const handleAddSlotTask = React.useCallback(
     async (uiKeys: string | string[], taskLabel: string) => {
       if (isCurrentNightLocked) {
         showToast("This day is locked — cannot add tasks", "error");
@@ -7272,7 +7268,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   });
 
   const stableAddTask = useStableCallback((slotKey: string, label: string) => {
-    handleCmdkAddTask(slotKey, label);
+    handleAddSlotTask(slotKey, label);
   });
 
   const stableWeekHealthSelectDay = useStableCallback((idx: number) => {
@@ -7997,6 +7993,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     setAssignments,
     setLiveAssignVersion,
   ]);
+
+  const [cheatsheetOpen, setCheatsheetOpen] = React.useState(false);
+  useDeskKeyboard({
+    cheatsheetOpen,
+    setCheatsheetOpen,
+    goPrevDay,
+    goNextDay,
+    rosterOpen,
+    setRosterOpen,
+    toggleDraft: canSeeDraftData ? toggleDraftMode : undefined,
+    applyDraft: canSeeDraftData ? () => { void applyDraft(); } : undefined,
+    discardDraft: canSeeDraftData ? () => { void discardDraft(); } : undefined,
+    refreshDay: canEditAssignments ? () => { void handleDeepRefreshDay(); } : undefined,
+    canDraft: canSeeDraftData && canEditAssignments && !isCurrentNightLocked,
+  });
 
   return (
     <div
@@ -8871,7 +8882,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                     onLiveUnassign: handleBoardLiveUnassign,
                     onToggleLock: handlePadToggleLock,
                     onAssign: handlePadAssign,
-                    onAddTask: (sk: string, label: string) => handleCmdkAddTask(sk, label),
+                    onAddTask: (sk: string, label: string) => handleAddSlotTask(sk, label),
                     onRemoveTask: handleBoardRemoveTask,
                     onClearSlotTasks: handleClearSlotTasks,
                     onCopyRestroomPairingTasks: handleCopyRestroomPairingTasks,
@@ -9184,6 +9195,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           }}
         />
       )}
+
+      <KeyboardCheatsheet
+        open={cheatsheetOpen}
+        onClose={() => setCheatsheetOpen(false)}
+      />
 
       {/* Task selector popover — fires when the operator picks "Tasks" from
          the quick-action fan. Centered modal with backdrop. The list of

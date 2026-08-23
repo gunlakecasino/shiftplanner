@@ -549,7 +549,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.271"');
+    expect(version).toContain('"1.272"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -753,5 +753,78 @@ describe("SheetBuilder Wave 2 density / pad QA / Apply honesty", () => {
     expect(globalsCss).toContain("var(--sb-spring-snappy) both");
     expect(shiftBuilderBoard).toContain("key={key}");
     expect(shiftBuilderBoard).not.toContain("key={`${dayTransitionKey}");
+  });
+});
+
+describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
+  const cheatsheet = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/KeyboardCheatsheet.tsx"),
+    "utf8",
+  );
+  const deskHook = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/hooks/useDeskKeyboard.ts"),
+    "utf8",
+  );
+  const catalog = readFileSync(
+    resolve(process.cwd(), "src/lib/shiftbuilder/deskShortcuts.ts"),
+    "utf8",
+  );
+  const version = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/version.ts"),
+    "utf8",
+  );
+  const rosterItem = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/RosterItem.tsx"),
+    "utf8",
+  );
+  const authGateCss = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/authGate.css"),
+    "utf8",
+  );
+
+  it("ships a ? cheatsheet of real bindings and no Engine / R / ⌘K theater", () => {
+    expect(shiftBuilderClient).toContain("useDeskKeyboard");
+    expect(shiftBuilderClient).toContain("KeyboardCheatsheet");
+    expect(deskHook).toContain('key === "?"');
+    expect(deskHook).toContain("ArrowLeft");
+    expect(deskHook).toContain("ArrowRight");
+    expect(deskHook).toContain("ArrowUp");
+    expect(deskHook).toContain("sb-unassigned-invite");
+    expect(deskHook).toContain("applyDraft");
+    expect(deskHook).not.toContain("Run Engine");
+    expect(cheatsheet).toContain("DESK_SHORTCUTS");
+    expect(cheatsheet).toContain("data-sb-cheatsheet");
+    expect(cheatsheet).not.toContain("Run Engine");
+    expect(catalog).toContain("Previous day");
+    expect(catalog).toContain("Apply to Live — opens confirm");
+    expect(catalog).not.toContain("⌘K");
+    expect(existsSync(resolve(process.cwd(), "src/lib/shiftbuilder/commandParser.ts"))).toBe(false);
+    expect(floatingNav).not.toContain(">⌘K<");
+  });
+
+  it("keeps one next-day strip cue and one empty-zone board cue", () => {
+    expect(floatingNav).toContain("sb-day-strip-btn--ahead");
+    expect(floatingNav).toContain("sb-week-nav-btn--ahead");
+    expect(shiftBuilderBoard).toContain("data-attention-cue");
+    expect(shiftBuilderBoard).toContain("attentionZoneKey");
+    expect(globalsCss).toContain(".sb-day-strip-btn--ahead::after");
+    expect(globalsCss).toContain('.sb-day-card-host[data-attention-cue="true"]');
+    expect(globalsCss).not.toMatch(/attention-cue[\s\S]{0,80}sparkle/i);
+  });
+
+  it("adds focus rings on cards and roster without trapping iPad", () => {
+    expect(globalsCss).toContain(".assignment-card:focus-visible");
+    expect(globalsCss).toContain(".sb-roster-row:focus-visible");
+    expect(rosterItem).toContain("tabIndex={0}");
+    expect(deskHook).toContain("isDeskTypingTarget");
+    expect(deskHook).toContain("isDeskModalLock");
+    expect(cheatsheet).toContain("previousFocusRef");
+  });
+
+  it("improves the PIN side toward a cool desk and bumps 1.272", () => {
+    expect(authGateCss).toContain("sb-auth-visual__desk");
+    expect(authGateCss).toContain("#F4F6FA");
+    expect(authGateCss).toContain("object-fit: contain");
+    expect(version).toContain('"1.272"');
   });
 });

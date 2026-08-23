@@ -52,6 +52,7 @@ describe("PinGate — modern lightweight ops console", () => {
     expect(opsAuthGate).toContain("sb-auth-split");
     expect(opsAuthGate).toContain("sb-auth-visual");
     expect(opsAuthGate).toContain("sb-auth-visual__art");
+    expect(opsAuthGate).toContain("sb-auth-visual__desk");
     expect(opsAuthGate).toContain("/sheetbuilder/auth-gate-side.png");
     expect(opsAuthGate).not.toContain("Night board");
     expect(opsAuthGate).not.toContain("BuilderLoadingShell");
@@ -128,13 +129,16 @@ describe("PinGate — modern lightweight ops console", () => {
     expect(existsSync(resolve(process.cwd(), "public/sheetbuilder/auth-gate-side.png"))).toBe(true);
     expect(opsAuthGate).toContain('alt=""');
     expect(opsAuthGate).toContain('aria-hidden="true"');
+    expect(opsAuthGate).toContain("sb-auth-visual__desk");
     expect(opsAuthGate).not.toContain("GRAVES_FLOOR_ZONES");
     expect(opsAuthGate).not.toContain("sb-auth-floor");
     expect(opsAuthGate).not.toContain("sb-auth-preview");
     expect(opsAuthGate).not.toContain("SmartSave");
     expect(opsAuthGate).not.toContain("Continue With");
     expect(authCss).toContain("sb-auth-visual__art");
+    expect(authCss).toContain("sb-auth-visual__desk");
     expect(authCss).toContain("object-fit: contain");
+    expect(authCss).toContain("#F4F6FA");
     expect(authCss).not.toContain("sb-auth-floor");
     expect(authCss).not.toContain("sb-auth-preview");
     expect(authCss).toContain("display: none");

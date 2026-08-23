@@ -538,6 +538,16 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
 
+  /** One ignorable empty-zone cue — first uncovered zone in visual order. */
+  const attentionZoneKey = React.useMemo(() => {
+    if (isPrintPreview) return null;
+    return (
+      ZONE_VISUAL_ORDER.find(
+        (zKey) => !slotShowsFilled(zKey, displayAssignments, isDraftMode, draftAssignments),
+      ) ?? null
+    );
+  }, [isPrintPreview, displayAssignments, isDraftMode, draftAssignments]);
+
   const todayOpenAuxCount = React.useMemo(() => {
     if (!isTodayBoard) return 0;
     return auxDefs.filter((d) => {
@@ -1523,6 +1533,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           ? "true"
                           : undefined
                       }
+                      data-attention-cue={attentionZoneKey === key ? "true" : undefined}
                       {...builderDayCardMotionProps(idx, reducedMotion, allowCardDayEnter)}
                     >
                       {cardContent}
