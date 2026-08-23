@@ -2,15 +2,15 @@
 
 import * as React from "react";
 import { useState, useRef, useEffect } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import {
-  addDays,
   MONTH_LONG,
 } from "@/lib/shiftbuilder/dateUtils";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
-import { RequestBoardModal } from "./RequestBoardModal";
 import { MiniCalendar } from "../redesign/components/MiniCalendar";
+import { velvetGlassPillStyle } from "./canvasPillGlass";
 import {
   ChevronDown,
   ChevronLeft,
@@ -27,15 +27,10 @@ import {
   FilePenLine,
   Check,
   CalendarDays,
-  BarChart2,
   RefreshCw,
   Bell,
-  BookOpen,
-  Copy,
   Printer,
   ClipboardList,
-  ClipboardPlus,
-  CalendarRange,
 } from "lucide-react";
 
 const APP_BASE_PATH = "/sheetbuilder";
@@ -107,8 +102,8 @@ export interface FloatingNavProps {
   onOptimizeNight?: () => void;
   engineRunning?: boolean;
   deepOptimizeRunning?: boolean;
-  /** Preview the unified week engine (rolling solve + cross-night polish + fairness ledger) for the visible grave week. Read-only — opens a results sheet, doesn't write. */
-  onRunWeek?: () => void; // Optimize Week preview (uses unified week engine)
+  /** Hidden from chrome (PR A). Prop retained so callers do not have to unwire yet. */
+  onRunWeek?: () => void;
   weekRunBusy?: boolean;
   onClearDay?: () => void;
   /** Deep refresh: bust server caches + refetch night + placement histories. */
@@ -151,6 +146,45 @@ const DEFAULT_ACTIVE_COLOR = "#7B3226";
 function hexShadow(color: string): string {
   const c = color.startsWith("#") && color.length === 7 ? `${color}59` : "rgba(0,0,0,0.25)";
   return `0 2px 8px ${c}`;
+}
+
+type NightActionKind = "engine" | "draft" | "print";
+
+function nightActionPillStyle(kind: NightActionKind, extra?: CSSProperties): CSSProperties {
+  const accent: CSSProperties =
+    kind === "engine"
+      ? {
+          color: "var(--sb-optimize-ink)",
+          border: "1px solid var(--sb-optimize-border)",
+          boxShadow:
+            "inset 0 1px 0 var(--sb-glass-highlight), 0 6px 18px -12px color-mix(in srgb, var(--sb-optimize-ink) 45%, transparent)",
+        }
+      : kind === "draft"
+        ? {
+            color: "var(--sb-gold-ink)",
+            border: "1px solid var(--sb-gold-border)",
+            boxShadow:
+              "inset 0 1px 0 var(--sb-glass-highlight), 0 6px 18px -12px color-mix(in srgb, var(--sb-gold) 50%, transparent)",
+          }
+        : {
+            color: "var(--sb-text-2, #3C3C43)",
+          };
+
+  return velvetGlassPillStyle({
+    height: 30,
+    padding: "0 10px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 780,
+    letterSpacing: "0.01em",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    ...accent,
+    ...extra,
+  });
 }
 
 function SheetBuilderMark({ className }: { className?: string }) {
@@ -220,21 +254,13 @@ export default function FloatingNav(props: FloatingNavProps) {
     selectedDate,
     onPrevWeek,
     onNextWeek,
-    onCopyPriorWeekTasks,
-    onCopyYesterdayTasks,
-    onApplyOverlapTasks,
-    applyOverlapTasksBusy = false,
     onPrint,
-    onOpenCoverGuide,
     isDark = false,
-    contentMaxWidth,
     userInitials = "OP",
     currentUser,
     onLogout,
     onOpenSettings,
     onOptimizeNight,
-    onRunWeek,
-    weekRunBusy = false,
     engineRunning = false,
     onClearDay,
     onRefreshDay,
@@ -245,7 +271,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     draftSlotCount = 0,
     onToggleDraftMode,
     onSaveAllDraft,
-    onDiscardDraft,
     rosterOpen = false,
     onToggleRoster,
     canvasMode = "builder",
@@ -254,11 +279,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     canPublishDay = false,
     onToggleDayPublished,
     publishDayBusy = false,
-    onPublishWeek,
-    onUnpublishWeek,
-    publishWeekBusy = false,
-    onToggleWeekHealth,
-    weekHealthVisible = false,
     top = 0,
     permissions,
   } = props;
@@ -267,9 +287,6 @@ export default function FloatingNav(props: FloatingNavProps) {
   const canPublish = permissions?.canPublish ?? false;
   const canRunEngine = permissions?.canRunEngine ?? false;
   const canAccessSudo = permissions?.canAccessSudo ?? false;
-  const canAccessReports = permissions?.canAccessReports ?? false;
-  const canAccessTasks = permissions?.canAccessTasks ?? false;
-  const canRequestTasks = permissions?.canRequestTasks ?? false;
   const canManageTeam = permissions?.canManageTeam ?? false;
   const canApplySchedules = permissions?.canApplySchedules ?? false;
   const canSeeDraftData = permissions?.canSeeDraftData ?? false;
@@ -278,15 +295,12 @@ export default function FloatingNav(props: FloatingNavProps) {
   const showEngineTools = canRunEngine;
   const engineBusy = engineRunning;
   const showAdminLinks = canAccessSudo;
-  const showReportsLink = canAccessReports;
-  const showProjectsLink = canAccessTasks;
   const showTeamLink = canManageTeam || canApplySchedules || canAccessSudo;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
   const [rosterMenuOpen, setRosterMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [requestOpen, setRequestOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const launchpadRef = useRef<HTMLDivElement>(null);
@@ -481,15 +495,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </Link>
                 )}
 
-                {showReportsLink && (
-                  <Link href={`${APP_BASE_PATH}/reports`} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
-                    <span className="sb-sheetbuilder-launchpad-card-icon">
-                      <BarChart2 size={28} strokeWidth={2} />
-                    </span>
-                    <strong>Reports</strong>
-                  </Link>
-                )}
-
                 {showAdminLinks && onOpenSettings && (
                   <button
                     type="button"
@@ -677,8 +682,131 @@ export default function FloatingNav(props: FloatingNavProps) {
 
         <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
 
-        {/* RIGHT — actions + avatar + more */}
-        <div className="sb-topbar-actions flex items-center gap-0.5 shrink-0">
+        {/* RIGHT — night actions (seen) + roster + more */}
+        <div className="sb-topbar-actions flex items-center gap-1 shrink-0">
+          <div
+            className="sb-night-action-pills flex items-center gap-1 shrink-0"
+            role="group"
+            aria-label="Night actions"
+          >
+            {showEngineTools && onOptimizeNight && (
+              <button
+                type="button"
+                className="sb-night-action-pill sb-night-action-pill--engine sb-interactive"
+                style={nightActionPillStyle("engine")}
+                disabled={engineBusy}
+                onClick={onOptimizeNight}
+                aria-busy={engineBusy}
+                title="Engine — results land in Draft"
+                aria-label="Engine — run day placements"
+              >
+                <Sparkles size={13} strokeWidth={2.2} />
+                <span>{engineRunning ? "Running…" : "Engine"}</span>
+              </button>
+            )}
+
+            {showDraftTools && onToggleDraftMode && (
+              isDraftMode && draftSlotCount > 0 && onSaveAllDraft ? (
+                <div
+                  className="sb-night-action-pill sb-night-action-pill--draft sb-night-action-pill--split"
+                  style={nightActionPillStyle("draft", { padding: 0, gap: 0 })}
+                >
+                  <button
+                    type="button"
+                    className="sb-night-action-pill__segment sb-interactive"
+                    onClick={onToggleDraftMode}
+                    title="Draft mode on — edits stay provisional"
+                    aria-pressed
+                    aria-label={`Draft mode on — ${draftSlotCount} change${draftSlotCount === 1 ? "" : "s"}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      height: "100%",
+                      padding: "0 8px 0 10px",
+                      color: "inherit",
+                      background: "transparent",
+                      border: 0,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <FilePenLine size={13} strokeWidth={2.2} />
+                    <span>Draft</span>
+                    <span className="tabular-nums opacity-70">{draftSlotCount}</span>
+                  </button>
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 1,
+                      height: 14,
+                      background: "var(--sb-gold-border)",
+                      opacity: 0.8,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="sb-night-action-pill__apply sb-interactive"
+                    onClick={onSaveAllDraft}
+                    title="Apply draft changes to the live board"
+                    aria-label={`Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      height: "100%",
+                      padding: "0 10px 0 8px",
+                      color: "var(--sb-gold-ink)",
+                      background: "var(--sb-gold-surface)",
+                      border: 0,
+                      borderRadius: "0 999px 999px 0",
+                      cursor: "pointer",
+                      fontWeight: 800,
+                    }}
+                  >
+                    <Check size={12} strokeWidth={2.6} />
+                    Apply
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="sb-night-action-pill sb-night-action-pill--draft sb-interactive"
+                  style={nightActionPillStyle(
+                    "draft",
+                    isDraftMode
+                      ? { background: "var(--sb-gold-surface)" }
+                      : undefined,
+                  )}
+                  onClick={onToggleDraftMode}
+                  aria-pressed={isDraftMode}
+                  title={
+                    isDraftMode
+                      ? "Draft mode on — no unapplied changes"
+                      : "Enter Draft mode"
+                  }
+                  aria-label={isDraftMode ? "Draft mode on" : "Enter Draft mode"}
+                >
+                  <FilePenLine size={13} strokeWidth={2.2} />
+                  <span>Draft</span>
+                </button>
+              )
+            )}
+
+            {onPrint && (
+              <button
+                type="button"
+                className="sb-night-action-pill sb-night-action-pill--print sb-interactive"
+                style={nightActionPillStyle("print")}
+                onClick={onPrint}
+                title="Open Print Command Center"
+                aria-label="Print"
+              >
+                <Printer size={13} strokeWidth={2.2} />
+                <span>Print</span>
+              </button>
+            )}
+          </div>
+
           <button
             type="button"
             className="sb-topbar-notification-btn icon-btn sb-interactive flex items-center justify-center rounded-full"
@@ -862,39 +990,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Team
                   </Link>
                 )}
-                {showProjectsLink && (
-                  <Link
-                    href={`${APP_BASE_PATH}/projects`}
-                    className={menuItemClass}
-                    onClick={() => setProfileOpen(false)}
-                  >
-                    <ClipboardList size={14} />
-                    Projects
-                  </Link>
-                )}
-                {canRequestTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      setProfileOpen(false);
-                      setRequestOpen(true);
-                    }}
-                  >
-                    <ClipboardPlus size={14} />
-                    Request Work
-                  </button>
-                )}
-                {showReportsLink && (
-                  <Link
-                    href={`${APP_BASE_PATH}/reports`}
-                    className={menuItemClass}
-                    onClick={() => setProfileOpen(false)}
-                  >
-                    <BarChart2 size={14} />
-                    Reports
-                  </Link>
-                )}
                 <button type="button" className={menuItemClass} onClick={() => { onLogout?.(); setProfileOpen(false); }}>
                   Sign out
                 </button>
@@ -923,56 +1018,15 @@ export default function FloatingNav(props: FloatingNavProps) {
 
             {moreOpen && (
               <div
-                className={`absolute right-0 top-full mt-2 w-64 max-h-[min(70vh,560px)] overflow-y-auto overscroll-contain z-[70] ${menuPanelClass}`}
+                className={`absolute right-0 top-full mt-2 w-56 max-h-[min(70vh,560px)] overflow-y-auto overscroll-contain z-[70] ${menuPanelClass}`}
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Engine & Maintenance */}
-                {showEngineTools && (onOptimizeNight || onRunWeek) && (
-                  <div
-                    className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
-                  >
-                    Engine
-                  </div>
-                )}
-                {showEngineTools && onOptimizeNight && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    disabled={engineBusy}
-                    onClick={() => {
-                      onOptimizeNight();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Sparkles size={14} /> Run Day Placements
-                    {engineRunning && (
-                      <span className="ml-auto text-[10px] opacity-60">Running…</span>
-                    )}
-                  </button>
-                )}
-                {showEngineTools && onRunWeek && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    disabled={weekRunBusy}
-                    onClick={() => {
-                      onRunWeek();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <CalendarRange size={14} className="shrink-0" />
-                    <span className="flex min-w-0 flex-col items-start leading-tight">
-                      <span className="truncate">Optimize Week</span>
-                      <span className="truncate text-[10px] font-normal opacity-60">
-                        Cross-night fairness · preview + per-night draft
-                      </span>
-                    </span>
-                    {weekRunBusy && (
-                      <span className="ml-auto text-[10px] opacity-60">Running…</span>
-                    )}
-                  </button>
-                )}
+                <div
+                  className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
+                >
+                  Maintenance
+                </div>
                 {showDraftTools && onClearDay && (
                   <button
                     type="button"
@@ -1000,118 +1054,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {((showEngineTools && (onOptimizeNight || onRunWeek)) || (showDraftTools && onClearDay) || onRefreshDay) && (
-                  <div className={menuDividerClass} />
-                )}
-
-                {/* Draft */}
-                {showDraftTools && onToggleDraftMode && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onToggleDraftMode();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <FilePenLine size={14} />
-                    Draft Mode
-                    {isDraftMode && (
-                      <span className="ml-auto text-[11px] font-semibold opacity-70">✓</span>
-                    )}
-                  </button>
-                )}
-                {showDraftTools && onSaveAllDraft && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    disabled={!isDraftMode || draftSlotCount === 0}
-                    onClick={() => {
-                      onSaveAllDraft();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Check size={14} />
-                    Apply to Live
-                    {draftSlotCount > 0 && (
-                      <span className="ml-auto text-[11px] tabular-nums opacity-60">{draftSlotCount}</span>
-                    )}
-                  </button>
-                )}
-                {showDraftTools && onDiscardDraft && isDraftMode && draftSlotCount > 0 && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onDiscardDraft();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <X size={14} /> Discard Draft
-                  </button>
-                )}
-
-                {showDraftTools && (onToggleDraftMode || onSaveAllDraft) && <div className={menuDividerClass} />}
-
-                {/* Apply Overlap Tasks (K13): staffed AM/PM pool from ops_work_items.
-                    Zone/RR defaults materialize on night create only (applySlotDefaultsToNight). */}
-                {onApplyOverlapTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onApplyOverlapTasks();
-                      setMoreOpen(false);
-                    }}
-                    disabled={applyOverlapTasksBusy}
-                  >
-                    <Layers size={14} />
-                    {applyOverlapTasksBusy ? "Applying…" : "Apply Overlap Tasks"}
-                  </button>
-                )}
-
-                {/* Copies (task population) */}
-                {showDraftTools && onCopyPriorWeekTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onCopyPriorWeekTasks();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Copy size={14} /> Copy Tasks from Prior Week
-                  </button>
-                )}
-                {showDraftTools && onCopyYesterdayTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onCopyYesterdayTasks();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Copy size={14} /> Copy Tasks from Yesterday
-                  </button>
-                )}
-
-                {(onApplyOverlapTasks || (showDraftTools && (onCopyPriorWeekTasks || onCopyYesterdayTasks))) && (
-                  <div className={menuDividerClass} />
-                )}
-
-                {/* Admin & Schedule */}
-                {showTeamLink && (
-                  <Link
-                    href={`${APP_BASE_PATH}/team?tab=schedule`}
-                    className={menuItemClass}
-                    onClick={() => setMoreOpen(false)}
-                  >
-                    <CalendarDays size={14} />
-                    Graves Schedule
-                  </Link>
-                )}
-
                 {showPublishControls && (
                   <button
                     type="button"
@@ -1127,117 +1069,45 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {showPublishControls && (
-                  <button
-                    type="button"
+                {showTeamLink && (
+                  <Link
+                    href={`${APP_BASE_PATH}/team?tab=schedule`}
                     className={menuItemClass}
-                    onClick={() => {
-                      onPublishWeek?.();
-                      setMoreOpen(false);
-                    }}
-                    disabled={publishWeekBusy}
+                    onClick={() => setMoreOpen(false)}
                   >
-                    Publish Week
-                  </button>
-                )}
-
-                {showPublishControls && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onUnpublishWeek?.();
-                      setMoreOpen(false);
-                    }}
-                    disabled={publishWeekBusy}
-                  >
-                    Unpublish Week
-                  </button>
-                )}
-
-                {(showAdminLinks || showPublishControls) && (
-                  <div className={menuDividerClass} />
-                )}
-
-                {/* Guides & Output */}
-                {onOpenCoverGuide && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onOpenCoverGuide();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <BookOpen size={14} />
-                    Grave Cover Guide
-                  </button>
-                )}
-
-                {onPrint && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onPrint();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <Printer size={14} /> Print
-                  </button>
+                    <CalendarDays size={14} />
+                    Graves Schedule
+                  </Link>
                 )}
 
                 {onCanvasModeChange && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onCanvasModeChange(canvasMode === "print-preview" ? "builder" : "print-preview");
-                      setMoreOpen(false);
-                    }}
-                  >
-                    {canvasMode === "print-preview" ? (
-                      <>
-                        <X size={14} /> Exit Print Preview
-                      </>
-                    ) : (
-                      <>
-                        <Eye size={14} /> View Print Preview
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {onViewChange && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onViewChange(currentView === "weekly" ? "deployment" : "weekly");
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <CalendarRange size={14} />
-                    {currentView === "weekly" ? "Exit Weekly View" : "Weekly View"}
-                  </button>
-                )}
-
-                {(onOpenCoverGuide || onPrint || onCanvasModeChange) && (
-                  <div className={menuDividerClass} />
-                )}
-
-                {/* Analytics */}
-                {showDraftTools && onToggleWeekHealth && (
-                  <button type="button" className={menuItemClass} onClick={() => { onToggleWeekHealth(); setMoreOpen(false); }}>
-                    {weekHealthVisible ? "Hide" : "Show"} Week Health
-                  </button>
+                  <>
+                    <div className={menuDividerClass} />
+                    <button
+                      type="button"
+                      className={menuItemClass}
+                      onClick={() => {
+                        onCanvasModeChange(canvasMode === "print-preview" ? "builder" : "print-preview");
+                        setMoreOpen(false);
+                      }}
+                    >
+                      {canvasMode === "print-preview" ? (
+                        <>
+                          <X size={14} /> Exit Print Preview
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={14} /> View Print Preview
+                        </>
+                      )}
+                    </button>
+                  </>
                 )}
               </div>
             )}
           </div>
         </div>
       </nav>
-      <RequestBoardModal open={requestOpen} onClose={() => setRequestOpen(false)} isDark={isDark} />
     </>
   );
 }

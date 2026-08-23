@@ -33,6 +33,11 @@ import {
 import { uiToDb, dbToUi, type SlotType } from "@/lib/shiftbuilder/slot-keys"; // auxDbKeyToDef extracted, no longer used here
 import { mapNightTasksToUiKeys as mapNightTasksToUiKeysLib } from "@/lib/shiftbuilder/mapNightTasksToUiKeys";
 import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHistory";
+import {
+  dismissHistoryUndoToast,
+  offerHistoryUndoToast,
+  runSharedHistoryUndo,
+} from "@/lib/shiftbuilder/historyUndoToast";
 // Command palette (and its hook) are loaded dynamically on first open to shrink
 // the static dependency graph of this very large file and stop Turbopack module factory errors.
 
@@ -141,9 +146,6 @@ import { useAuxLayout } from "./hooks/useAuxLayout";
 import { useDayNavigation } from "./hooks/useDayNavigation";
 import { useEngineRunner } from "./hooks/useEngineRunner";
 import { useConfirm } from "./components/ConfirmDialog";
-import { useTimefoldOptimize } from "./hooks/useTimefoldOptimize";
-import { TimefoldResultsSheet } from "./components/timefold/TimefoldResultsSheet";
-import type { TimefoldProposal } from "@/lib/shiftbuilder/timefold/timefoldTypes";
 import { WeekEngineResultsSheet } from "./components/WeekEngineResultsSheet";
 import { EngineRunningOverlay } from "./components/EngineRunningOverlay";
 import { useNotes } from "./hooks/useNotes";
@@ -878,6 +880,11 @@ function AuthedShiftBuilder() {
   // Undo/Redo recording coordination
   const pendingHistoryRef = useRef<{ description: string; before: Snapshot } | null>(null);
   const historyPersistBusyRef = useRef(false);
+  // Invalidates a covering-operator Undo toast when Cmd+Z or a newer history
+  // entry already consumed the snapshot — same stack, no second undo path.
+  const undoToastGenRef = useRef(0);
+  const performHistoryUndoRef = useRef<() => void>(() => {});
+  const offerPersistedHistoryUndoToastRef = useRef<(message: string) => void>(() => {});
 
   // Ref for handle to avoid TDZ when passing to early useAuxLayout
   const handleBoardLiveUnassignRef = useRef<((slotKey: string) => void) | null>(null);
@@ -1317,87 +1324,8 @@ function AuthedShiftBuilder() {
 
   // === Single unified Optimize Night ===
   // Full placements (planner) + optimization (local search + optional AI via unified engine).
-  // One thing for the day: runs the canonical engine path and lands in Draft.
-  // (The previous separate deep timefold path has been incorporated here.)
-  const timefold = useTimefoldOptimize(); // kept for now for sheet if needed, but main path is engine
-  const [timefoldSheetOpen, setTimefoldSheetOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    if (timefold.phase === "results") setTimefoldSheetOpen(true);
-  }, [timefold.phase]);
-
-  /**
-   * Lands an entire Timefold proposal into a fresh Draft, mirroring
-   * applyGrokSuggestions' shape: ensure Draft Mode, build the diff map,
-   * commit it, and record one atomic history entry so undo/audit behave
-   * exactly like every other draft-producing entry point.
-   */
-  const applyTimefoldProposal = React.useCallback(
-    (proposal: TimefoldProposal, selectedDiffs?: import("@/lib/shiftbuilder/timefold/timefoldTypes").TimefoldSlotDiff[]) => {
-      if (isCurrentNightLocked) {
-        showToast("This day is locked — cannot import optimize results", "error");
-        return;
-      }
-
-      // Triage: the sheet can hand us a subset of the proposal's diffs
-      // (e.g. accept the fills + repeat fixes, skip the neutral shuffle).
-      const diffsToApply = selectedDiffs && selectedDiffs.length > 0 ? selectedDiffs : proposal.diffs;
-
-      timefold.markImporting();
-
-      if (!isDraftMode) {
-        setIsDraftMode(true);
-        setDraftAssignments({});
-      }
-
-      const before = {
-        assignments: { ...assignments },
-        auxDefs: [...auxDefs],
-        draft: { ...draftAssignments },
-      };
-
-      const newDraft: Record<string, any> = { ...draftAssignments };
-      diffsToApply.forEach((diff) => {
-        if (diff.proposedTmId) {
-          newDraft[diff.slotKey] = {
-            proposedTmId: diff.proposedTmId,
-            proposedTmName: diff.proposedTmName || diff.proposedTmId,
-            previousTmId: diff.previousTmId ?? undefined,
-            previousTmName: diff.previousTmName ?? undefined,
-          };
-        } else if (diff.previousTmId) {
-          newDraft[diff.slotKey] = {
-            proposedTmId: "",
-            proposedTmName: "",
-            previousTmId: diff.previousTmId,
-            previousTmName: diff.previousTmName ?? undefined,
-            proposedClear: true,
-          };
-        }
-      });
-
-      setDraftAssignments(newDraft);
-      const partial = diffsToApply.length !== proposal.diffs.length;
-      pendingHistoryRef.current = {
-        description: `Optimize Tonight — imported "${proposal.title}" (${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"})`,
-        before,
-      };
-
-      timefold.markImported();
-      showToast(
-        `Imported ${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"} to Draft. Look for blue "D" badges + left borders on cards + "was:" lines.`,
-        "success",
-      );
-
-      // Immediate spotlight flash for the just-imported optimizer changes
-      setTimeout(() => {
-        const canvas = document.querySelector('.sb-builder-canvas') || document.body;
-        canvas.classList.add('sb-draft-flash');
-        setTimeout(() => canvas.classList.remove('sb-draft-flash'), 2200);
-      }, 120);
-    },
-    [isCurrentNightLocked, showToast, timefold, isDraftMode, setIsDraftMode, assignments, auxDefs, draftAssignments],
-  );
+  // One thing for the day: runs the canonical engine path (`runNightEngine`) and lands in Draft.
+  // Timefold UI is unmounted from this tree; hide-before-delete. Live path is not Timefold.
 
   const applyDraft = async () => {
     const draft = useShiftBuilderStore.getState().draftAssignments;
@@ -1884,6 +1812,8 @@ function AuthedShiftBuilder() {
       };
       recordChangeRef.current(description, before, after);
       pendingHistoryRef.current = null;
+      undoToastGenRef.current += 1;
+      dismissHistoryUndoToast();
     }
   }, [assignments, auxDefs]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2896,7 +2826,7 @@ function AuthedShiftBuilder() {
     });
   };
 
-  const unassign = (slotKey: string) => {
+  const unassign = (slotKey: string, options?: { offerUndo?: boolean }) => {
     if (!requireEdit()) return;
     if (isCurrentNightLocked) {
       showToast("This day is locked — changes are disabled", "error");
@@ -2921,6 +2851,7 @@ function AuthedShiftBuilder() {
     const captureDayName = selectedDay.name;
     const prevAssignment = assignments[slotKey];
     const tmIdBeingRemoved = prevAssignment?.tmId ?? null;
+    const offerUndoAfterPersist = options?.offerUndo === true;
 
     // Derive DB key + side so legacy direct delete (and flex AUX) targets the
     // same row assign wrote (e.g. AUX3+support → support_1, not aux_3).
@@ -2942,6 +2873,9 @@ function AuthedShiftBuilder() {
         captureDayName,
         targetNightId,
         isDraftMode,
+        onPersisted: offerUndoAfterPersist
+          ? () => offerPersistedHistoryUndoToastRef.current("Unassigned")
+          : undefined,
       });
     } else {
       // Fallback (legacy direct path)
@@ -2964,7 +2898,13 @@ function AuthedShiftBuilder() {
               slotType: derivedSlotType,
               rrSide: derivedRrSide,
               dbSlotKey: derivedDbSlotKey,
-            }).catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
+            })
+              .then(() => {
+                if (offerUndoAfterPersist) {
+                  offerPersistedHistoryUndoToastRef.current("Unassigned");
+                }
+              })
+              .catch((e: any) => console.error("[shiftbuilder] robust delete failed", e))
           );
         }
       })();
@@ -3230,6 +3170,31 @@ function AuthedShiftBuilder() {
   const applyHistorySnapshotRef = useRef(applySnapshot);
   shiftHistoryRef.current = shiftHistory;
   applyHistorySnapshotRef.current = applySnapshot;
+
+  const performHistoryUndo = () => {
+    runSharedHistoryUndo({
+      busy: historyPersistBusyRef.current,
+      undo: () => shiftHistoryRef.current.undo(),
+      apply: (snapshot) => {
+        void applyHistorySnapshotRef.current(snapshot, "Undo");
+      },
+      dismissToast: () => {
+        undoToastGenRef.current += 1;
+        dismissHistoryUndoToast();
+      },
+    });
+  };
+  performHistoryUndoRef.current = performHistoryUndo;
+
+  const offerPersistedHistoryUndoToast = (message: string) => {
+    const gen = undoToastGenRef.current;
+    offerHistoryUndoToast(message, () => {
+      if (undoToastGenRef.current !== gen) return;
+      performHistoryUndo();
+    });
+  };
+  offerPersistedHistoryUndoToastRef.current = offerPersistedHistoryUndoToast;
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey;
@@ -3242,8 +3207,7 @@ function AuthedShiftBuilder() {
       // then gets dropped — desyncing the history pointer from the board.
       if (historyPersistBusyRef.current) return;
       if (isUndo) {
-        const previous = shiftHistoryRef.current.undo();
-        if (previous) void applyHistorySnapshotRef.current(previous, "Undo");
+        performHistoryUndoRef.current();
       } else {
         const next = shiftHistoryRef.current.redo();
         if (next) void applyHistorySnapshotRef.current(next, "Redo");
@@ -5802,6 +5766,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               );
             }
             setLastSavedAt(new Date());
+            if (displacedTmId) {
+              offerPersistedHistoryUndoToastRef.current("Swapped");
+            }
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             rollbackDrag(msg || "unknown error");
@@ -5815,7 +5782,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       if (over?.data.current?.type === "roster") {
         const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
         pendingHistoryRef.current = { description: `Unassigned from ${a.fromSlot}`, before };
-        unassign(a.fromSlot);
+        unassign(a.fromSlot, { offerUndo: true });
         return;
       }
       // → nowhere: keep the assignment. Unassigning on a missed drop is too
@@ -8230,21 +8197,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           </details>
         </div>
       )}
-
-      <TimefoldResultsSheet
-        open={timefoldSheetOpen}
-        onOpenChange={(open) => {
-          setTimefoldSheetOpen(open);
-          if (!open && (timefold.phase === "results" || timefold.phase === "imported")) {
-            timefold.reset();
-          }
-        }}
-        result={timefold.result}
-        importing={timefold.phase === "importing"}
-        imported={timefold.phase === "imported"}
-        onImport={applyTimefoldProposal}
-        showToast={showToast}
-      />
 
       <WeekEngineResultsSheet
         open={weekRunSheetOpen}
