@@ -256,6 +256,14 @@ describe("SheetBuilder modern lightweight desk", () => {
     expect(globalsCss).toContain("Modern lightweight desk — live board cards only");
     expect(globalsCss).toContain("--sb-card-paper: #FFFFFF");
     expect(globalsCss).toContain("--sb-paper: #F4F6FA");
+    expect(globalsCss).toContain("--sb-substrate-2: #EEF1F6");
+    expect(globalsCss).toContain("Dock open — keep the cool desk");
+    expect(globalsCss).toMatch(
+      /body\.sb-tablet-dock-open \{[\s\S]*?--sb-substrate: #EEF1F6/,
+    );
+    expect(globalsCss).toContain(
+      "body.sb-tablet-dock-open .builder-workspace,\nbody.sb-tablet-dock-open .sb-canvas-veil",
+    );
     expect(globalsCss).toContain("sb-coverage-chip");
     expect(globalsCss).not.toContain("#F4EFE6");
     expect(globalsCss).not.toContain("#FBF7F0");

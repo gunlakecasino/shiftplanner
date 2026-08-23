@@ -6875,9 +6875,11 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-builder-shell.sb-canvas-builder {
   --sb-paper: #F4F6FA;
   --sb-substrate: #EEF1F6;
+  --sb-substrate-2: #EEF1F6;
   --sb-desk: #F4F6FA;
   --sb-card-paper: #FFFFFF;
   --sb-card-line: #E6EAF0;
+  --ios-background-primary: #F4F6FA;
 }
 
 .sb-builder-shell.sb-canvas-builder .sb-builder-stage {
@@ -7239,4 +7241,32 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 
 .sb-sheetbuilder-redesign .sb-month-status-diamond {
   background: #34C759;
+}
+
+/* ==========================================================================
+   Dock open — keep the cool desk.
+   Closed board already uses #F4F6FA / #EEF1F6 on .sb-canvas-builder. When
+   body.sb-tablet-dock-open, stage / viewport / workspace / veil still resolved
+   older velvet paper (#FAFAF8 / #F2F2F0). Lock every live canvas layer.
+   Does not touch Golden print (no .sb-canvas-builder / no dock-open).
+   ========================================================================== */
+body.sb-tablet-dock-open {
+  --sb-paper: #F4F6FA;
+  --sb-substrate: #EEF1F6;
+  --sb-substrate-2: #EEF1F6;
+  --sb-desk: #F4F6FA;
+  --ios-background-primary: #F4F6FA;
+}
+
+body.sb-tablet-dock-open.sb-shiftbuilder,
+body.sb-tablet-dock-open .sb-builder-shell,
+body.sb-tablet-dock-open .sb-builder-stage,
+body.sb-tablet-dock-open .sb-builder-stage.sb-stage-host,
+body.sb-tablet-dock-open .sb-builder-canvas,
+body.sb-tablet-dock-open .sb-builder-fluid-viewport,
+body.sb-tablet-dock-open .sb-builder-scale-viewport,
+body.sb-tablet-dock-open .builder-workspace,
+body.sb-tablet-dock-open .sb-canvas-veil,
+body.sb-tablet-dock-open .sb-canvas-veil--active {
+  background: #F4F6FA !important;
 }
