@@ -31,6 +31,12 @@ import {
   type TaskTextStyle,
 } from "@/lib/shiftbuilder/taskTextStyle";
 import { uiToDb, dbToUi, type SlotType } from "@/lib/shiftbuilder/slot-keys"; // auxDbKeyToDef extracted, no longer used here
+import {
+  markUnavailableToast,
+  restoreOutcomeCopy,
+  snapshotFromUiAssignments,
+  type RestoreSeatSnapshot,
+} from "@/lib/shiftbuilder/markedOffRestore";
 import { mapNightTasksToUiKeys as mapNightTasksToUiKeysLib } from "@/lib/shiftbuilder/mapNightTasksToUiKeys";
 import { useShiftHistory, type Snapshot } from "@/lib/shiftbuilder/useShiftHistory";
 import {
@@ -1072,8 +1078,11 @@ function AuthedShiftBuilder() {
     localStorage.setItem("oms_current_view", currentView);
   }, [currentView]);
 
-  // Called-off TMs for the currently selected night (from `call_offs` table)
+  // Marked-off TMs for the currently selected night (from `call_offs` table)
   const [calledOffIds, setCalledOffIds] = useState<Set<string>>(new Set());
+  const [markedOffByTmId, setMarkedOffByTmId] = useState<
+    Record<string, { reason: string | null; restoreSeat: RestoreSeatSnapshot | null }>
+  >({});
 
   // TMs explicitly marked as scheduled to work this specific night (from
   // `night_tm_status`, populated by the SUDO Schedules tab when an ADP
@@ -3499,7 +3508,7 @@ function AuthedShiftBuilder() {
     async (tmId: string, date: Date) => {
       if (!nightId) throw new Error("No night context — pick a day first");
       const { removeTMFromSchedule } = await import("@/lib/shiftbuilder/tmCommands");
-      await removeTMFromSchedule({ tmId, nightId, nightDate: date, reason: "called_off" });
+      await removeTMFromSchedule({ tmId, nightId, nightDate: date, reason: "unavailable" });
       setCalledOffIds((prev) => {
         const next = new Set(prev);
         next.add(tmId);
@@ -5054,12 +5063,23 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       if (!requireEdit()) return;
 
       try {
+        const reliableNightId = queryNightId || nightId;
         const { undoRemoveFromSchedule } = await import("@/lib/shiftbuilder/tmCommands");
-        await undoRemoveFromSchedule({ tmId, nightDate: selectedDay.date });
+        const outcome = await undoRemoveFromSchedule({
+          tmId,
+          nightDate: selectedDay.date,
+          nightId: reliableNightId,
+        });
 
         setCalledOffIds((prev) => {
           const next = new Set(prev);
           next.delete(tmId);
+          return next;
+        });
+        setMarkedOffByTmId((prev) => {
+          if (!(tmId in prev)) return prev;
+          const next = { ...prev };
+          delete next[tmId];
           return next;
         });
 
@@ -5074,33 +5094,76 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 : Array.isArray(old.calledOffIds)
                   ? (old.calledOffIds as string[])
                   : [];
+            const prevSeats =
+              old.markedOffByTmId && typeof old.markedOffByTmId === "object"
+                ? { ...old.markedOffByTmId }
+                : {};
+            delete prevSeats[tmId];
             return {
               ...old,
               calledOffIds: new Set(prevIds.filter((id) => id !== tmId)),
+              markedOffByTmId: prevSeats,
             };
           });
         }
+
+        if (outcome?.restored === "seat" && outcome.uiKey) {
+          const store = useShiftBuilderStore.getState();
+          const nextAssignments = {
+            ...store.assignments,
+            [outcome.uiKey]: {
+              ...(store.assignments?.[outcome.uiKey] ?? {}),
+              tmId,
+              tmName,
+              isLocked: outcome.isLocked === true,
+            },
+          };
+          store.setAssignments(nextAssignments);
+          try {
+            const { patchNightCoreAssignmentsCache } = await import(
+              "@/lib/shiftbuilder/scheduleCacheSync"
+            );
+            patchNightCoreAssignmentsCache(qc, dateKey, nextAssignments as any);
+          } catch {
+            /* non-fatal */
+          }
+          shiftData.mirrorCurrentDay();
+          setLiveAssignVersion((v) => v + 1);
+        }
+
         await qc?.invalidateQueries({ queryKey: ["nightSecondary", dateKey] });
+        if (outcome?.restored === "seat") {
+          await qc?.invalidateQueries({ queryKey: ["nightCore", dateKey] });
+        }
         setPickerScheduleEpoch((e) => e + 1);
-        showToast(`${tmName} restored to tonight's roster`, "success");
+        showToast(
+          restoreOutcomeCopy({
+            tmName,
+            restored: outcome?.restored === "seat" ? "seat" : "roster",
+            seatLabel: outcome?.seatLabel,
+            blockReason: outcome?.blockReason,
+          }),
+          "success",
+        );
       } catch (e) {
-        console.error("[shiftbuilder] unmark called off failed", e);
+        console.error("[shiftbuilder] restore marked-off TM failed", e);
         showToast("Failed to restore team member", "error");
       }
     },
-    [requireEdit, selectedDay.date, currentNight.queryClient, showToast],
+    [
+      requireEdit,
+      queryNightId,
+      nightId,
+      selectedDay.date,
+      currentNight.queryClient,
+      shiftData,
+      showToast,
+    ],
   );
 
   const handlePadMarkUnavailable = React.useCallback(
-    async (tmId: string, tmName: string, status: string = "called_off") => {
+    async (tmId: string, tmName: string, status: string = "unavailable") => {
       if (!requireEdit()) return;
-
-      const statusLabel: Record<string, string> = {
-        called_off: "called off",
-        pto: "PTO",
-        loa: "LOA",
-        off: "off",
-      };
 
       try {
         let nid = queryNightId || nightId;
@@ -5110,15 +5173,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           setNightId(nid);
         }
 
+        const localSeat = snapshotFromUiAssignments(
+          useShiftBuilderStore.getState().assignments ?? {},
+          tmId,
+        );
+
         const { removeTMFromSchedule } = await import("@/lib/shiftbuilder/tmCommands");
-        await removeTMFromSchedule({
+        const marked = await removeTMFromSchedule({
           tmId,
           nightId: nid,
           nightDate: selectedDay.date,
           reason: status,
         });
+        const restoreSeat = marked?.restoreSeat ?? localSeat;
 
-        // Optimistic: Called Off section + board clear before secondary refetch.
+        // Optimistic: Marked Off section + board clear before secondary refetch.
         // Secondary used to hardcode calledOffIds:[] which wiped this set on poll —
         // still keep local set + query cache in sync so roster never flings them
         // back into "On Sheet — Not Placed".
@@ -5127,6 +5196,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           next.add(tmId);
           return next;
         });
+        setMarkedOffByTmId((prev) => ({
+          ...prev,
+          [tmId]: { reason: status, restoreSeat },
+        }));
 
         const store = useShiftBuilderStore.getState();
         const cleared: Record<string, unknown> = { ...store.assignments };
@@ -5151,7 +5224,12 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                   : [];
             const merged = new Set(prevIds);
             merged.add(tmId);
-            return { ...old, calledOffIds: merged };
+            const prevSeats =
+              old.markedOffByTmId && typeof old.markedOffByTmId === "object"
+                ? { ...old.markedOffByTmId }
+                : {};
+            prevSeats[tmId] = { reason: status, restoreSeat };
+            return { ...old, calledOffIds: merged, markedOffByTmId: prevSeats };
           });
           // Reassert board assignments without waiting for core refetch.
           try {
@@ -5170,10 +5248,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         setLiveAssignVersion((v) => v + 1);
         setPickerScheduleEpoch((e) => e + 1);
 
-        showToast(
-          `${tmName} marked ${statusLabel[status] ?? status} for tonight`,
-          "success",
-        );
+        showToast(markUnavailableToast(tmName, status), "success");
       } catch (e) {
         console.error("[shiftbuilder] mark unavailable failed", e);
         showToast("Failed to mark unavailable", "error");
@@ -5980,17 +6055,19 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     }
   }, [effectiveRecentZoneHistory]);
 
-  // Call-offs from session night-secondary poll (KD-13) — no anon SELECT fallback.
+  // Marked-off rows from session night-secondary poll (KD-13) — no anon SELECT fallback.
   React.useEffect(() => {
     const fromSecondary = (currentNight as { calledOffIds?: Set<string> }).calledOffIds;
     if (fromSecondary instanceof Set) {
       setCalledOffIds(new Set(fromSecondary));
-      return;
-    }
-    if (Array.isArray(fromSecondary)) {
+    } else if (Array.isArray(fromSecondary)) {
       setCalledOffIds(new Set(fromSecondary as string[]));
     }
-  }, [currentNight.calledOffIds, selectedDay.date, tmCommandEpoch]);
+    const seats = (currentNight as { markedOffByTmId?: typeof markedOffByTmId }).markedOffByTmId;
+    if (seats && typeof seats === "object") {
+      setMarkedOffByTmId(seats);
+    }
+  }, [currentNight.calledOffIds, currentNight.markedOffByTmId, selectedDay.date, tmCommandEpoch]);
 
   React.useEffect(() => {
     setLoadingAssignments(boardColdLoading);
@@ -8184,7 +8261,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 aria-label="Shift notes for this night"
                 onInput={handleNotesInput}
                 className="min-h-[52px] max-h-[140px] overflow-y-auto rounded-lg border border-black/6 dark:border-white/10 bg-white/80 dark:bg-black/20 px-2.5 py-2 text-[12.5px] leading-snug text-[var(--ios-label)] outline-none focus:ring-2 focus:ring-[var(--sb-gold-border)]"
-                data-placeholder="Notes for this night (call-offs, BEOs, floor context)…"
+                data-placeholder="Notes for this night (unavailable TMs, BEOs, floor context)…"
               />
               {notesCompletion?.ghostText ? (
                 <button
@@ -8287,6 +8364,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 profileRoster={effectiveRealRoster}
                 scheduledTmIdsTonight={effectiveScheduledTmIdsTonight}
                 calledOffIds={calledOffIds}
+                markedOffByTmId={markedOffByTmId}
                 isDark={isDark}
                 isCurrentNightLocked={boardInteractionLocked}
                 canEditAssignments={canEditAssignments}

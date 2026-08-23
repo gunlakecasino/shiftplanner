@@ -5,6 +5,16 @@ import { matrixTmsAfterHistoryChange } from "@/lib/shiftbuilder/rotation/history
 import type { BreakGroupValue } from "@/lib/shiftbuilder/breakGroupResolve";
 import type { MoveTaskParams } from "./data";
 import { preferTaskIdFilter } from "./taskMutationIdentity";
+import {
+  parseRestoreSeat,
+  restoreSeatLabel,
+  seatTakenReason,
+  serializeRestoreSeat,
+  snapshotFromZoneRows,
+  type RestoreOutcome,
+  type RestoreSeatSnapshot,
+} from "./markedOffRestore";
+import { ProposalValidationError } from "./validateAssignments.server";
 
 export type UpsertAssignmentParams = {
   nightId: string;
@@ -1959,18 +1969,30 @@ export async function replaceAllNightSlotTasksServer(
   if (insErr) throw new Error(`Failed to copy tasks: ${insErr.message}`);
 }
 
-/** Mark a TM unavailable tonight — clears their placements and records call_offs. */
+/** Mark a TM unavailable tonight — snapshot the seat, then clear placements + record call_offs. */
 export async function markTmCallOffServer(params: {
   nightId: string;
   tmId: string;
   date: string;
   reason?: string | null;
-}): Promise<{ ok: true }> {
+}): Promise<{ ok: true; restoreSeat: RestoreSeatSnapshot | null }> {
   const { nightId, tmId, date, reason } = params;
   const client = adminClient();
 
   if (!nightId || !tmId || !date) {
     throw new Error("markTmCallOff: nightId, tmId, and date are required");
+  }
+
+  let restoreSeat: RestoreSeatSnapshot | null = null;
+  const seatRead = await client
+    .from("zone_assignments")
+    .select("slot_key, slot_type, rr_side, is_locked")
+    .eq("night_id", nightId)
+    .eq("tm_id", tmId);
+  if (seatRead.error) {
+    console.warn("[ops] markTmCallOff seat snapshot failed", seatRead.error.message);
+  } else {
+    restoreSeat = snapshotFromZoneRows(seatRead.data ?? []);
   }
 
   // Delete zone rows (same as slot unassign) so empty shells with null tm_id
@@ -2002,7 +2024,7 @@ export async function markTmCallOffServer(params: {
     throw new Error(`markTmCallOff: break clear failed: ${breakClear.error.message}`);
   }
 
-  // Drop singular night×TM history so trails/matrix don't keep called-off people.
+  // Drop singular night×TM history so trails/matrix don't keep marked-off people.
   try {
     const delHist = await client
       .from("tm_placement_history")
@@ -2013,43 +2035,150 @@ export async function markTmCallOffServer(params: {
       console.warn("[ops] markTmCallOff history clear failed", delHist.error.message);
     } else {
       await refreshTmZoneMatrixServer(tmId).catch((e) =>
-        console.warn("[ops] matrix refresh after call-off failed", e),
+        console.warn("[ops] matrix refresh after mark-unavailable failed", e),
       );
     }
   } catch (histErr) {
     console.warn("[ops] markTmCallOff history cleanup skipped", histErr);
   }
 
-  const upsert = await client.from("call_offs").upsert(
-    {
-      tm_id: tmId,
-      night_date: date,
-      reason: reason ?? null,
-    },
-    { onConflict: "tm_id,night_date" },
-  );
+  const upsertPayload: Record<string, unknown> = {
+    tm_id: tmId,
+    night_date: date,
+    reason: reason ?? null,
+    restore_seat: restoreSeat ? serializeRestoreSeat(restoreSeat) : null,
+  };
+  let upsert = await client.from("call_offs").upsert(upsertPayload, {
+    onConflict: "tm_id,night_date",
+  });
+  if (upsert.error && /restore_seat/i.test(upsert.error.message)) {
+    delete upsertPayload.restore_seat;
+    upsert = await client.from("call_offs").upsert(upsertPayload, {
+      onConflict: "tm_id,night_date",
+    });
+  }
   if (upsert.error) {
     throw new Error(`markTmCallOff: call_offs upsert failed: ${upsert.error.message}`);
   }
 
-  return { ok: true };
+  return { ok: true, restoreSeat };
 }
 
-/** Remove a call_offs row so the TM is available again tonight (does not restore prior slots). */
+/**
+ * Remove a call_offs row so the TM is available again tonight.
+ * Re-places the snapshotted seat when it is still empty and canPlace allows.
+ * Never overwrites another TM. Roster restore still succeeds if the seat cannot.
+ */
 export async function unmarkTmCallOffServer(params: {
   tmId: string;
   date: string;
-}): Promise<{ ok: true }> {
+  nightId?: string | null;
+}): Promise<RestoreOutcome> {
   const client = adminClient();
+  const { tmId, date, nightId } = params;
+
+  const existing = await client
+    .from("call_offs")
+    .select("restore_seat")
+    .eq("tm_id", tmId)
+    .eq("night_date", date)
+    .maybeSingle();
+  const missingSeatColumn =
+    !!existing.error && /restore_seat/i.test(existing.error.message);
+  if (existing.error && !missingSeatColumn) {
+    throw new Error(`unmarkTmCallOff: read failed: ${existing.error.message}`);
+  }
+  const restoreSeat = missingSeatColumn
+    ? null
+    : parseRestoreSeat(
+        (existing.data as { restore_seat?: unknown } | null)?.restore_seat,
+      );
+  const seatLabel = restoreSeatLabel(restoreSeat) ?? undefined;
+
   const { error } = await client
     .from("call_offs")
     .delete()
-    .eq("tm_id", params.tmId)
-    .eq("night_date", params.date);
+    .eq("tm_id", tmId)
+    .eq("night_date", date);
   if (error) {
     throw new Error(`unmarkTmCallOff: delete failed: ${error.message}`);
   }
-  return { ok: true };
+
+  if (!restoreSeat || !nightId) {
+    return { ok: true, restored: "roster", seatLabel };
+  }
+
+  const { finalSlotKey, finalSlotType, finalRrSide } = normalizeSlotKeys(
+    restoreSeat.slotKey,
+    restoreSeat.slotType,
+    restoreSeat.rrSide,
+  );
+
+  let occupantQ = client
+    .from("zone_assignments")
+    .select("tm_id")
+    .eq("night_id", nightId)
+    .eq("slot_key", finalSlotKey)
+    .eq("slot_type", finalSlotType);
+  occupantQ =
+    finalRrSide != null
+      ? occupantQ.eq("rr_side", finalRrSide)
+      : occupantQ.is("rr_side", null);
+  const { data: occupantRow } = await occupantQ.maybeSingle();
+  const occupant =
+    typeof (occupantRow as { tm_id?: string | null } | null)?.tm_id === "string"
+      ? (occupantRow as { tm_id: string }).tm_id.trim()
+      : "";
+  if (occupant && occupant !== tmId) {
+    return {
+      ok: true,
+      restored: "roster",
+      seatLabel,
+      blockReason: seatTakenReason(seatLabel ?? restoreSeat.uiKey),
+    };
+  }
+
+  try {
+    await upsertZoneAssignmentServer({
+      nightId,
+      slotKey: restoreSeat.slotKey,
+      slotType: restoreSeat.slotType,
+      rrSide: restoreSeat.rrSide,
+      tmId,
+      isLocked: restoreSeat.isLocked,
+    });
+    return {
+      ok: true,
+      restored: "seat",
+      seatLabel,
+      uiKey: restoreSeat.uiKey,
+      isLocked: restoreSeat.isLocked,
+    };
+  } catch (err) {
+    if (
+      err instanceof ProposalValidationError ||
+      (err instanceof Error && err.name === "ProposalValidationError")
+    ) {
+      const pe = err as ProposalValidationError;
+      const reason =
+        pe.invalid?.[0]?.reason ??
+        pe.message ??
+        `Not eligible for ${seatLabel ?? restoreSeat.uiKey}`;
+      return {
+        ok: true,
+        restored: "roster",
+        seatLabel,
+        blockReason: reason,
+      };
+    }
+    const message = err instanceof Error ? err.message : "Could not restore the seat";
+    return {
+      ok: true,
+      restored: "roster",
+      seatLabel,
+      blockReason: message,
+    };
+  }
 }
 
 export type GravePoolValue = "Full" | "AM" | "PM" | null;

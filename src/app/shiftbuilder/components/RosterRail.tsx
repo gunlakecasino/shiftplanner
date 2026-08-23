@@ -22,6 +22,14 @@ import {
   useRosterSearch,
   useShiftBuilderStore,
 } from "../store/useShiftBuilderStore";
+import {
+  MARKED_OFF_RAIL_LABEL,
+  canOfferRestoreSeat,
+  markedOffChipBadge,
+  restoreButtonLabel,
+  restoreSeatLabel,
+  type RestoreSeatSnapshot,
+} from "@/lib/shiftbuilder/markedOffRestore";
 
 export interface RosterRailProps {
   /** Canonical pool from graves_default_schedule (+ night_on_call) for tonight. */
@@ -41,12 +49,16 @@ export interface RosterRailProps {
   }>;
   scheduledTmIdsTonight: Set<string>;
   calledOffIds: Set<string>;
+  markedOffByTmId?: Record<
+    string,
+    { reason?: string | null; restoreSeat?: RestoreSeatSnapshot | null }
+  >;
   isDark: boolean;
   isCurrentNightLocked: boolean;
   canEditAssignments: boolean;
   /** Close the floating roster panel. */
   onClose?: () => void;
-  /** Remove TM from Called Off — returns them to the assignable pool (slots stay cleared). */
+  /** Restore a marked-off TM to the assignable pool, and to the seat when canPlace allows. */
   onUnmarkCalledOff?: (tmId: string, tmName: string) => void | Promise<void>;
   /** Unplace a placed TM from their board card (Already Placed section). */
   onUnplaceTm?: (tmId: string, tmName: string) => void;
@@ -164,6 +176,7 @@ const RosterRail = React.memo(function RosterRail({
   profileRoster = [],
   scheduledTmIdsTonight,
   calledOffIds,
+  markedOffByTmId = {},
   isDark,
   isCurrentNightLocked,
   canEditAssignments,
@@ -274,6 +287,20 @@ const RosterRail = React.memo(function RosterRail({
     [calledOffIds, identityLookup],
   );
 
+  const markedOffRecordFor = React.useCallback(
+    (tmId: string) => {
+      if (markedOffByTmId[tmId]) return markedOffByTmId[tmId];
+      for (const [id, rec] of Object.entries(markedOffByTmId)) {
+        if (!id || !rec) continue;
+        if (id === tmId) return rec;
+        const resolved = resolveTmFromLookup(identityLookup, id);
+        if (resolved && boardTmId(resolved) === tmId) return rec;
+      }
+      return {};
+    },
+    [markedOffByTmId, identityLookup],
+  );
+
   const placedCount = React.useMemo(
     () => sourceRoster.filter((t) => t.isPlaced && !isCalledOff(t)).length,
     [sourceRoster, isCalledOff],
@@ -291,7 +318,7 @@ const RosterRail = React.memo(function RosterRail({
 
   const calledOff = React.useMemo(() => {
     const fromPool = sourceRoster.filter((t) => isCalledOff(t));
-    // Include call-offs that aren't in tonight's band-filtered pool (still show under Called Off).
+    // Include marked-off TMs that aren't in tonight's band-filtered pool (still show under Marked Off).
     const seen = new Set(fromPool.map((t) => t.id));
     for (const cid of calledOffIds) {
       if (!cid || seen.has(cid)) continue;
@@ -632,7 +659,7 @@ const RosterRail = React.memo(function RosterRail({
           <section className="sb-roster-section">
             <div className="sb-roster-divider" />
             <RosterSectionHeader
-              label="Called Off"
+              label={MARKED_OFF_RAIL_LABEL}
               count={filteredCalledOff.length}
               expanded={calledOffExpanded}
               onToggle={() => setSection("calledOff", (v) => !v)}
@@ -642,17 +669,35 @@ const RosterRail = React.memo(function RosterRail({
               filteredCalledOff.map((tm) => {
                 const displayName = tm.name || tm.fullName || tm.id;
                 const busy = unmarkingId === tm.id;
+                const marked = markedOffRecordFor(tm.id);
+                const seat = marked.restoreSeat ?? null;
+                const seatLabel = restoreSeatLabel(seat);
+                const occupantTmId = seat?.uiKey
+                  ? (storeAssignments[seat.uiKey] as { tmId?: string | null } | undefined)?.tmId
+                  : null;
+                const offerSeat = canOfferRestoreSeat({ seat, occupantTmId });
+                const restoreLabel = restoreButtonLabel(seatLabel, offerSeat);
                 return (
                   <div key={tm.id} className="sb-roster-called-chip">
                     <span className="sb-roster-called-chip__name">{displayName}</span>
-                    <span className="sb-roster-called-chip__badge">off</span>
+                    <span className="sb-roster-called-chip__badge">
+                      {markedOffChipBadge(marked.reason)}
+                    </span>
                     {canUnmarkCalledOff ? (
                       <button
                         type="button"
                         className="sb-roster-called-chip__restore sb-interactive"
                         disabled={busy}
-                        title="Return to tonight's assignable pool"
-                        aria-label={`Restore ${displayName} to assignable roster`}
+                        title={
+                          offerSeat && seatLabel
+                            ? `Restore to ${seatLabel} if still open`
+                            : "Return to tonight's assignable pool"
+                        }
+                        aria-label={
+                          offerSeat && seatLabel
+                            ? `Restore ${displayName} to ${seatLabel}`
+                            : `Restore ${displayName} to tonight's roster`
+                        }
                         onClick={() => {
                           if (busy) return;
                           setUnmarkingId(tm.id);
@@ -663,7 +708,7 @@ const RosterRail = React.memo(function RosterRail({
                             });
                         }}
                       >
-                        {busy ? "…" : "Restore"}
+                        {busy ? "…" : restoreLabel}
                       </button>
                     ) : null}
                   </div>

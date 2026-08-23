@@ -79,14 +79,14 @@ export const GUIDE_STEPS: GuideStep[] = [
   {
     id: "mark-unavailable",
     title: "Mark unavailable for the whole night",
-    body: "In the placement pad, use Mark unavailable (yellow button under the TM header). This clears Martinez from every slot and moves them to Called Off — not Clear, which only removes one slot.",
+    body: "In the placement pad, use Mark unavailable (yellow button under the TM header). This clears Martinez from every slot and moves them to Marked Off — not Clear, which only removes one slot.",
     hint: "Click Mark unavailable.",
   },
   {
     id: "review-called-off",
     title: "Check the Grave Roster",
-    body: "The roster sits on the left like production — the board shifts beside it. Martinez should appear under Called Off. On Sheet — Not Placed is often empty on grave.",
-    hint: "Click Continue after you see Called Off.",
+    body: "The roster sits on the left like production — the board shifts beside it. Martinez should appear under Marked Off. On Sheet — Not Placed is often empty on grave.",
+    hint: "Click Continue after you see Marked Off.",
   },
   {
     id: "dblclick-empty-z4",

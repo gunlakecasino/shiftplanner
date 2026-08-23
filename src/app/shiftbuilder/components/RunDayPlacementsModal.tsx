@@ -126,8 +126,8 @@ export function RunDayPlacementsModal({
 
         <div className="mt-3 rounded-xl border border-black/8 bg-white/70 px-3 py-2 text-[12px] leading-relaxed text-neutral-600">
           {summary.callOffCount > 0
-            ? `${summary.callOffCount} call-off/unavailable TM${summary.callOffCount === 1 ? "" : "s"} will be excluded.`
-            : "Known call-offs and dated unavailability stay excluded."}
+            ? `${summary.callOffCount} unavailable TM${summary.callOffCount === 1 ? "" : "s"} will be excluded.`
+            : "Known unavailability stays excluded."}
           {summary.draftActive
             ? " Current draft placements may be replaced by this run."
             : " Existing live placements are handled by the mode you choose."}

@@ -58,7 +58,7 @@ Useful roster sections:
 |---|---|
 | **Already Placed** | Everyone currently on the board tonight (your main reference when reshuffling). |
 | **On Sheet — Not Placed** | TMs on tonight’s schedule who are **not** on the board yet—often **Graves** only, sometimes PM/AM bands. **Usually empty or very short on grave.** Check here only after you have looked at the board. |
-| **Called Off** | TMs marked unavailable for tonight. Each name has a **Restore** button (if someone shows up or was marked off by mistake). |
+| **Marked Off** | TMs marked unavailable for tonight. Each name has a **Restore** button (if someone shows up or was marked off by mistake). |
 
 Use the **search box** at the top of the roster to find someone by name. The **Graves only** filter narrows the sheet to the full-grave band.
 
@@ -107,10 +107,10 @@ These three actions are easy to mix up. Use the right one:
 
 | Action | Where | What it does |
 |---|---|---|
-| **Mark unavailable** | Placement Pad header (yellow button) | TM is **off for the whole night**. Removed from **all** slots. Moves to **Called Off** in the roster. |
+| **Mark unavailable** | Placement Pad header (yellow button) | TM is **off for the whole night**. Removed from **all** slots. Moves to **Marked Off** in the roster. |
 | **Mark unavailable tonight** | TM picker (during Assign / Swap) | Same end result, but you pick a reason: **Called off**, **PTO**, **LOA**, or **Other / Off**. |
-| **Clear** | Placement Pad footer | Removes the TM from **one slot only**. They stay available and can be placed somewhere else. Does **not** mark them called off. |
-| **Restore** | Grave Roster → **Called Off** | Undoes **Mark unavailable** for tonight. TM returns to the assignable pool. **Does not** put them back on slots—you assign them again. |
+| **Clear** | Placement Pad footer | Removes the TM from **one slot only**. They stay available and can be placed somewhere else. Does **not** mark them unavailable. |
+| **Restore** | Grave Roster → **Marked Off** | Undoes **Mark unavailable** for tonight. If their last seat is still empty and they are still eligible, they go back on that seat (e.g. **Restore to Z4**). If not, they return to the roster only — the toast will say so. |
 
 ---
 
@@ -201,7 +201,7 @@ Someone calls off
     │      → Backfill, thin out, or add Coverage on their card
     │
     ├─ B. Restore someone (they showed up or were marked off by mistake)
-    │      → Grave Roster → Called Off → Restore → assign them
+    │      → Grave Roster → Marked Off → Restore (to the seat if it is still open)
     │
     └─ C. Call admin (large gaps, eligibility questions, board won’t save)
 ```
@@ -215,7 +215,7 @@ Work in this order:
 ### Step A — Mark them unavailable
 
 1. **If they are on a slot:** open that slot’s Placement Pad and click **Mark unavailable** (yellow button under their name).
-2. They are **removed from every slot** on the board for tonight and appear under **Called Off** in the Grave Roster.
+2. They are **removed from every slot** on the board for tonight and appear under **Marked Off** in the Grave Roster.
 
 *(If you are in the TM picker during Assign/Swap, you can instead use **Mark unavailable tonight** and pick a reason.)*
 
@@ -247,10 +247,10 @@ Repeat until the floor has a workable layout. A few thin zones with clear covera
 Use this when a TM was marked unavailable but **is working tonight** after all.
 
 1. Open the **Grave Roster** (people icon).
-2. Expand **Called Off** if it is collapsed.
-3. Find their name and click **Restore**.
-4. They disappear from **Called Off** and return to the normal assignable pool.
-5. **Assign them to a slot**—via **Swap**, **Assign team member**, or drag onto the card. Restore alone does not place them on the board.
+2. Expand **Marked Off** if it is collapsed.
+3. Find their name and click **Restore** (or **Restore to Z4** when their last seat is still open).
+4. They disappear from **Marked Off**. If the seat is still empty and they are still eligible, they go back on that seat. If not, they return to the roster only — the toast will say so.
+5. If they came back to the roster only, **assign them to a slot** via **Swap**, **Assign team member**, or drag onto the card.
 
 If you only needed to move someone off **one** position and they are still working, use **Clear** on that slot instead of **Mark unavailable**. If you already marked them off by mistake, **Restore** fixes the roster; then assign them where they belong.
 

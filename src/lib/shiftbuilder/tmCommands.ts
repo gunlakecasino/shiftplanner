@@ -1,7 +1,7 @@
 /**
  * Mutations for the Command Palette's `make` and `remove` commands.
  *
- * Privileged writes (grave pool, display name, call-off) go through
+ * Privileged writes (grave pool, display name, mark-unavailable) go through
  * postOpsMutation → /api/shiftbuilder/mutations with session + permission.
  * Server handlers use the admin client (see opsMutations.server.ts).
  * Reads may still use the browser supabase client where RLS allows SELECT.
@@ -132,68 +132,57 @@ export interface CallOffRow {
 }
 
 /**
- * Mark a TM as removed from a specific night's schedule.
+ * Mark a TM unavailable for a specific night.
  *
- * Behavior (operator-confirmed): clear all assignments for that night AND
- * insert a call_offs row so the roster can render them in a "Called Off"
- * section.
- *
- * The three assignment tables (`zone_assignments`, `overlap_assignments`,
- * `break_assignments`) are wiped for this TM + night. `zone_assignments`
- * uses a (night_id, slot_key, slot_type, rr_side) primary key so we update
- * the row's tm_id to NULL rather than deleting it — that preserves the
- * slot row for the operator to re-fill. Overlap and break use TM-keyed
- * rows so we delete them outright.
+ * Clears zone / overlap / break placements and inserts a `call_offs` row so
+ * the roster can render them under Marked Off. The last board seat is
+ * snapshotted on that row for Restore. Internal table name stays `call_offs`.
  */
 export async function removeTMFromSchedule(args: {
   tmId: string;
   nightId: string;       // for zone/overlap/break clearing
   nightDate: Date;       // for the call_offs row
   reason?: string;
-}): Promise<void> {
+}): Promise<{ restoreSeat?: import("./markedOffRestore").RestoreSeatSnapshot | null }> {
   const { tmId, nightId, nightDate, reason } = args;
   const iso = toIsoDate(nightDate);
-
-  if (typeof window !== "undefined") {
-    const { postOpsMutation } = await import("./opsMutationClient");
-    await postOpsMutation("mark_tm_call_off", {
-      nightId,
-      tmId,
-      date: iso,
-      reason: reason ?? "called_off",
-    });
-    return;
-  }
-
-  const { markTmCallOffServer } = await import("./opsMutations.server");
-  await markTmCallOffServer({
+  const payload = {
     nightId,
     tmId,
     date: iso,
-    reason: reason ?? "called_off",
-  });
+    reason: reason ?? "unavailable",
+  };
+
+  if (typeof window !== "undefined") {
+    const { postOpsMutation } = await import("./opsMutationClient");
+    return postOpsMutation("mark_tm_call_off", payload);
+  }
+
+  const { markTmCallOffServer } = await import("./opsMutations.server");
+  return markTmCallOffServer(payload);
 }
 
 /**
- * Reverse a `remove` — delete the call_offs row. Doesn't restore the
- * assignments (those were cleared and would need to be re-added manually).
- * Used by the Undo toast.
+ * Reverse Mark unavailable — delete the `call_offs` row and, when the
+ * snapshotted seat is still empty and canPlace allows, put the TM back.
+ * Used by the roster Restore button.
  */
 export async function undoRemoveFromSchedule(args: {
   tmId: string;
   nightDate: Date;
-}): Promise<void> {
-  const { tmId, nightDate } = args;
+  nightId?: string | null;
+}): Promise<import("./markedOffRestore").RestoreOutcome> {
+  const { tmId, nightDate, nightId } = args;
   const iso = toIsoDate(nightDate);
+  const payload = { tmId, date: iso, nightId: nightId ?? undefined };
 
   if (typeof window !== "undefined") {
     const { postOpsMutation } = await import("./opsMutationClient");
-    await postOpsMutation("unmark_tm_call_off", { tmId, date: iso });
-    return;
+    return postOpsMutation("unmark_tm_call_off", payload);
   }
 
   const { unmarkTmCallOffServer } = await import("./opsMutations.server");
-  await unmarkTmCallOffServer({ tmId, date: iso });
+  return unmarkTmCallOffServer(payload);
 }
 
 /**

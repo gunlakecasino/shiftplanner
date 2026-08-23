@@ -4,6 +4,23 @@
 
 ---
 
+## 2026-08-23 — Grok Build — SheetBuilder Call-off Restore honesty / Marked Off
+
+**Task**: Restore was returning the TM to tonight's roster only while copy could be read as seat restore. Brian also named the language flaw: UI says Mark unavailable, path writes `call_offs`, rail said Called Off. Sole user, no auth/PIN/RLS. No engine/Golden/production Apply.
+
+**Changes**:
+- At mark-unavailable, snapshot `{slotKey, slotType, rrSide, isLocked, uiKey}` from `zone_assignments` into `call_offs.restore_seat` (table name unchanged).
+- Restore unmarks the row, then re-places through `upsertZoneAssignmentServer` (canPlace). Occupied or ineligible seat → roster only + clear reason. Lock preserved when snapshotted.
+- Operator copy: rail **Marked Off**; default pad reason `unavailable` (MarkerPad still offers Called off / PTO / LOA / Other). Toasts name the seat only after a successful re-place.
+- Floor guide + grave-cover tutorial updated to match. Additive migration `restore_seat jsonb`.
+- Rebased onto `origin/main` after RR coverage gender fix #5 (`49161a7`).
+
+**Files**: `markedOffRestore.ts` + tests, `opsMutations.server.ts`, `tmCommands.ts`, mutations route, `nightSecondaryBundle.server.ts`, ShiftBuilderClient + RosterRail + PlacementPad, floor guide, tutorial.
+
+**Status**: Rebased onto latest main. Slice tests + mergeable next. No production Apply.
+
+---
+
 ## 2026-08-23 — Grok Build — SheetBuilder RR coverage gender leak
 
 **Task**: Brian 2026-08-23 — assigning coverage from a women's restroom to another women's restroom (WRR6 → WRR7) also marked the men's half as covering / covered. Same-gender RR→RR must stay on that half only. No Golden print CSS, no engine rewrite, no Projects, no Apply, no auth/PIN.
