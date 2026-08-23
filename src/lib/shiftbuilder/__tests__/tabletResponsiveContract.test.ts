@@ -8,8 +8,6 @@ const source = (path: string) => readFileSync(resolve(projectRoot, path), "utf8"
 const globalsCss = source("src/app/globals.css");
 const shiftBuilderClient = source("src/app/shiftbuilder/ShiftBuilderClient.tsx");
 const shiftBuilderBoard = source("src/app/shiftbuilder/components/ShiftBuilderBoard.tsx");
-const projectsCss = source("src/app/shiftbuilder/projects/projectsShell.css");
-const projectsClient = source("src/app/shiftbuilder/projects/ProjectsClient.tsx");
 const reportsCss = source("src/app/shiftbuilder/reports/reportsShell.css");
 const reportsDashboard = source(
   "src/app/shiftbuilder/reports/components/ReportsDashboard.tsx",
@@ -53,16 +51,10 @@ describe("iPad Pro responsive layout contract", () => {
     );
   });
 
-  it("keeps Projects and Reports portrait-native and touch-sized", () => {
-    expect(projectsClient).toContain("sb-projects-nav-toggle sb-touch-target");
-    expect(projectsCss).toContain(".sb-projects-sidebar[data-open=\"true\"]");
-    expect(projectsCss).toContain(
-      "@media (orientation: landscape) and (min-width: 1024px)",
-    );
-    expect(reportsDashboard).toContain("sb-reports-segment");
-    expect(reportsDashboard).toContain("sb-reports-refresh");
-    expect(reportsCss).toContain("@media (orientation: portrait)");
-    expect(reportsCss).toContain("@media (pointer: coarse)");
+  it("keeps Reports portrait-native and touch-sized", () => {
+    expect(reportsDashboard).toContain("sb-report-primary");
+    expect(reportsDashboard).toContain("sb-report-document");
+    expect(reportsCss).toContain("@media (max-width: 760px)");
     expect(globalsCss).toMatch(/\.sb-touch-target\s*\{[\s\S]*?min-height: 44px !important/);
   });
 });

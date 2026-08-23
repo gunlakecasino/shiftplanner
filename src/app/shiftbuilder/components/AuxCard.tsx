@@ -17,9 +17,6 @@ import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import BreakBadge from "./BreakBadge";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
-import { CardTaskBadge } from "./CardTaskBadge";
-import { CardProjectPills } from "./CardProjectPills";
-import { auxDbSlotKey } from "@/lib/shiftbuilder/slotCatalog";
 import ZoneTaskList from "./ZoneTaskList";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
@@ -412,7 +409,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       {...(!isLocked && !(isUnsetBlank && !hasTM) ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${(isUnsetBlank && !hasTM) ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${showDigitalAssists && isConfigured && !isTodayKiosk ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${(isUnsetBlank && !hasTM) ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -428,7 +425,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         titleClassName={isTodayKiosk ? "sb-kiosk-zone-title" : undefined}
         trailing={isConfigured ? (
           <>
-            {showTaskBadge && <CardTaskBadge tmId={currentTmId} slotKey={auxDbSlotKey(role, def.key)} />}
             {hasTM && coveredBy.length === 0 && (
               <PlacementFitChip fit={fitChip} compact />
             )}
@@ -507,15 +503,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             criticalRepeat={isCriticalRepeatFit(fitChip)}
             placementTrail={placementTrail}
             placementTrailMatchSlotKey={def.key}
-            projectPills={
-              showTaskBadge && hasTM ? (
-                <CardProjectPills
-                  tmId={slotTm.tmId}
-                  slotKey={auxDbSlotKey(role, def.key)}
-                  className="mb-1"
-                />
-              ) : undefined
-            }
             onSwapCoverageSides={
               showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
                 ? () => onSwapCoverageSides(def.key, coveredBy)

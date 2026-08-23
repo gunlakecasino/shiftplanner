@@ -73,9 +73,7 @@
   --sb-gold-surface: rgba(255, 204, 0, 0.24);
   --sb-gold-border: rgba(255, 204, 0, 0.44);
 
-  /* ── Deep Optimize / Optimize Tonight accent (iOS blue per Velvet redesign) ─
-     Distinct from yellow gold so it reads as "engine action" like +Add / insights.
-     Matches the 2026-07 visual spec in Optimize Tonight - Velvet Redesign.html */
+  /* ── Engine action accent (iOS blue). Gold stays Draft-only. */
   --sb-optimize:        #339CFF;
   --sb-optimize-ink:    #007AFF;
   --sb-optimize-tint:   #EFF6FF;
@@ -653,7 +651,7 @@ body {
 /* Draft / optimizer change indicator on cards (subtle left bar + D badge already in chrome).
    Helps scannability of the 8 changes in the screenshot flow. */
 .assignment-card[data-has-draft="true"] {
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(51, 156, 255, 0.15);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px rgba(212, 168, 0, 0.32);
 }
 
 /* Temporary flash for post-optimizer import review (triggered via Review button or import) */
@@ -661,9 +659,9 @@ body {
   animation: sb-draft-flash-kf 2.2s ease-out 1;
 }
 @keyframes sb-draft-flash-kf {
-  0% { box-shadow: 0 0 0 3px rgba(51,156,255,0.45); }
-  70% { box-shadow: 0 0 0 1px rgba(51,156,255,0.15); }
-  100% { box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(51, 156, 255, 0.15); }
+  0% { box-shadow: 0 0 0 2px rgba(212, 168, 0, 0.38); }
+  70% { box-shadow: 0 0 0 1px rgba(212, 168, 0, 0.22); }
+  100% { box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px rgba(212, 168, 0, 0.32); }
 }
 
 /* Spotlight layer — radial gradient using the card's own accent color,
@@ -864,16 +862,15 @@ body {
    Cards use refined glass matching the nav language: calm, tactile, premium.
    ========================================================================== */
 
-/* Live builder shell — remap Velvet/Atkinson tokens to Helvetica variants.
+/* Live builder shell — paper tokens stay Helvetica so cards don't pick up
+   Bricolage/Atkinson. Chrome + canvas labels keep Velvet Inter Tight via --font-ui.
    Scoped to sb-canvas-builder so print preview + export keep Atkinson. */
 .sb-builder-shell.sb-canvas-builder {
   --font-atkinson: var(--font-builder);
   --font-bricolage: var(--font-builder);
-  --font-inter-tight: var(--font-builder);
-  --font-ui: var(--font-builder);
   --font-display: var(--font-builder);
   --font-geist-sans: var(--font-builder);
-  font-family: var(--font-builder);
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -1047,11 +1044,13 @@ body {
 }
 
 .builder-workspace .sheet-section-header .label {
-  padding: 5px 11px;
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.04);
-  font-size: 9.5px;
-  letter-spacing: 1.8px;
+  padding: 4px 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
   color: #48484A;
 }
 
@@ -2519,44 +2518,28 @@ body.sb-roster-open .sb-stage-host {
   border-left: 3px solid var(--task-color, #ffcc00);
 }
 
-/* Empty slots — ghosted/translucent so filled cards read clearly at a glance. */
+/* Empty slots — same paper as filled cards. Zone color lives on the stripe only. */
 .builder-workspace .assignment-card.empty,
 .builder-workspace .assignment-card.sb-card-empty {
-  background: linear-gradient(
-    155deg,
-    color-mix(in srgb, var(--ios-background-secondary) 34%, transparent),
-    color-mix(in srgb, var(--ios-background-primary) 48%, transparent)
-  );
-  border: 1.5px dashed rgba(184, 151, 8, 0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 1px 2px rgba(0, 0, 0, 0.02);
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   min-height: 84px;
 }
 
 .builder-workspace .assignment-card.empty:hover,
 .builder-workspace .assignment-card.sb-card-empty:hover {
-  border-color: color-mix(in srgb, var(--card-accent, var(--ios-gray-4)) 38%, transparent);
-  background: linear-gradient(
-    155deg,
-    color-mix(in srgb, var(--ios-background-secondary) 52%, transparent),
-    color-mix(in srgb, var(--ios-background-primary) 66%, transparent)
-  );
+  border-color: #d1d5db;
+  background: #ffffff;
 }
 
 .dark .builder-workspace .assignment-card.empty,
 .dark .builder-workspace .assignment-card.sb-card-empty {
-  background: linear-gradient(
-    155deg,
-    color-mix(in srgb, var(--ios-background-secondary) 38%, transparent),
-    color-mix(in srgb, var(--ios-background-primary) 52%, transparent)
-  );
-  border-color: rgba(184, 151, 8, 0.2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.12);
+  background: #1c1c1e;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 /* Soften empty card chrome (stripe + header) — body text/tasks stay full strength. */
@@ -3908,10 +3891,7 @@ button,
   border: 1px solid rgba(15, 23, 42, 0.08) !important;
   border-radius: 4px !important;
   background: var(--sb-paper, #ffffff) !important;
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.03),
-    0 10px 28px -10px rgba(15, 23, 42, 0.22),
-    0 2px 8px -2px rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 8px 24px -16px rgba(15, 23, 42, 0.28) !important;
   overflow: visible !important;
   min-height: 100%;
 }
@@ -4037,13 +4017,13 @@ button,
   }
 
   .sb-sheetbuilder-redesign .sb-night-action-pills {
-    gap: 4px;
-    margin-right: 2px;
+    gap: 0;
+    margin-right: 4px;
   }
 
   .sb-sheetbuilder-redesign .sb-night-action-pill {
     padding-inline: 8px;
-    font-size: 10.5px;
+    font-size: 12px;
   }
 }
 
@@ -4061,7 +4041,7 @@ button,
   --sb-grid-gap: 10px;
   background: var(--sb-paper, #ffffff) !important;
   color: #111827;
-  font-family: var(--font-ui, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--font-builder, "Helvetica Neue", Helvetica, Arial, sans-serif);
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace > .flex-1 {
@@ -4225,7 +4205,7 @@ button,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card:hover,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-refined-card:hover {
   border-color: #d1d5db;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06), 0 14px 28px -24px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card::before {
@@ -4392,12 +4372,10 @@ button,
   min-height: 0 !important;
   height: auto !important;
   padding: 10px 10px 12px 12px;
-  border: 1px solid #e3e6ed;
-  border-radius: 13px;
-  background: linear-gradient(180deg, #f7f7fb 0%, #f2f3f8 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.84),
-    0 16px 34px -30px rgba(15, 23, 42, 0.55);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f7f7f8;
+  box-shadow: none;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header {
@@ -4966,13 +4944,14 @@ button,
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sheet-section-header .count,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sheet-section-header .sb-section-count--filled {
-  margin-left: 2px;
-  padding: 3px 7px;
-  border-color: #dfe4ec;
-  background: rgba(255, 255, 255, 0.78);
-  color: #7a8494;
-  font-size: 9px;
-  letter-spacing: 0.08em;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8a93a3;
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-zone-grid,
@@ -4998,19 +4977,18 @@ button,
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-refined-card {
-  border-color: #dfe4eb;
-  border-radius: 10px !important;
+  border-color: #e5e7eb;
+  border-radius: 8px !important;
   padding-left: 7px !important;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.055),
-    0 7px 16px -13px rgba(15, 23, 42, 0.42);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card.empty,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card.sb-card-empty {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card-accent, #ef4444) 7%, #ffffff) 0%, #ffffff 62%) !important;
-  border-color: color-mix(in srgb, var(--card-accent, #ef4444) 20%, #dfe4eb) !important;
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card > .sb-card-accent-stripe,
@@ -5050,30 +5028,34 @@ button,
   filter: saturate(1.05);
 }
 
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-canvas-slot-label,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-slot-header > span:nth-child(2),
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-slot-header > div:first-child > span:last-child,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-slot-header > div:first-child > div:first-child {
-  max-width: 132px;
-  padding: 3px 7px !important;
-  border-radius: 7px !important;
-  background: color-mix(in srgb, var(--card-accent, #64748b) 13%, #ffffff) !important;
+  max-width: 148px;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--card-accent, #64748b) !important;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui) !important;
   font-size: 10px !important;
-  font-weight: 850 !important;
-  letter-spacing: 0.055em !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
   line-height: 1 !important;
   box-shadow: none !important;
+  text-transform: uppercase;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card:not(.sb-aux-blank) .sb-card-slot-header > div:first-child > button {
-  max-width: 140px;
-  padding: 3px 7px !important;
-  border-radius: 7px !important;
-  background: color-mix(in srgb, var(--card-accent, #64748b) 13%, #ffffff) !important;
+  max-width: 148px;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--card-accent, #64748b) !important;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui) !important;
   font-size: 10px !important;
-  font-weight: 850 !important;
-  letter-spacing: 0.055em !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
   line-height: 1 !important;
   box-shadow: none !important;
 }
@@ -5084,11 +5066,9 @@ button,
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-fit-dot {
-  width: 12px !important;
-  height: 12px !important;
-  box-shadow:
-    0 0 0 2px #ffffff,
-    0 1px 3px rgba(15, 23, 42, 0.22) !important;
+  width: 8px !important;
+  height: 8px !important;
+  box-shadow: none !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-break-badge-btn {
@@ -5273,13 +5253,14 @@ button,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-slot-header > div:first-child > span:last-child,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-slot-header > div:first-child > div:first-child,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card:not(.sb-aux-blank) .sb-card-slot-header > div:first-child > button {
-  padding: 3px 7px !important;
-  border-radius: 7px !important;
-  background: color-mix(in srgb, var(--card-accent, #64748b) 13%, #ffffff) !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--card-accent, #64748b) !important;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui) !important;
   font-size: 10px !important;
-  font-weight: 850 !important;
-  letter-spacing: 0.055em !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.04em !important;
   box-shadow: none !important;
 }
 
@@ -5334,9 +5315,8 @@ button,
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card.empty,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-card.sb-card-empty {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card-accent, #ef4444) 8%, #ffffff) 0%, color-mix(in srgb, var(--card-accent, #ef4444) 5%, #ffffff) 100%) !important;
-  border-color: color-mix(in srgb, var(--card-accent, #ef4444) 19%, #dfe4eb) !important;
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-covered-by-block {
@@ -5459,14 +5439,12 @@ button,
 
 .sb-month-status-diamond {
   display: block;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
   background: #22c55e;
-  box-shadow:
-    0 0 0 2px rgba(34, 197, 94, 0.12),
-    0 0 14px rgba(34, 197, 94, 0.42);
-  transform: rotate(45deg);
+  box-shadow: none;
+  transform: none;
 }
 
 .sb-day-strip-btn--inactive {
@@ -5495,12 +5473,13 @@ button,
 }
 
 .sb-night-action-pills {
-  margin-right: 4px;
+  margin-right: 6px;
 }
 
 .sb-night-action-pill {
-  min-height: 30px;
+  min-height: 28px;
   line-height: 1;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
 }
 
 .sb-night-action-pill--split {

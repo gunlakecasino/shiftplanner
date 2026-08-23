@@ -1,27 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { checkOpsApiRateLimit, clientIpFromRequest } from "@/app/api/_lib/rateLimit";
-import { requireTasksAccess } from "../_lib/requireTasksAccess.server";
+import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
+import { requireOpsPermission } from "@/lib/auth/requireOpsSession.server";
 import { rowToWorkItem, WORK_ITEM_COLUMNS } from "@/lib/tasks/mapping";
 import { SHIFTBUILDER_DEPARTMENT } from "@/lib/shiftbuilder/tasksAdapter";
 import { canonicalizeDefaultSlotKey, isOverlapPoolSlotKey } from "@/lib/shiftbuilder/overlapPoolDefaults";
 
 /**
  * Slot-default chip templates (successor to slot_default_tasks).
- * - Zone / RR / AUX: materialize onto cards on new grave nights via applySlotDefaultsToNight.
- * - AM/PM overlap: standing **pools** (canonical write overlap_am_0 / overlap_pm_0);
- *   distributed to staffed seats by Apply Overlap Tasks — not fixed per-card night seeds.
+ * Edited from Settings → Card Defaults. Apply Overlap Tasks still reads
+ * ops_work_items directly — this route is the operator editor only.
  */
+async function requireDefaultsAccess(request: NextRequest) {
+  const session = await requireOpsPermission(request, "canAccessSudo");
+  if (!session.ok) {
+    return { ok: false as const, response: NextResponse.json({ error: session.error }, { status: session.status }) };
+  }
+  const admin = createAdminClientSafe();
+  if (!admin) {
+    return { ok: false as const, response: NextResponse.json({ error: "Service role not configured" }, { status: 500 }) };
+  }
+  return { ok: true as const, admin, actor: session.actor };
+}
+
 export async function GET(request: NextRequest) {
   if (!isSameOriginOpsRequest(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const rate = checkOpsApiRateLimit(`projects-defaults:${clientIpFromRequest(request)}`);
+  const rate = checkOpsApiRateLimit(`overlap-defaults:${clientIpFromRequest(request)}`);
   if (!rate.ok) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } });
   }
 
-  const access = await requireTasksAccess(request, "view");
+  const access = await requireDefaultsAccess(request);
   if (!access.ok) return access.response;
 
   const { data, error } = await access.admin
@@ -34,19 +46,18 @@ export async function GET(request: NextRequest) {
     .order("title", { ascending: true });
 
   if (error) {
-    console.error("[projects/defaults] list error:", error);
+    console.error("[overlap-defaults] list error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({ defaults: (data ?? []).map(rowToWorkItem) });
 }
 
-/** POST — add a default task to a slot. */
 export async function POST(request: NextRequest) {
   if (!isSameOriginOpsRequest(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const access = await requireTasksAccess(request, "manage");
+  const access = await requireDefaultsAccess(request);
   if (!access.ok) return access.response;
   const { admin, actor } = access;
 
@@ -58,7 +69,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "title, slotKey, slotType are required" }, { status: 400 });
   }
 
-  // New OL pool members always land on the band bucket (_0); never scatter to _1…_5.
   const slotKey = canonicalizeDefaultSlotKey(rawSlotKey);
   if (isOverlapPoolSlotKey(slotKey)) {
     slotType = "overlap";
@@ -115,7 +125,7 @@ export async function POST(request: NextRequest) {
     .select(WORK_ITEM_COLUMNS)
     .single();
   if (error) {
-    console.error("[projects/defaults] create error:", error);
+    console.error("[overlap-defaults] create error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

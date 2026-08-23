@@ -3251,9 +3251,9 @@ export async function upsertSlotDefault(params: {
 }
 
 const SLOT_DEFAULT_TASKS_RETIRED =
-  "Default task chips were retired by the cutover — manage them in Projects → Defaults (ops_work_items).";
+  "Default task chips were retired by the cutover — manage them in Settings → Card Defaults (ops_work_items).";
 
-/** @deprecated Retired by the defaults cutover. Slot-default task chips are now managed in Projects → Defaults. */
+/** @deprecated Retired by the defaults cutover. Slot-default task chips are now managed in Settings → Card Defaults. */
 export async function addSlotDefaultTask(_params: {
   slotKey: string;
   slotType: 'zone' | 'rr' | 'aux' | 'overlap';
@@ -3266,7 +3266,7 @@ export async function addSlotDefaultTask(_params: {
   throw new Error(SLOT_DEFAULT_TASKS_RETIRED);
 }
 
-/** @deprecated Retired by the defaults cutover. Slot-default task chips are now managed in Projects → Defaults. */
+/** @deprecated Retired by the defaults cutover. Slot-default task chips are now managed in Settings → Card Defaults. */
 export async function removeSlotDefaultTask(_id: string): Promise<void> {
   throw new Error(SLOT_DEFAULT_TASKS_RETIRED);
 }

@@ -8,6 +8,7 @@ const REPORTS_HOME = "/shiftbuilder/reports";
 const SETTINGS_PREFIX = "/shiftbuilder/settings";
 const GRAVES_SCHEDULE_PREFIX = "/shiftbuilder/graves-schedule";
 const PROJECTS_PREFIX = "/shiftbuilder/projects";
+const SHEETBUILDER_PROJECTS_PREFIX = "/sheetbuilder/projects";
 const TEAM_PREFIX = "/shiftbuilder/team";
 
 export function resolveOpsSurface(permissions: ShiftBuilderPermissions): OpsSurface {
@@ -35,20 +36,17 @@ function isGravesSchedulePath(pathname: string): boolean {
   return pathname.startsWith(GRAVES_SCHEDULE_PREFIX);
 }
 
-/**
- * /shiftbuilder/projects has its own independent canAccessTasks gate (see
- * ProjectsClient.tsx), the same way Reports gates itself on top of whatever
- * this surface router allows. Every surface below exempts it so a per-user
- * permission override (canAccessTasks without canAccessSudo/canAccessReports)
- * still reaches the page instead of being bounced by surface routing.
- */
+/** Retired Projects app — bounce every surface back to its home canvas. */
 function isProjectsPath(pathname: string): boolean {
-  return pathname.startsWith(PROJECTS_PREFIX);
+  return (
+    pathname.startsWith(PROJECTS_PREFIX) ||
+    pathname.startsWith(SHEETBUILDER_PROJECTS_PREFIX)
+  );
 }
 
 /**
  * /shiftbuilder/team self-gates on canManageTeam / canApplySchedules (see
- * TeamClient.tsx), so — like Projects — every surface exempts it and lets the
+ * TeamClient.tsx), so every surface exempts it and lets the
  * page decide. This is what lets a canManageTeam-only operator reach the roster.
  */
 function isTeamPath(pathname: string): boolean {
@@ -60,7 +58,7 @@ export function guardAuthenticatedRoute(
   pathname: string,
   surface: OpsSurface,
 ): string | null {
-  if (isProjectsPath(pathname)) return null;
+  if (isProjectsPath(pathname)) return homeRouteForSurface(surface);
   if (isTeamPath(pathname)) return null;
 
   if (surface === "team") {

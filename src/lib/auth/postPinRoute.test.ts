@@ -126,6 +126,18 @@ describe("guardAuthenticatedRoute", () => {
     expect(guardAuthenticatedRoute("/shiftbuilder", "admin")).toBeNull();
   });
 
+  it("redirects retired Projects paths to the surface home", () => {
+    expect(guardAuthenticatedRoute("/shiftbuilder/projects", "sudo")).toBe(
+      "/shiftbuilder",
+    );
+    expect(guardAuthenticatedRoute("/sheetbuilder/projects", "sudo")).toBe(
+      "/shiftbuilder",
+    );
+    expect(guardAuthenticatedRoute("/shiftbuilder/projects", "team")).toBe(
+      "/shiftbuilder",
+    );
+  });
+
   it("allows sudo operators everywhere under shiftbuilder", () => {
     expect(guardAuthenticatedRoute("/shiftbuilder", "sudo")).toBeNull();
     expect(guardAuthenticatedRoute("/shiftbuilder/reports", "sudo")).toBeNull();

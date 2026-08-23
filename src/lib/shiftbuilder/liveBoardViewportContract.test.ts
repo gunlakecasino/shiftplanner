@@ -20,6 +20,18 @@ const settingsConfig = readFileSync(
   "utf8",
 );
 const middleware = readFileSync(resolve(process.cwd(), "src/middleware.ts"), "utf8");
+const defaultsTab = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/sudo/DefaultsTab.tsx"),
+  "utf8",
+);
+const rrCard = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/components/RRCard.tsx"),
+  "utf8",
+);
+const auxCard = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/components/AuxCard.tsx"),
+  "utf8",
+);
 
 describe("live board short-landscape viewport contract", () => {
   const compactStart = globalsCss.indexOf("/* Short landscape boards must fit");
@@ -98,6 +110,65 @@ describe("SheetBuilder chrome slim (PR A)", () => {
   });
 });
 
+describe("SheetBuilder desk refine + Projects retirement", () => {
+  it("redirects retired Projects routes to the canvas", () => {
+    expect(middleware).toContain('url.pathname.startsWith("/sheetbuilder/projects")');
+    expect(middleware).toContain('url.pathname.startsWith("/shiftbuilder/projects")');
+  });
+
+  it("does not mount Projects pills, Timefold UI, or the Projects API on the canvas client", () => {
+    expect(shiftBuilderClient).not.toContain("useBoardTaskSummary");
+    expect(shiftBuilderClient).not.toContain("CardProjectPills");
+    expect(shiftBuilderClient).not.toContain("/api/shiftbuilder/projects");
+    expect(shiftBuilderClient).not.toContain("TimefoldResultsSheet");
+    expect(shiftBuilderClient).not.toContain("useTimefoldOptimize");
+  });
+
+  it("keeps Engine / Draft / Print as one quiet velvet cluster without sparkle chrome", () => {
+    expect(floatingNav).toContain("velvetGlassPillStyle");
+    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).toContain("sb-night-action-pill--draft");
+    expect(floatingNav).toContain("sb-night-action-pill--print");
+    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).toContain(">Draft<");
+    expect(floatingNav).toContain(">Print<");
+    expect(floatingNav).not.toContain("Sparkles");
+    expect(floatingNav).toContain("aria-label=\"Night actions\"");
+  });
+
+  it("aligns desk chrome with Inter Tight and does not remap --font-ui off the builder shell", () => {
+    expect(globalsCss).toContain("font-family: var(--font-ui, var(--font-inter-tight), system-ui)");
+    expect(globalsCss).not.toMatch(/\.sb-builder-shell\.sb-canvas-builder \{[\s\S]*--font-ui: var\(--font-builder\)/);
+    expect(globalsCss).not.toMatch(/\.sb-builder-shell\.sb-canvas-builder \{[\s\S]*--font-inter-tight: var\(--font-builder\)/);
+  });
+
+  it("edits standing OL defaults from Card Defaults, not a Projects app", () => {
+    expect(defaultsTab).toContain("OverlapPoolDefaultsPanel");
+    expect(defaultsTab).not.toContain("Projects → Defaults");
+  });
+
+  it("de-gimmicks idle zone cards — type + zone color, no demo orbs or kebab chrome", () => {
+    const shiftCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+      "utf8",
+    );
+    expect(shiftCard).not.toContain("MoreHorizontal");
+    expect(shiftCard).not.toContain("ZONE_STATUS");
+    expect(shiftCard).not.toContain("backgroundColor: `${accentColor}14`");
+    expect(rrCard).not.toContain("rgba(0,122,255,0.12)");
+    expect(auxCard).not.toContain("rgba(0,122,255,0.12)");
+  });
+
+  it("keeps empty cards and draft frames on paper, not optimize-blue glow", () => {
+    expect(globalsCss).toContain("Empty slots — same paper as filled cards");
+    expect(globalsCss).toContain("0 0 0 1px rgba(212, 168, 0, 0.32)");
+    expect(globalsCss).not.toContain("0 0 0 1px rgba(51, 156, 255, 0.15)");
+    expect(globalsCss).not.toMatch(
+      /\.builder-workspace \.assignment-card\.sb-card-empty \{[\s\S]{0,280}backdrop-filter: blur/,
+    );
+  });
+});
+
 describe("SheetBuilder night actions (PR B)", () => {
   it("surfaces Engine, Draft, and Print as velvet glass pills", () => {
     expect(floatingNav).toContain("velvetGlassPillStyle");
@@ -141,7 +212,7 @@ describe("SheetBuilder night actions (PR B)", () => {
 
   it("desk chrome gives the live artboard a paper sheet without touching Golden print", () => {
     expect(globalsCss).toContain(".sb-night-action-pill");
-    expect(globalsCss).toContain("0 10px 28px -10px rgba(15, 23, 42, 0.22)");
+    expect(globalsCss).toContain("0 8px 24px -16px rgba(15, 23, 42, 0.28)");
     expect(globalsCss).toContain(".sb-sheetbuilder-redesign .sb-builder-fluid-viewport");
     expect(globalsCss).toContain("var(--sb-paper, #ffffff)");
     expect(globalsCss).not.toMatch(/\.print-artboard\s*\{[^}]*sb-paper-desk/);

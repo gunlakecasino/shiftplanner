@@ -35,6 +35,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (
+    url.pathname.startsWith("/sheetbuilder/projects") ||
+    url.pathname.startsWith("/shiftbuilder/projects")
+  ) {
+    return NextResponse.redirect(new URL("/sheetbuilder", request.url));
+  }
+
   if (process.env.NODE_ENV === "production") {
     const devOnly =
       url.pathname.startsWith("/shiftbuilder/dev") ||

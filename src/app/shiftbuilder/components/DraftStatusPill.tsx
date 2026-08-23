@@ -43,14 +43,14 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
     <div
       role="status"
       aria-live="polite"
-      className="sb-draft-pill no-print fixed bottom-5 left-1/2 z-[120] flex -translate-x-1/2 items-center gap-2.5 rounded-full py-1.5 pl-3.5 pr-1.5 shadow-2xl"
+      className="sb-draft-pill no-print fixed bottom-5 left-1/2 z-[120] flex -translate-x-1/2 items-center gap-2.5 rounded-full py-1.5 pl-3.5 pr-1.5"
       style={{
         background: "var(--sb-glass)",
         backdropFilter: "var(--sb-glass-blur)",
         WebkitBackdropFilter: "var(--sb-glass-blur)",
         border: "1px solid var(--sb-gold-border)",
-        boxShadow:
-          "inset 0 1px 0 var(--sb-glass-highlight), 0 12px 32px -12px rgba(0,0,0,0.45)",
+        boxShadow: "inset 0 1px 0 var(--sb-glass-highlight)",
+        fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
       }}
     >
       <span

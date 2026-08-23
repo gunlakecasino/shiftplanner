@@ -233,17 +233,17 @@ export function CardSlotHeader({
     >
       <div className="flex items-center gap-1.5 leading-none min-w-0" style={{ color: ink }}>
         {icon != null ? (
-          <span className="text-[12px] leading-none drop-shadow-sm shrink-0">{icon}</span>
+          <span className="text-[12px] leading-none shrink-0">{icon}</span>
         ) : null}
         {React.isValidElement(label) ? (
           <div className="min-w-0 flex-1">{label}</div>
         ) : (
           <span
-            className={`font-bold tracking-[0.07em] uppercase truncate ${titleClassName ?? ""}`}
+            className={`sb-canvas-slot-label font-semibold tracking-[0.04em] uppercase truncate ${titleClassName ?? ""}`}
             style={{
               fontSize: 10,
-              fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-              letterSpacing: "0.07em",
+              fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              letterSpacing: "0.04em",
             }}
           >
             {label}
@@ -301,7 +301,7 @@ function LockIcon({ size }: { size: number }) {
   );
 }
 
-/** Builder-only glass invite for empty slots. */
+/** Builder-only empty-slot invite. */
 export function UnassignedInvite({
   size,
   onClick,
@@ -312,7 +312,6 @@ export function UnassignedInvite({
   title?: string;
 }) {
   const cfg = INVITE_CONFIG[size];
-  const reducedMotion = useReducedMotion();
 
   return (
     <motion.div
@@ -326,27 +325,19 @@ export function UnassignedInvite({
         background: "color-mix(in srgb, var(--ios-background-secondary) 35%, transparent)",
         boxShadow: "0 1px 1px rgba(0,0,0,0.015)",
       }}
-      initial={{ opacity: 0.85, y: 1, scale: 0.99 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      whileHover={{
-        scale: 1.01,
-        borderColor: "rgba(0,0,0,0.10)",
-        background: "color-mix(in srgb, var(--ios-background-secondary) 55%, transparent)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-      }}
-      whileTap={{ scale: 0.985 }}
-      transition={premiumSpring}
+      initial={false}
+      animate={{ opacity: 1 }}
+      whileTap={{ scale: 0.99 }}
+      transition={premiumSpringReduced}
       onClick={onClick}
       title={title}
     >
-      <motion.span
+      <span
         className="leading-none opacity-25"
         style={{ fontSize: cfg.plusSize }}
-        whileHover={reducedMotion ? {} : { scale: 1.15, rotate: 90 }}
-        transition={{ ...premiumSpring, stiffness: 250 }}
       >
         +
-      </motion.span>
+      </span>
       <span
         className="font-semibold tracking-[0.35px] text-[#9CA3AF] mt-1"
         style={{ fontSize: cfg.labelSize, opacity: 0.85 }}
@@ -675,7 +666,6 @@ export function CoveredByOverlay({
       className="sb-covered-by-overlay min-w-0 w-full"
       initial={{ opacity: 0.92, y: 2 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ opacity: 0.92 }}
       whileTap={{ scale: 0.995 }}
       transition={premiumSpring}
       onClick={onClick}
@@ -801,7 +791,7 @@ export function SlotAssignmentBody({
         showDigitalAssists ? (
           <motion.div
             key="draft"
-            className="flex flex-col min-w-0 relative pl-2 border-l-[3px] border-[#339CFF] rounded-l"  /* subtle left accent for optimizer/draft changes (blue = preview) */
+            className="flex flex-col min-w-0 relative pl-2 border-l-[3px] border-[var(--sb-gold-border)] rounded-l"
             initial={{ opacity: 0, y: 3, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -2, scale: 0.985 }}
@@ -816,8 +806,13 @@ export function SlotAssignmentBody({
               criticalRepeat={criticalRepeat}
               trailing={
                 <span
-                  className="text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none shrink-0"
-                  style={{ paddingTop: "1px", paddingBottom: "1px" }}
+                  className="text-[8px] font-semibold px-1 rounded leading-none shrink-0"
+                  style={{
+                    paddingTop: "1px",
+                    paddingBottom: "1px",
+                    background: "var(--sb-gold-surface)",
+                    color: "var(--sb-gold-ink)",
+                  }}
                   title="Draft change from optimizer"
                 >
                   D
@@ -844,8 +839,13 @@ export function SlotAssignmentBody({
               criticalRepeat={false}
               trailing={
                 <span
-                  className="text-[8px] font-extrabold px-1 rounded bg-[#339CFF] text-white leading-none shrink-0"
-                  style={{ paddingTop: "1px", paddingBottom: "1px" }}
+                  className="text-[8px] font-semibold px-1 rounded leading-none shrink-0"
+                  style={{
+                    paddingTop: "1px",
+                    paddingBottom: "1px",
+                    background: "var(--sb-gold-surface)",
+                    color: "var(--sb-gold-ink)",
+                  }}
                   title="Draft change from optimizer"
                 >
                   D
@@ -870,7 +870,6 @@ export function SlotAssignmentBody({
             initial={{ opacity: 0, y: 6, scale: 0.93 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -2, scale: 0.97 }}
-            whileHover={reducedMotion ? {} : { scale: 1.005 }}
             transition={
               reducedMotion
                 ? premiumSpringReduced
@@ -948,7 +947,6 @@ export function SlotAssignmentBody({
           style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
           initial={{ opacity: 0.5, y: 2, scale: 0.985 }}
           animate={{ opacity: 0.75, y: 0, scale: 1 }}
-          whileHover={{ scale: 1.01, opacity: 0.9 }}
           transition={premiumSpring}
           onClick={onUnassignedClick}
         >
@@ -986,7 +984,5 @@ export function cardBodyInteriorStyle(showDigitalAssists: boolean, paddingBottom
   return {
     paddingBottom,
     background: showDigitalAssists ? "color-mix(in srgb, var(--ios-background-secondary) 2.2%, transparent)" : undefined,
-    backdropFilter: showDigitalAssists ? "blur(0.5px)" : undefined,
-    WebkitBackdropFilter: showDigitalAssists ? "blur(0.5px)" : undefined,
   };
 }

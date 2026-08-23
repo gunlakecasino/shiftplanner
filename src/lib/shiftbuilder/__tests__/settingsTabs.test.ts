@@ -13,6 +13,9 @@ describe("settings tabs (PR A)", () => {
       "auditLog",
     ]);
     expect(SETTINGS_TABS.some((tab) => tab.label === "Batch Planner")).toBe(false);
+    expect(SETTINGS_TABS.find((tab) => tab.id === "defaults")?.description).toContain(
+      "standing OL",
+    );
   });
 
   it("redirects ?tab=planner to Engine Config", () => {

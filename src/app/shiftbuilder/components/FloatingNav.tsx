@@ -18,18 +18,14 @@ import {
   Home,
   Users,
   Layers,
-  Sparkles,
   Settings,
   MoreHorizontal,
   Eye,
   X,
   Eraser,
-  FilePenLine,
-  Check,
   CalendarDays,
   RefreshCw,
   Bell,
-  Printer,
   ClipboardList,
 } from "lucide-react";
 
@@ -141,50 +137,38 @@ export interface FloatingNavProps {
 const MONTHS = MONTH_LONG;
 const SHORT_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
-const DEFAULT_ACTIVE_COLOR = "#7B3226";
-
-function hexShadow(color: string): string {
-  const c = color.startsWith("#") && color.length === 7 ? `${color}59` : "rgba(0,0,0,0.25)";
-  return `0 2px 8px ${c}`;
+function nightActionClusterStyle(): CSSProperties {
+  return velvetGlassPillStyle({
+    height: 32,
+    padding: 2,
+    borderRadius: 8,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 0,
+    boxShadow: "inset 0 1px 0 var(--sb-glass-highlight)",
+  });
 }
 
-type NightActionKind = "engine" | "draft" | "print";
-
-function nightActionPillStyle(kind: NightActionKind, extra?: CSSProperties): CSSProperties {
-  const accent: CSSProperties =
-    kind === "engine"
-      ? {
-          color: "var(--sb-optimize-ink)",
-          border: "1px solid var(--sb-optimize-border)",
-          boxShadow:
-            "inset 0 1px 0 var(--sb-glass-highlight), 0 6px 18px -12px color-mix(in srgb, var(--sb-optimize-ink) 45%, transparent)",
-        }
-      : kind === "draft"
-        ? {
-            color: "var(--sb-gold-ink)",
-            border: "1px solid var(--sb-gold-border)",
-            boxShadow:
-              "inset 0 1px 0 var(--sb-glass-highlight), 0 6px 18px -12px color-mix(in srgb, var(--sb-gold) 50%, transparent)",
-          }
-        : {
-            color: "var(--sb-text-2, #3C3C43)",
-          };
-
-  return velvetGlassPillStyle({
-    height: 30,
+function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
+  return {
+    height: 28,
     padding: "0 10px",
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 780,
-    letterSpacing: "0.01em",
+    borderRadius: 6,
+    border: 0,
+    background: "transparent",
+    color: "var(--sb-text-2, #3C3C43)",
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: "-0.01em",
+    fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
     cursor: "pointer",
     whiteSpace: "nowrap",
-    ...accent,
+    transition: "background 0.14s var(--sb-spring-snappy), color 0.14s var(--sb-spring-snappy)",
     ...extra,
-  });
+  };
 }
 
 function SheetBuilderMark({ className }: { className?: string }) {
@@ -206,40 +190,6 @@ function SheetBuilderMark({ className }: { className?: string }) {
     </svg>
   );
 }
-
-const ROSTER_AVATAR_PALETTE = [
-  "#e0a40c",
-  "#ef4444",
-  "#df5f9c",
-  "#4db783",
-  "#4f7fe5",
-  "#8b5cf6",
-  "#7b675e",
-  "#0ea5b7",
-];
-
-function initialsForName(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "?";
-  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
-}
-
-function rosterAvatarColor(person: RosterDropdownPerson, fallbackIndex: number): string {
-  if (person.color) return person.color;
-  const key = `${person.id || ""}${person.name || ""}`;
-  let hash = fallbackIndex;
-  for (let i = 0; i < key.length; i += 1) {
-    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-  }
-  return ROSTER_AVATAR_PALETTE[hash % ROSTER_AVATAR_PALETTE.length] ?? ROSTER_AVATAR_PALETTE[0];
-}
-
-const EMPTY_ROSTER_DROPDOWN: RosterDropdownGroups = {
-  scheduledDefault: [],
-  scheduledOverlaps: [],
-  markedOff: [],
-  notScheduled: [],
-};
 
 export default function FloatingNav(props: FloatingNavProps) {
   const {
@@ -266,7 +216,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     onRefreshDay,
     refreshDayBusy = false,
     rosterSummary,
-    rosterDropdown,
     isDraftMode = false,
     draftSlotCount = 0,
     onToggleDraftMode,
@@ -323,7 +272,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     (rosterOpenCount > 0 ? ` · ${rosterOpenCount} open` : "") +
     (rosterCalledOffCount > 0 ? ` · ${rosterCalledOffCount} marked off` : "");
   const notificationCount = rosterCalledOffCount;
-  const navRoster = rosterDropdown ?? EMPTY_ROSTER_DROPDOWN;
 
   const firstDay = days[0]?.date || new Date();
   const monthLabel = `${MONTHS[firstDay.getMonth()]} ${firstDay.getFullYear()}`;
@@ -378,41 +326,13 @@ export default function FloatingNav(props: FloatingNavProps) {
     onToday();
   };
 
-  const renderRosterRows = (people: RosterDropdownPerson[], emptyLabel = "No team members") => {
-    if (!people.length) {
-      return <div className="sb-sheetbuilder-roster-popover__empty">{emptyLabel}</div>;
-    }
-
-    return people.map((person, index) => {
-      const initials = person.initials || initialsForName(person.name);
-      const color = rosterAvatarColor(person, index);
-      return (
-        <div className="sb-sheetbuilder-roster-popover__row" key={person.id || `${person.name}-${index}`}>
-          <span
-            className="sb-sheetbuilder-roster-popover__avatar"
-            style={{ background: color }}
-            aria-hidden
-          >
-            {initials.slice(0, 2)}
-          </span>
-          <span className="sb-sheetbuilder-roster-popover__name">{person.name}</span>
-        </div>
-      );
-    });
-  };
-
   return (
     <>
       <style>{`
         .icon-btn { transition: background 0.12s ease; }
         .icon-btn:hover { background: rgba(0,0,0,0.06); }
         .icon-btn:active { background: rgba(0,0,0,0.11); }
-        @keyframes live-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-          70% { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
-          100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-        }
-        .live-dot { animation: live-pulse 2s ease-out infinite; }
+        .live-dot { box-shadow: none; }
       `}</style>
 
       <nav
@@ -435,7 +355,7 @@ export default function FloatingNav(props: FloatingNavProps) {
           height: 54,
           maxHeight: 54,
           padding: "0 16px",
-          fontFamily: "var(--font-ui, var(--font-builder, 'Helvetica Neue', Helvetica, Arial, sans-serif))",
+          fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
           userSelect: "none",
           display: "flex",
           alignItems: "center",
@@ -613,7 +533,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                       width: 42,
                       height: 42,
                       gap: 0,
-                      boxShadow: "0 6px 16px -9px rgba(34,197,94,0.95), inset 0 1px 0 rgba(255,255,255,0.22)",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.16)",
                     }}
                   >
                     <span
@@ -685,22 +605,26 @@ export default function FloatingNav(props: FloatingNavProps) {
         {/* RIGHT — night actions (seen) + roster + more */}
         <div className="sb-topbar-actions flex items-center gap-1 shrink-0">
           <div
-            className="sb-night-action-pills flex items-center gap-1 shrink-0"
+            className={`sb-night-action-pills flex items-center shrink-0${isDraftMode ? " sb-night-action-pills--draft-active" : ""}`}
             role="group"
             aria-label="Night actions"
+            style={nightActionClusterStyle()}
           >
             {showEngineTools && onOptimizeNight && (
               <button
                 type="button"
                 className="sb-night-action-pill sb-night-action-pill--engine sb-interactive"
-                style={nightActionPillStyle("engine")}
+                style={nightActionSegmentStyle(
+                  engineBusy
+                    ? { color: "var(--sb-optimize-ink)" }
+                    : undefined,
+                )}
                 disabled={engineBusy}
                 onClick={onOptimizeNight}
                 aria-busy={engineBusy}
                 title="Engine — results land in Draft"
                 aria-label="Engine — run day placements"
               >
-                <Sparkles size={13} strokeWidth={2.2} />
                 <span>{engineRunning ? "Running…" : "Engine"}</span>
               </button>
             )}
@@ -709,7 +633,7 @@ export default function FloatingNav(props: FloatingNavProps) {
               isDraftMode && draftSlotCount > 0 && onSaveAllDraft ? (
                 <div
                   className="sb-night-action-pill sb-night-action-pill--draft sb-night-action-pill--split"
-                  style={nightActionPillStyle("draft", { padding: 0, gap: 0 })}
+                  style={{ display: "inline-flex", alignItems: "center", height: 28 }}
                 >
                   <button
                     type="button"
@@ -718,52 +642,25 @@ export default function FloatingNav(props: FloatingNavProps) {
                     title="Draft mode on — edits stay provisional"
                     aria-pressed
                     aria-label={`Draft mode on — ${draftSlotCount} change${draftSlotCount === 1 ? "" : "s"}`}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                      height: "100%",
-                      padding: "0 8px 0 10px",
-                      color: "inherit",
-                      background: "transparent",
-                      border: 0,
-                      cursor: "pointer",
-                    }}
+                    style={nightActionSegmentStyle({
+                      color: "var(--sb-gold-ink)",
+                      background: "var(--sb-gold-surface)",
+                    })}
                   >
-                    <FilePenLine size={13} strokeWidth={2.2} />
                     <span>Draft</span>
                     <span className="tabular-nums opacity-70">{draftSlotCount}</span>
                   </button>
-                  <span
-                    aria-hidden
-                    style={{
-                      width: 1,
-                      height: 14,
-                      background: "var(--sb-gold-border)",
-                      opacity: 0.8,
-                    }}
-                  />
                   <button
                     type="button"
                     className="sb-night-action-pill__apply sb-interactive"
                     onClick={onSaveAllDraft}
                     title="Apply draft changes to the live board"
                     aria-label={`Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board`}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      height: "100%",
-                      padding: "0 10px 0 8px",
+                    style={nightActionSegmentStyle({
                       color: "var(--sb-gold-ink)",
-                      background: "var(--sb-gold-surface)",
-                      border: 0,
-                      borderRadius: "0 999px 999px 0",
-                      cursor: "pointer",
-                      fontWeight: 800,
-                    }}
+                      fontWeight: 650,
+                    })}
                   >
-                    <Check size={12} strokeWidth={2.6} />
                     Apply
                   </button>
                 </div>
@@ -771,10 +668,9 @@ export default function FloatingNav(props: FloatingNavProps) {
                 <button
                   type="button"
                   className="sb-night-action-pill sb-night-action-pill--draft sb-interactive"
-                  style={nightActionPillStyle(
-                    "draft",
+                  style={nightActionSegmentStyle(
                     isDraftMode
-                      ? { background: "var(--sb-gold-surface)" }
+                      ? { color: "var(--sb-gold-ink)", background: "var(--sb-gold-surface)" }
                       : undefined,
                   )}
                   onClick={onToggleDraftMode}
@@ -786,7 +682,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                   }
                   aria-label={isDraftMode ? "Draft mode on" : "Enter Draft mode"}
                 >
-                  <FilePenLine size={13} strokeWidth={2.2} />
                   <span>Draft</span>
                 </button>
               )
@@ -796,12 +691,11 @@ export default function FloatingNav(props: FloatingNavProps) {
               <button
                 type="button"
                 className="sb-night-action-pill sb-night-action-pill--print sb-interactive"
-                style={nightActionPillStyle("print")}
+                style={nightActionSegmentStyle()}
                 onClick={onPrint}
                 title="Open Print Command Center"
                 aria-label="Print"
               >
-                <Printer size={13} strokeWidth={2.2} />
                 <span>Print</span>
               </button>
             )}
