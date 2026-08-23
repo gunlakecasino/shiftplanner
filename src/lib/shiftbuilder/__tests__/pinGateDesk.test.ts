@@ -74,6 +74,28 @@ describe("PinGate desk — corporate ops console", () => {
     expect(authCss).toContain("quiet desk paper");
   });
 
+  it("closes the live-sit 10-item PIN kill-list", () => {
+    expect(opsAuthGate).not.toContain("backdropFilter");
+    expect(opsAuthGate).not.toContain("BuilderLoadingShell");
+    expect(authCss).not.toContain("backdrop-filter");
+    expect(authCss).toContain("visibility: hidden");
+    expect(authCss).toMatch(/\.sb-auth-card::before,[\s\S]*content: none !important/);
+    expect(authCss).toContain("border-radius: 8px");
+    expect(authCss).not.toContain("rounded-[26px]");
+    expect(pinGate).not.toContain("sb-auth-icon");
+    expect(pinGate).not.toMatch(/\block\b/);
+    expect(pinGate).not.toContain("SheetBuilder Access");
+    expect(pinGate).not.toContain("6-digit PIN");
+    expect(pinGate).not.toContain("••••••");
+    expect(pinGate).not.toContain("sb-auth-slots");
+    expect(pinGate).toContain('"Enter"');
+    expect(pinGate).not.toContain("ENTER");
+    expect(pinGate).not.toContain("arrow_forward");
+    expect(authCss).toContain("text-transform: none");
+    expect(authCss).toContain("color: #4A453C");
+    expect(authCss).toContain("color: #1C1910");
+  });
+
   it("does not keep PIN theater classes in globals.css", () => {
     expect(globalsCss).not.toContain("sb-auth-card--access");
     expect(globalsCss).not.toContain("sb-auth-accent");

@@ -29,13 +29,14 @@
   position: absolute;
   inset: 0;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity var(--sb-dur-mid) var(--sb-spring-gentle);
 }
 
 .sb-auth-gate-behind--visible {
   position: relative;
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 
