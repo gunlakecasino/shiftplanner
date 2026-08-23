@@ -5,7 +5,10 @@ import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-quer
 import { toast } from "sonner";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
-import { NIGHT_BOARD_POLL_MS } from "@/lib/shiftbuilder/liveCache";
+import {
+  nightBoardRefetchInterval,
+  shouldRefetchNightBoardOnFocus,
+} from "@/lib/shiftbuilder/liveCache";
 import { fetchNightCoreData } from "./fetchNightCoreData";
 import { fetchNightSecondaryData } from "./fetchNightSecondaryData";
 
@@ -26,44 +29,52 @@ export type UseCurrentNightOptions = {
   todayPolicy?: boolean;
   /** Viewer role — server rejects unpublished nights; client clears stale day data. */
   publishedOnlyPolicy?: boolean;
+  /**
+   * When false, skip the 20s night-board poll (Settings / off-canvas).
+   * Canvas keeps poll so multi-operator sync stays live.
+   */
+  poll?: boolean;
 };
 
 export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOptions) {
   const queryClient = useQueryClient();
   const dateKey = formatLocalDateISO(selectedDay.date);
   const coreEnabled = options?.enabled !== false;
+  const poll = options?.poll !== false;
 
   const coreQuery = useQuery({
     queryKey: ["nightCore", dateKey],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchNightCoreData(selectedDay, {
         todayPolicy: options?.todayPolicy,
         publishedOnlyPolicy: options?.publishedOnlyPolicy,
+        signal,
       }),
     enabled: coreEnabled,
     // Long stale window keeps UI stable during live session; poll + patches keep data fresh.
-    // refetchOnMount: 'always' ensures hard refresh / remount sees latest server data
-    // immediately (paired with { expire: 0 } revalidates after edits).
+    // Remount uses cached data immediately (hydration no longer waits on isFetching).
+    // Hard refresh has an empty cache so it still hits the network.
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-    refetchInterval: NIGHT_BOARD_POLL_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: () => shouldRefetchNightBoardOnFocus(poll),
+    refetchInterval: () => nightBoardRefetchInterval(poll),
     refetchIntervalInBackground: false,
     placeholderData: options?.publishedOnlyPolicy ? undefined : keepPreviousData,
   });
 
   const secondaryQuery = useQuery({
     queryKey: ["nightSecondary", dateKey],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchNightSecondaryData(selectedDay, {
         publishedOnlyPolicy: options?.publishedOnlyPolicy,
+        signal,
       }),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-    refetchInterval: NIGHT_BOARD_POLL_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: () => shouldRefetchNightBoardOnFocus(poll),
+    refetchInterval: () => nightBoardRefetchInterval(poll),
     refetchIntervalInBackground: false,
     enabled: coreEnabled,
   });
@@ -121,13 +132,13 @@ export function useCurrentNight(selectedDay: DayDef, options?: UseCurrentNightOp
 
     queryClient.prefetchQuery({
       queryKey: ["nightCore", prefetchDateKey],
-      queryFn: () => fetchNightCoreData(dayDef, fetchOptions),
+      queryFn: ({ signal }) => fetchNightCoreData(dayDef, { ...fetchOptions, signal }),
       staleTime: 1000 * 60 * 5,
     });
 
     queryClient.prefetchQuery({
       queryKey: ["nightSecondary", prefetchDateKey],
-      queryFn: () => fetchNightSecondaryData(dayDef, fetchOptions),
+      queryFn: ({ signal }) => fetchNightSecondaryData(dayDef, { ...fetchOptions, signal }),
       staleTime: 1000 * 60 * 5,
     });
   };

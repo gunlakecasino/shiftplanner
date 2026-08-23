@@ -12,7 +12,9 @@ import {
 import {
   liveAssignmentsStore,
   mirrorMainAssignmentsToLiveStore,
+  resumeHydratedBoardDayKey,
   setBoardAssignmentsDayKey,
+  shouldApplyNightBoardQueryToStore,
 } from "@/lib/shiftbuilder/liveCache";
 import {
   invalidateNightBoardQueries,
@@ -119,10 +121,13 @@ export function useShiftData(
 
   const storeAssignments = useAssignments();
   const storeDraftAssignments = useDraftAssignments();
+  const pendingDrag = useShiftBuilderStore((s) => s.pendingDrag);
   const selectedDateKey = formatLocalDateISO(selectedDay.date);
   const stabilizedDateKeyRef = React.useRef(selectedDateKey);
   const rosterStabilizedForDateRef = React.useRef<string | null>(null);
-  const hydratedAssignmentsDayRef = React.useRef<string | null>(null);
+  const hydratedAssignmentsDayRef = React.useRef<string | null>(
+    resumeHydratedBoardDayKey(selectedDateKey),
+  );
 
   // === Stable refs for effective values ===
   // Prevents fresh {} / new Set() / new [] literals on every render from query ?? defaults
@@ -322,7 +327,9 @@ export function useShiftData(
   // below only runs after the render where query data first lands). Without this,
   // `boardColdLoading` would go false the instant query data arrives — one render before
   // the store actually has it — and every ZoneCard would flash "Unassigned" for a frame.
-  const [hydratedDayKey, setHydratedDayKey] = React.useState<string | null>(null);
+  const [hydratedDayKey, setHydratedDayKey] = React.useState<string | null>(() =>
+    resumeHydratedBoardDayKey(selectedDateKey),
+  );
   const boardColdLoading = queryColdLoading || hydratedDayKey !== selectedDateKey;
 
   // Live version for reactivity of "already placed this night" and week surfaces.
@@ -339,7 +346,11 @@ export function useShiftData(
   React.useEffect(() => {
     const dayKey = formatLocalDateISO(selectedDay.date);
     if (hydratedAssignmentsDayRef.current === dayKey) return;
-    if (queryColdLoading || currentNight.isCoreFetching) return;
+    // Background poll/refetch must not block remount hydration — waiting on
+    // isCoreFetching made Settings↔canvas paint a cold veil for a full RTT.
+    if (queryColdLoading) return;
+    if (currentNight.isCorePlaceholder) return;
+    if (!shouldApplyNightBoardQueryToStore()) return;
 
     if (nightAccessBlocked) {
       useShiftBuilderStore.getState().setAssignments({});
@@ -396,11 +407,12 @@ export function useShiftData(
   }, [
     selectedDay.date,
     queryColdLoading,
-    currentNight.isCoreFetching,
+    currentNight.isCorePlaceholder,
     currentNight.queryClient,
     currentNight.assignments,
     bumpLiveAssignVersion,
     nightAccessBlocked,
+    pendingDrag,
   ]);
 
   // Public helpers for action paths (applyDraft, drag persist, engine runs, etc.)

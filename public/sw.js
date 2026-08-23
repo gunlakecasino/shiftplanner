@@ -13,7 +13,7 @@
 //   • Everything else             → passthrough.
 //
 // Bump CACHE_VERSION on every release so activate() purges the previous caches.
-const CACHE_VERSION = "v5-ipad-20260716";
+const CACHE_VERSION = "v6-ipad-20260823";
 const SHELL_CACHE = `shiftforge-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `shiftforge-static-${CACHE_VERSION}`;
 const OFFLINE_URL = "/sheetbuilder";

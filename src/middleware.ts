@@ -118,14 +118,27 @@ export function middleware(request: NextRequest) {
 
     response.headers.set("Content-Security-Policy", csp);
     response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-    if (pathname.startsWith("/shiftbuilder")) {
+    // Interactive shells must never be CDN-cached. s-maxage / SWR here made
+    // Settings↔canvas↔Team paint a sticky stale RSC chrome, then flash.
+    if (
+      pathname.startsWith("/shiftbuilder") ||
+      pathname.startsWith("/sheetbuilder") ||
+      pathname === "/"
+    ) {
       response.headers.set(
         "Cache-Control",
-        "public, max-age=30, s-maxage=60, stale-while-revalidate=300"
+        "private, no-cache, no-store, must-revalidate"
       );
+      response.headers.set("Pragma", "no-cache");
+      response.headers.set("Expires", "0");
+      response.headers.set("Surrogate-Control", "no-store");
     }
   } else {
-    if (pathname.startsWith("/shiftbuilder") || pathname === "/") {
+    if (
+      pathname.startsWith("/shiftbuilder") ||
+      pathname.startsWith("/sheetbuilder") ||
+      pathname === "/"
+    ) {
       response.headers.set(
         "Cache-Control",
         "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"

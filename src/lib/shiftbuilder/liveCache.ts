@@ -49,6 +49,88 @@ import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderSt
  */
 export const NIGHT_BOARD_POLL_MS = 20_000;
 
+/**
+ * Module-level gesture flag (not Zustand) so poll / refetch / hydration can
+ * skip without notifying every store subscriber on pointer-down.
+ * `pendingDrag` remains the visual source-card lock for assigned-TM moves.
+ */
+let liveBoardGestureActive = false;
+/** Persist-in-flight after pointer-up — poll must not overwrite until server ack. */
+let liveBoardSettleCount = 0;
+
+export function beginLiveBoardGesture(): void {
+  liveBoardGestureActive = true;
+}
+
+export function endLiveBoardGesture(): void {
+  liveBoardGestureActive = false;
+}
+
+export function beginLiveBoardSettle(): void {
+  liveBoardSettleCount += 1;
+}
+
+export function endLiveBoardSettle(): void {
+  liveBoardSettleCount = Math.max(0, liveBoardSettleCount - 1);
+}
+
+export function isLiveBoardSettling(): boolean {
+  return liveBoardSettleCount > 0;
+}
+
+export function isLiveBoardGestureActive(): boolean {
+  if (liveBoardGestureActive || liveBoardSettleCount > 0) return true;
+  try {
+    return useShiftBuilderStore.getState().pendingDrag != null;
+  } catch {
+    return false;
+  }
+}
+
+/** Remount resume: if Zustand already holds this night, do not go cold. */
+export function resumeHydratedBoardDayKey(selectedDateKey: string): string | null {
+  return getBoardAssignmentsDayKey() === selectedDateKey ? selectedDateKey : null;
+}
+
+/** Drop in-flight night polls so they cannot overwrite an optimistic board. */
+export function cancelNightBoardQueries(queryClient: QueryClient): void {
+  void queryClient.cancelQueries({ queryKey: ["nightCore"] });
+  void queryClient.cancelQueries({ queryKey: ["nightSecondary"] });
+  void queryClient.cancelQueries({ queryKey: ["night"] });
+}
+
+/** Pause the 20s night poll (and focus refetch) for the duration of a drag. */
+export function nightBoardRefetchInterval(poll = true): number | false {
+  if (!poll) return false;
+  if (isLiveBoardGestureActive()) return false;
+  return NIGHT_BOARD_POLL_MS;
+}
+
+export function shouldRefetchNightBoardOnFocus(poll = true): boolean {
+  return poll && !isLiveBoardGestureActive();
+}
+
+/** Do not paint a poll/refetch onto the live store while a gesture is in flight. */
+export function shouldApplyNightBoardQueryToStore(): boolean {
+  return !isLiveBoardGestureActive();
+}
+
+/** Route leave / Escape-cancel: clear gesture + leftover pendingDrag overlay. */
+export function resetLiveBoardGesture(): void {
+  liveBoardGestureActive = false;
+  liveBoardSettleCount = 0;
+  try {
+    const store = useShiftBuilderStore.getState();
+    if (typeof store.setPendingDrag === "function") {
+      store.setPendingDrag(null);
+    } else {
+      useShiftBuilderStore.setState({ pendingDrag: null });
+    }
+  } catch {
+    /* store may be unavailable in isolated tests */
+  }
+}
+
 /** Local YYYY-MM-DD — use everywhere live cache keys assignments (never UTC slice). */
 export function nightDateKey(date: Date): string {
   return formatLocalDateISO(date);
@@ -298,6 +380,7 @@ function teardownLiveCacheForNight(nightId: string, dateKey: string) {
  * Kept for call-site compatibility (formerly re-subscribed Realtime channels).
  */
 export function reconnectAllActiveLiveCache(queryClient?: QueryClient): void {
+  if (isLiveBoardGestureActive()) return;
   for (const entry of Object.values(activeNights)) {
     const qc = queryClient ?? entry.queryClient;
     liveAssignmentsStore.getState().setConnectionStatus(entry.dateKey, "connected");

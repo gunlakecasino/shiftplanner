@@ -13,6 +13,7 @@ import {
   rectIntersection,
   MeasuringStrategy,
   type CollisionDetection,
+  type DragCancelEvent,
   type DragEndEvent,
   type DragStartEvent,
   type UniqueIdentifier,
@@ -80,6 +81,7 @@ interface InteractiveStageProps {
   children: React.ReactNode;
   onDragStart: (event: DragStartEvent) => void;
   onDragEnd: (event: DragEndEvent) => void;
+  onDragCancel?: (event: DragCancelEvent) => void;
   onDragOver?: (event: any) => void; // for intra-list task reordering preview
   activeDrag: any; // the ghost data
   isDark: boolean;
@@ -91,6 +93,7 @@ export default function InteractiveStage({
   children,
   onDragStart,
   onDragEnd,
+  onDragCancel,
   onDragOver,
   activeDrag,
   isDark,
@@ -175,6 +178,7 @@ export default function InteractiveStage({
         }}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
+        onDragCancel={onDragCancel}
         onDragOver={onDragOver}
         autoScroll={false}
       >
