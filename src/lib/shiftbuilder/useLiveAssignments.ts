@@ -47,6 +47,8 @@ import {
   liveAssignmentsStore,
   initLiveCacheForNight,
   getBoardAssignmentsDayKey,
+  beginLiveBoardSettle,
+  endLiveBoardSettle,
 } from "./liveCache";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore";
 import { patchNightCoreAssignmentsCache } from "./scheduleCacheSync";
@@ -175,6 +177,7 @@ export function useLiveAssignments(selectedDay: DayDef) {
       },
 
       onMutate: async (params: TParams & LiveAssignOptions) => {
+        beginLiveBoardSettle();
         // 1. Cancel any outgoing refetches so they don't overwrite our optimistic update
         await queryClient.cancelQueries({ queryKey: ["nightCore", dateKey] });
         await queryClient.cancelQueries({ queryKey: ["night", dateKey] });
@@ -311,7 +314,9 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
       // Do not invalidateQueries here — refetch can return stale server-cached bundles
       // and overwrite the optimistic nightCore patch from onMutate (board reverts until refresh).
-      onSettled: () => {},
+      onSettled: () => {
+        endLiveBoardSettle();
+      },
     });
   };
 

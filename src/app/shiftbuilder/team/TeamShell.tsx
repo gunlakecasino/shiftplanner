@@ -11,7 +11,8 @@
  */
 
 import React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useSheetBuilderNav } from "../hooks/useSheetBuilderNav";
 import Link from "next/link";
 import { ArrowLeft, Users, CalendarDays, Layers } from "lucide-react";
 import { useOpsAuth } from "@/lib/auth/opsAuth";
@@ -40,7 +41,7 @@ function resolveView(param: string | null): TeamView {
 }
 
 export function TeamShell() {
-  const router = useRouter();
+  const router = useSheetBuilderNav();
   const searchParams = useSearchParams();
   const { permissions } = useOpsAuth();
 
@@ -101,7 +102,8 @@ export function TeamShell() {
 
   return (
     <div
-      className="min-h-screen bg-[#F8F8F9] text-[#1C1C1E]"
+      className="sb-team-shell min-h-screen bg-[#F8F8F9] text-[#1C1C1E]"
+      data-sb-route-ready=""
       style={{ fontFamily: "var(--font-atkinson, system-ui, sans-serif)" }}
     >
       <header className="flex items-center justify-between border-b border-neutral-200/80 bg-white/70 px-6 py-2.5 text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500 backdrop-blur">

@@ -3,12 +3,17 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   beginLiveBoardGesture,
+  beginLiveBoardSettle,
   cancelNightBoardQueries,
   endLiveBoardGesture,
+  endLiveBoardSettle,
   isLiveBoardGestureActive,
+  isLiveBoardSettling,
   nightBoardRefetchInterval,
   NIGHT_BOARD_POLL_MS,
   resetLiveBoardGesture,
+  resumeHydratedBoardDayKey,
+  setBoardAssignmentsDayKey,
   shouldApplyNightBoardQueryToStore,
   shouldRefetchNightBoardOnFocus,
 } from "../liveCache";
@@ -17,6 +22,10 @@ import {
   bindNightBoardAbortSignal,
   isNightBoardAbortError,
 } from "../nightBoardAbort";
+import {
+  isSameSheetBuilderPathname,
+  isSheetBuilderInternalHref,
+} from "../sheetBuilderRouteHold";
 
 const middleware = readFileSync(resolve(process.cwd(), "src/middleware.ts"), "utf8");
 const nextConfig = readFileSync(resolve(process.cwd(), "next.config.ts"), "utf8");
@@ -46,6 +55,27 @@ const shiftBuilderClient = readFileSync(
 );
 const interactiveStage = readFileSync(
   resolve(process.cwd(), "src/app/shiftbuilder/components/InteractiveStage.tsx"),
+  "utf8",
+);
+const canvasPage = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/page.tsx"),
+  "utf8",
+);
+const shiftbuilderLoading = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/loading.tsx"),
+  "utf8",
+);
+const sheetbuilderLoading = readFileSync(
+  resolve(process.cwd(), "src/app/sheetbuilder/loading.tsx"),
+  "utf8",
+);
+const authedShell = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/components/ShiftBuilderAuthenticatedShell.tsx"),
+  "utf8",
+);
+const layout = readFileSync(resolve(process.cwd(), "src/app/shiftbuilder/layout.tsx"), "utf8");
+const liveAssign = readFileSync(
+  resolve(process.cwd(), "src/lib/shiftbuilder/useLiveAssignments.ts"),
   "utf8",
 );
 
@@ -87,6 +117,27 @@ describe("live board gesture — poll skip + pendingDrag", () => {
   it("never polls when the surface opts out (Settings)", () => {
     expect(nightBoardRefetchInterval(false)).toBe(false);
     expect(shouldRefetchNightBoardOnFocus(false)).toBe(false);
+  });
+
+  it("keeps poll paused until persist settle (server ack), not just pointer-up", () => {
+    beginLiveBoardGesture();
+    beginLiveBoardSettle();
+    endLiveBoardGesture();
+    expect(isLiveBoardSettling()).toBe(true);
+    expect(isLiveBoardGestureActive()).toBe(true);
+    expect(nightBoardRefetchInterval(true)).toBe(false);
+    expect(shouldApplyNightBoardQueryToStore()).toBe(false);
+
+    endLiveBoardSettle();
+    expect(isLiveBoardSettling()).toBe(false);
+    expect(nightBoardRefetchInterval(true)).toBe(NIGHT_BOARD_POLL_MS);
+  });
+
+  it("resumes hydration from the already-painted night so remount is not cold", () => {
+    setBoardAssignmentsDayKey("2026-08-23");
+    expect(resumeHydratedBoardDayKey("2026-08-23")).toBe("2026-08-23");
+    expect(resumeHydratedBoardDayKey("2026-08-24")).toBeNull();
+    setBoardAssignmentsDayKey(null);
   });
 
   it("cancelNightBoardQueries drops core + secondary + legacy night keys", () => {
@@ -164,8 +215,45 @@ describe("live board cache + nav contracts", () => {
     expect(shiftBuilderClient).toContain("endLiveBoardGesture()");
     expect(shiftBuilderClient).toContain("resetLiveBoardGesture()");
     expect(shiftBuilderClient).toContain("cancelNightBoardQueries");
+    expect(shiftBuilderClient).toContain("beginLiveBoardSettle()");
     expect(shiftBuilderClient).toContain("onDragCancel={onDragCancel}");
     expect(interactiveStage).toContain("onDragCancel={onDragCancel}");
     expect(interactiveStage).toContain("activationConstraint: { distance: coarse ? 12 : 4 }");
+    expect(liveAssign).toContain("beginLiveBoardSettle()");
+    expect(liveAssign).toContain("endLiveBoardSettle()");
+  });
+});
+
+describe("continuity acceptance — hold previous UI, never replace the board", () => {
+  it("route loaders return null instead of a skeleton shell", () => {
+    expect(shiftbuilderLoading).toContain("return null");
+    expect(shiftbuilderLoading).not.toContain("BuilderLoadingShell");
+    expect(sheetbuilderLoading).toContain("return null");
+    expect(canvasPage).toContain("loading: () => null");
+    expect(canvasPage).not.toContain("BuilderArtboardSkeletonPreview");
+  });
+
+  it("canvas remount does not fade in from empty via sb-content-enter", () => {
+    expect(authedShell).not.toContain("sb-content-enter");
+    expect(settingsShell).not.toContain("sb-content-enter");
+    expect(useShiftData).toContain("resumeHydratedBoardDayKey");
+  });
+
+  it("layout holds the outgoing paint until the next view is ready", () => {
+    expect(layout).toContain("SheetBuilderRouteContinuity");
+    expect(shiftBuilderClient).toContain("data-sb-route-ready");
+    expect(settingsShell).toContain("data-sb-route-ready");
+  });
+
+  it("classifies SheetBuilder internal hrefs and same-path tab changes", () => {
+    expect(isSheetBuilderInternalHref("/sheetbuilder/settings", "https://ops.example")).toBe(true);
+    expect(isSheetBuilderInternalHref("/shiftbuilder/team", "https://ops.example")).toBe(true);
+    expect(isSheetBuilderInternalHref("https://other.example/sheetbuilder", "https://ops.example")).toBe(
+      false,
+    );
+    vi.stubGlobal("location", { pathname: "/sheetbuilder/settings", origin: "https://ops.example" });
+    expect(isSameSheetBuilderPathname("/sheetbuilder/settings?tab=engine")).toBe(true);
+    expect(isSameSheetBuilderPathname("/sheetbuilder")).toBe(false);
+    vi.unstubAllGlobals();
   });
 });

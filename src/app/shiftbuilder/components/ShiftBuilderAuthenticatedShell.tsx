@@ -28,7 +28,7 @@ export function ShiftBuilderAuthenticatedShell({ children }: Props) {
   }
 
   return (
-    <div key={user.id} className={cn("sb-shiftbuilder-authed", "sb-content-enter")}>
+    <div key={user.id} className={cn("sb-shiftbuilder-authed")}>
       {children}
     </div>
   );

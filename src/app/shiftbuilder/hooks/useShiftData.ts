@@ -12,6 +12,7 @@ import {
 import {
   liveAssignmentsStore,
   mirrorMainAssignmentsToLiveStore,
+  resumeHydratedBoardDayKey,
   setBoardAssignmentsDayKey,
   shouldApplyNightBoardQueryToStore,
 } from "@/lib/shiftbuilder/liveCache";
@@ -124,7 +125,9 @@ export function useShiftData(
   const selectedDateKey = formatLocalDateISO(selectedDay.date);
   const stabilizedDateKeyRef = React.useRef(selectedDateKey);
   const rosterStabilizedForDateRef = React.useRef<string | null>(null);
-  const hydratedAssignmentsDayRef = React.useRef<string | null>(null);
+  const hydratedAssignmentsDayRef = React.useRef<string | null>(
+    resumeHydratedBoardDayKey(selectedDateKey),
+  );
 
   // === Stable refs for effective values ===
   // Prevents fresh {} / new Set() / new [] literals on every render from query ?? defaults
@@ -324,7 +327,9 @@ export function useShiftData(
   // below only runs after the render where query data first lands). Without this,
   // `boardColdLoading` would go false the instant query data arrives — one render before
   // the store actually has it — and every ZoneCard would flash "Unassigned" for a frame.
-  const [hydratedDayKey, setHydratedDayKey] = React.useState<string | null>(null);
+  const [hydratedDayKey, setHydratedDayKey] = React.useState<string | null>(() =>
+    resumeHydratedBoardDayKey(selectedDateKey),
+  );
   const boardColdLoading = queryColdLoading || hydratedDayKey !== selectedDateKey;
 
   // Live version for reactivity of "already placed this night" and week surfaces.

@@ -55,6 +55,8 @@ export const NIGHT_BOARD_POLL_MS = 20_000;
  * `pendingDrag` remains the visual source-card lock for assigned-TM moves.
  */
 let liveBoardGestureActive = false;
+/** Persist-in-flight after pointer-up — poll must not overwrite until server ack. */
+let liveBoardSettleCount = 0;
 
 export function beginLiveBoardGesture(): void {
   liveBoardGestureActive = true;
@@ -64,13 +66,30 @@ export function endLiveBoardGesture(): void {
   liveBoardGestureActive = false;
 }
 
+export function beginLiveBoardSettle(): void {
+  liveBoardSettleCount += 1;
+}
+
+export function endLiveBoardSettle(): void {
+  liveBoardSettleCount = Math.max(0, liveBoardSettleCount - 1);
+}
+
+export function isLiveBoardSettling(): boolean {
+  return liveBoardSettleCount > 0;
+}
+
 export function isLiveBoardGestureActive(): boolean {
-  if (liveBoardGestureActive) return true;
+  if (liveBoardGestureActive || liveBoardSettleCount > 0) return true;
   try {
     return useShiftBuilderStore.getState().pendingDrag != null;
   } catch {
     return false;
   }
+}
+
+/** Remount resume: if Zustand already holds this night, do not go cold. */
+export function resumeHydratedBoardDayKey(selectedDateKey: string): string | null {
+  return getBoardAssignmentsDayKey() === selectedDateKey ? selectedDateKey : null;
 }
 
 /** Drop in-flight night polls so they cannot overwrite an optimistic board. */
@@ -99,6 +118,7 @@ export function shouldApplyNightBoardQueryToStore(): boolean {
 /** Route leave / Escape-cancel: clear gesture + leftover pendingDrag overlay. */
 export function resetLiveBoardGesture(): void {
   liveBoardGestureActive = false;
+  liveBoardSettleCount = 0;
   try {
     const store = useShiftBuilderStore.getState();
     if (typeof store.setPendingDrag === "function") {

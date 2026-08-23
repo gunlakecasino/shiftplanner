@@ -14,8 +14,8 @@
  *   • Timezone-sensitive formatting
  *   • dnd-kit's SSR-unfriendly internals
  *
- * The trade-off is a brief "Loading…" flash on first paint. For an internal
- * ops editor with no SEO value, this is the right call.
+ * First visit still waits on the dynamic chunk; returning to the canvas
+ * must not flash a skeleton — route hold + Zustand resume keep paint.
  */
 
 import dynamic from "next/dynamic";
@@ -23,15 +23,10 @@ import PwaRegister from "./components/PwaRegister";
 import ShiftBuilderHelpButton from "./components/ShiftBuilderHelpButton";
 import ShiftBuilderAuthenticatedShell from "./components/ShiftBuilderAuthenticatedShell";
 import DaySwitchTransitionBridge from "./components/DaySwitchTransitionBridge";
-import { BuilderArtboardSkeletonPreview } from "./components/builderPrimitives";
-
 const ShiftBuilderClient = dynamic(() => import("./ShiftBuilderClient"), {
   ssr: false,
-  loading: () => (
-    <div className="sb-content-enter p-6" aria-busy="true" aria-label="Loading shift builder">
-      <BuilderArtboardSkeletonPreview />
-    </div>
-  ),
+  // Returning to the canvas must not flash a skeleton over the route hold.
+  loading: () => null,
 });
 
 export default function ShiftBuilderPage() {

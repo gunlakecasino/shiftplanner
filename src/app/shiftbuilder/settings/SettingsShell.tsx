@@ -7,7 +7,8 @@
 
 import React from "react";
 import dynamic from "next/dynamic";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useSheetBuilderNav } from "../hooks/useSheetBuilderNav";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
@@ -176,7 +177,7 @@ function SettingsTabPanel({
 }
 
 export function SettingsShell() {
-  const router = useRouter();
+  const router = useSheetBuilderNav();
   const searchParams = useSearchParams();
   const { isDark, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
@@ -312,7 +313,7 @@ export function SettingsShell() {
       };
 
   return (
-    <div className="sb-settings-shell sb-content-enter">
+    <div className="sb-settings-shell" data-sb-route-ready="">
       <div className="sb-settings-grid" aria-hidden />
 
       <header className="sb-settings-status">

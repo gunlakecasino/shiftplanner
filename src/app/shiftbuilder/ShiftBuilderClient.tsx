@@ -179,7 +179,9 @@ import {
   buildPadAssignmentsFromStore,
   nightDateKey,
   beginLiveBoardGesture,
+  beginLiveBoardSettle,
   endLiveBoardGesture,
+  endLiveBoardSettle,
   resetLiveBoardGesture,
   cancelNightBoardQueries,
 } from "@/lib/shiftbuilder/liveCache";
@@ -5575,19 +5577,24 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
         setSelectedTasks((prev) => ({ ...prev, [fromUiKey]: reordered }));
 
+        beginLiveBoardSettle();
         (async () => {
-          let nid = nightId;
-          if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
-          if (!nid) return;
-
           try {
-            const { reorderNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-            const { slot_key, slot_type, rr_side } = uiToDb(fromUiKey);
-            await reorderNightSlotTasks(nid, slot_key, slot_type, rr_side, orderedLabels);
-          } catch (e: any) {
-            console.error("[shiftbuilder] task reorder persist failed", e);
-            setSelectedTasks((prev) => ({ ...prev, [fromUiKey]: preReorderList }));
-            showToast("Tasks reorder failed to save — reverted");
+            let nid = nightId;
+            if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+            if (!nid) return;
+
+            try {
+              const { reorderNightSlotTasks } = await import("@/lib/shiftbuilder/data");
+              const { slot_key, slot_type, rr_side } = uiToDb(fromUiKey);
+              await reorderNightSlotTasks(nid, slot_key, slot_type, rr_side, orderedLabels);
+            } catch (e: any) {
+              console.error("[shiftbuilder] task reorder persist failed", e);
+              setSelectedTasks((prev) => ({ ...prev, [fromUiKey]: preReorderList }));
+              showToast("Tasks reorder failed to save — reverted");
+            }
+          } finally {
+            endLiveBoardSettle();
           }
         })();
         return;
@@ -5615,39 +5622,44 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           [toUiKey]: [...(prev[toUiKey] ?? []), copied],
         }));
 
+        beginLiveBoardSettle();
         (async () => {
-          let nid = nightId;
-          if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
-          if (!nid) return;
-
           try {
-            const { addNightSlotTask } = await import("@/lib/shiftbuilder/data");
-            await addNightSlotTask({
-              nightId: nid,
-              slotKey: toSlotKey,
-              slotType: toSlotType,
-              rrSide: toRrSide,
-              taskLabel: a.taskLabel,
-              catalogTaskId: a.catalogTaskId ?? null,
-              color: a.color ?? null,
-              // sortOrder will default / append in add
-            });
-            // Refresh the target slot's tasks so order/sort_order is correct (best effort)
+            let nid = nightId;
+            if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+            if (!nid) return;
+
             try {
-              const fresh = await (await import("@/lib/shiftbuilder/data")).getNightSlotTasks(nid);
-              const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
-              setSelectedTasks((prev) => ({ ...prev, ...byKey })); // merge, other slots unchanged
-            } catch (refreshErr) {
-              console.warn('[ShiftBuilder] duplicate task refresh failed (write succeeded)', refreshErr);
+              const { addNightSlotTask } = await import("@/lib/shiftbuilder/data");
+              await addNightSlotTask({
+                nightId: nid,
+                slotKey: toSlotKey,
+                slotType: toSlotType,
+                rrSide: toRrSide,
+                taskLabel: a.taskLabel,
+                catalogTaskId: a.catalogTaskId ?? null,
+                color: a.color ?? null,
+                // sortOrder will default / append in add
+              });
+              // Refresh the target slot's tasks so order/sort_order is correct (best effort)
+              try {
+                const fresh = await (await import("@/lib/shiftbuilder/data")).getNightSlotTasks(nid);
+                const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
+                setSelectedTasks((prev) => ({ ...prev, ...byKey })); // merge, other slots unchanged
+              } catch (refreshErr) {
+                console.warn('[ShiftBuilder] duplicate task refresh failed (write succeeded)', refreshErr);
+              }
+            } catch (e: any) {
+              console.error("[shiftbuilder] task duplicate persist failed", e);
+              // Roll back the optimistic copy — remove this exact (un-persisted) object from the target slot.
+              setSelectedTasks((prev) => ({
+                ...prev,
+                [toUiKey]: (prev[toUiKey] ?? []).filter((t: any) => t !== copied),
+              }));
+              showToast("Task duplicate failed to save — reverted");
             }
-          } catch (e: any) {
-            console.error("[shiftbuilder] task duplicate persist failed", e);
-            // Roll back the optimistic copy — remove this exact (un-persisted) object from the target slot.
-            setSelectedTasks((prev) => ({
-              ...prev,
-              [toUiKey]: (prev[toUiKey] ?? []).filter((t: any) => t !== copied),
-            }));
-            showToast("Task duplicate failed to save — reverted");
+          } finally {
+            endLiveBoardSettle();
           }
         })();
         return;
@@ -5684,31 +5696,36 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         });
 
         // Persist using the same coordinated-night pattern used for TM swaps
+        beginLiveBoardSettle();
         (async () => {
-          let nid = nightId;
-          if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
-          if (!nid) return;
-
           try {
-            const { moveNightSlotTask } = await import("@/lib/shiftbuilder/data");
-            await moveNightSlotTask({
-              nightId: nid,
-              fromSlotKey,
-              fromSlotType,
-              fromRrSide,
-              toSlotKey,
-              toSlotType,
-              toRrSide,
-              taskLabel: a.taskLabel,
-            });
-          } catch (e: any) {
-            console.error("[shiftbuilder] task move persist failed", e);
-            setSelectedTasks((prev) => ({
-              ...prev,
-              [fromUiKeyMove]: preMoveFromList,
-              [toUiKeyMove]: preMoveToList,
-            }));
-            showToast("Task move failed to save — reverted");
+            let nid = nightId;
+            if (!nid) nid = await resolveNightIdForDate(selectedDay.date, selectedDay.name);
+            if (!nid) return;
+
+            try {
+              const { moveNightSlotTask } = await import("@/lib/shiftbuilder/data");
+              await moveNightSlotTask({
+                nightId: nid,
+                fromSlotKey,
+                fromSlotType,
+                fromRrSide,
+                toSlotKey,
+                toSlotType,
+                toRrSide,
+                taskLabel: a.taskLabel,
+              });
+            } catch (e: any) {
+              console.error("[shiftbuilder] task move persist failed", e);
+              setSelectedTasks((prev) => ({
+                ...prev,
+                [fromUiKeyMove]: preMoveFromList,
+                [toUiKeyMove]: preMoveToList,
+              }));
+              showToast("Task move failed to save — reverted");
+            }
+          } finally {
+            endLiveBoardSettle();
           }
         })();
       }
@@ -5797,6 +5814,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
         // Single background persist path (no parallel legacy double-write — races
         // made production look like "nothing saved" when one write undid the other).
+        beginLiveBoardSettle();
         (async () => {
           const dateKey = formatLocalDateISO(captureDate);
           const rollbackDrag = (reason: string) => {
@@ -5895,6 +5913,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             rollbackDrag(msg || "unknown error");
+          } finally {
+            endLiveBoardSettle();
           }
         })();
 
@@ -8084,6 +8104,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   return (
     <div
       className={`sb-builder-shell sb-sheetbuilder-redesign flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder${isPrintPreview ? "" : " sb-canvas-builder"}`}
+      {...(!boardColdLoading ? { "data-sb-route-ready": "" } : {})}
       style={{
         "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",
         "--sb-builder-canvas-max": `${BUILDER_CANVAS_MAX_WIDTH_PX}px`,

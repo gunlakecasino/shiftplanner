@@ -13,7 +13,7 @@ export default function HelpPageClient({ markdown }: { markdown: string }) {
   const [tutorialOpen, setTutorialOpen] = React.useState(false);
 
   return (
-    <div className="sb-help-page">
+    <div className="sb-help-page" data-sb-route-ready="">
       <div className="sb-help-page__inner">
         <header className="sb-help-page__header">
           <h1 className="sb-help-page__title">SheetBuilder Help</h1>
