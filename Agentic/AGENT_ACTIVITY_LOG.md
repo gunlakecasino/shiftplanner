@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-08-23 — Grok Build — SheetBuilder PR A (chrome slim + heartbeat)
+
+**Task**: Hide retired grave chrome on `/sheetbuilder`. Rewrite agent bootstrap. No auth / PIN / RLS. No engine or print edits. No production Apply.
+
+**Changes**:
+- Unmounted `useTimefoldOptimize` + `TimefoldResultsSheet` + `timefoldSheetOpen` from `ShiftBuilderClient.tsx` (hide-before-delete; `timefold.start` had zero callers). Live path remains `runNightEngine`. Did not touch `engine/optimizer.ts` or `print/`.
+- `FloatingNav` launchpad = Home / Team / Settings only. More menu keeps Run Day Placements, Draft/Apply/Discard, Print + print-preview, Graves Schedule, Refresh Day, Clear Day, official-flag day control. Hidden: Optimize Week, Cover Guide, Weekly View, Week Health, Reports, Projects, Request Work.
+- Settings: dropped Batch Planner from `SETTINGS_TABS`; `?tab=planner` → Engine Config. `BatchPlannerTab` file/server behavior unchanged. Users tab kept.
+- Prod middleware now redirects `/sheetbuilder/ai` and `/sheetbuilder/dev` the same way `/shiftbuilder/ai` already is (lands on canvas).
+- Deleted orphan `xai/XAISphere.tsx` (no importers).
+- Rewrote `Agentic/THIS_IS_WHAT_WE_ARE_DOING.md` to the short SheetBuilder heartbeat. Archived the June 2026 file to `Agentic/Plans/archive/THIS_IS_WHAT_WE_ARE_DOING_2026-06-09.md`. `Plans/active/` is museum — ignore.
+
+**Tests**: chrome-slim contract in `liveBoardViewportContract.test.ts`; `settingsTabs.test.ts` for tab list + planner redirect. `pnpm test` + tsc for the slice.
+
+**Sacred held**: Golden 1056×816, Draft→Apply, `runNightEngine`, GDS, `canPlace`/`PLACEMENT_ORDER`. Dual URL left in place. Folder not renamed.
+
+**Status**: PR A chrome slim. Canvas still Runs Engine → Draft → Apply → Print.
+
+---
+
 ## 2026-07-08 — Grok — Admin toggle for print timestamp stamp
 
 **Task**: User: "now add a toggle to the print command center, only visible to the auth role sudo admin that toggles this off or on on the print pdf" (clarified: the timestamp stamp, not footer)

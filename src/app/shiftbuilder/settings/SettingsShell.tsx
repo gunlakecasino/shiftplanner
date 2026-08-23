@@ -54,7 +54,7 @@ import "./settingsShell.css";
 // being fetched/compiled — a real, silent multi-second blank gap in dev
 // (Turbopack compiles the route on first visit) that has nothing to do with
 // either tab's own internal data-loading state, since the component hasn't
-// even mounted yet. Give both a fallback so the tab never looks broken.
+// even mounted yet. Give the engine tab a fallback so it never looks broken.
 function SettingsDynamicTabFallback({ label }: { label: string }) {
   return (
     <div className="h-full flex items-center justify-center py-16">
@@ -66,10 +66,6 @@ function SettingsDynamicTabFallback({ label }: { label: string }) {
 const EngineConfigTab = dynamic(
   () => import("../sudo/EngineConfigTab").then((m) => ({ default: m.EngineConfigTab })),
   { ssr: false, loading: () => <SettingsDynamicTabFallback label="Loading engine config" /> },
-);
-const BatchPlannerTab = dynamic(
-  () => import("../sudo/BatchPlannerTab").then((m) => ({ default: m.BatchPlannerTab })),
-  { ssr: false, loading: () => <SettingsDynamicTabFallback label="Loading batch planner" /> },
 );
 
 function resolveWeekContext() {
@@ -163,15 +159,6 @@ function SettingsTabPanel({
         ) : (
           <InsufficientPermNotice feature="Engine Config" isDark={isDark} />
         ))}
-      {activeTab === "planner" &&
-        (canRunEngine ? (
-          <BatchPlannerTab
-            onDataChanged={() => onDataChanged("planner", { area: "engine_run" })}
-            isDark={isDark}
-          />
-        ) : (
-          <InsufficientPermNotice feature="Batch Planner" isDark={isDark} />
-        ))}
       {activeTab === "users" && currentOperator?.role === "sudo_admin" && (
         <UsersTab
           onDataChanged={() => onDataChanged("users", { area: "user_update" })}
@@ -213,10 +200,15 @@ export function SettingsShell() {
   }, []);
 
   // People + schedule tools moved to /team — bounce any legacy deep link there.
+  // Batch Planner tab is hidden; fold ?tab=planner into Engine Config.
   React.useEffect(() => {
     const raw = searchParams.get("tab");
     if (raw && raw in TEAM_REDIRECT_TABS) {
       router.replace(`/shiftbuilder/team?tab=${TEAM_REDIRECT_TABS[raw]}`);
+      return;
+    }
+    if (raw === "planner") {
+      router.replace("/shiftbuilder/settings?tab=engine", { scroll: false });
     }
   }, [searchParams, router]);
 
@@ -302,7 +294,7 @@ export function SettingsShell() {
 
   const isTabDisabled = React.useCallback(
     (tab: SettingsTab) => {
-      if (tab === "planner" || tab === "engine") return !canRunEngine;
+      if (tab === "engine") return !canRunEngine;
       return false;
     },
     [canRunEngine],

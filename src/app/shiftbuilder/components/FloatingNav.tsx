@@ -4,12 +4,10 @@ import * as React from "react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
-  addDays,
   MONTH_LONG,
 } from "@/lib/shiftbuilder/dateUtils";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
-import { RequestBoardModal } from "./RequestBoardModal";
 import { MiniCalendar } from "../redesign/components/MiniCalendar";
 import {
   ChevronDown,
@@ -27,15 +25,11 @@ import {
   FilePenLine,
   Check,
   CalendarDays,
-  BarChart2,
   RefreshCw,
   Bell,
-  BookOpen,
   Copy,
   Printer,
   ClipboardList,
-  ClipboardPlus,
-  CalendarRange,
 } from "lucide-react";
 
 const APP_BASE_PATH = "/sheetbuilder";
@@ -107,8 +101,8 @@ export interface FloatingNavProps {
   onOptimizeNight?: () => void;
   engineRunning?: boolean;
   deepOptimizeRunning?: boolean;
-  /** Preview the unified week engine (rolling solve + cross-night polish + fairness ledger) for the visible grave week. Read-only — opens a results sheet, doesn't write. */
-  onRunWeek?: () => void; // Optimize Week preview (uses unified week engine)
+  /** Hidden from chrome (PR A). Prop retained so callers do not have to unwire yet. */
+  onRunWeek?: () => void;
   weekRunBusy?: boolean;
   onClearDay?: () => void;
   /** Deep refresh: bust server caches + refetch night + placement histories. */
@@ -225,16 +219,12 @@ export default function FloatingNav(props: FloatingNavProps) {
     onApplyOverlapTasks,
     applyOverlapTasksBusy = false,
     onPrint,
-    onOpenCoverGuide,
     isDark = false,
-    contentMaxWidth,
     userInitials = "OP",
     currentUser,
     onLogout,
     onOpenSettings,
     onOptimizeNight,
-    onRunWeek,
-    weekRunBusy = false,
     engineRunning = false,
     onClearDay,
     onRefreshDay,
@@ -257,8 +247,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     onPublishWeek,
     onUnpublishWeek,
     publishWeekBusy = false,
-    onToggleWeekHealth,
-    weekHealthVisible = false,
     top = 0,
     permissions,
   } = props;
@@ -267,9 +255,6 @@ export default function FloatingNav(props: FloatingNavProps) {
   const canPublish = permissions?.canPublish ?? false;
   const canRunEngine = permissions?.canRunEngine ?? false;
   const canAccessSudo = permissions?.canAccessSudo ?? false;
-  const canAccessReports = permissions?.canAccessReports ?? false;
-  const canAccessTasks = permissions?.canAccessTasks ?? false;
-  const canRequestTasks = permissions?.canRequestTasks ?? false;
   const canManageTeam = permissions?.canManageTeam ?? false;
   const canApplySchedules = permissions?.canApplySchedules ?? false;
   const canSeeDraftData = permissions?.canSeeDraftData ?? false;
@@ -278,15 +263,12 @@ export default function FloatingNav(props: FloatingNavProps) {
   const showEngineTools = canRunEngine;
   const engineBusy = engineRunning;
   const showAdminLinks = canAccessSudo;
-  const showReportsLink = canAccessReports;
-  const showProjectsLink = canAccessTasks;
   const showTeamLink = canManageTeam || canApplySchedules || canAccessSudo;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
   const [rosterMenuOpen, setRosterMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [requestOpen, setRequestOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const launchpadRef = useRef<HTMLDivElement>(null);
@@ -478,15 +460,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                       <Users size={28} strokeWidth={2} />
                     </span>
                     <strong>Team</strong>
-                  </Link>
-                )}
-
-                {showReportsLink && (
-                  <Link href={`${APP_BASE_PATH}/reports`} role="menuitem" className="sb-sheetbuilder-launchpad-card" onClick={() => setLaunchpadOpen(false)}>
-                    <span className="sb-sheetbuilder-launchpad-card-icon">
-                      <BarChart2 size={28} strokeWidth={2} />
-                    </span>
-                    <strong>Reports</strong>
                   </Link>
                 )}
 
@@ -862,39 +835,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Team
                   </Link>
                 )}
-                {showProjectsLink && (
-                  <Link
-                    href={`${APP_BASE_PATH}/projects`}
-                    className={menuItemClass}
-                    onClick={() => setProfileOpen(false)}
-                  >
-                    <ClipboardList size={14} />
-                    Projects
-                  </Link>
-                )}
-                {canRequestTasks && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      setProfileOpen(false);
-                      setRequestOpen(true);
-                    }}
-                  >
-                    <ClipboardPlus size={14} />
-                    Request Work
-                  </button>
-                )}
-                {showReportsLink && (
-                  <Link
-                    href={`${APP_BASE_PATH}/reports`}
-                    className={menuItemClass}
-                    onClick={() => setProfileOpen(false)}
-                  >
-                    <BarChart2 size={14} />
-                    Reports
-                  </Link>
-                )}
                 <button type="button" className={menuItemClass} onClick={() => { onLogout?.(); setProfileOpen(false); }}>
                   Sign out
                 </button>
@@ -928,7 +868,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Engine & Maintenance */}
-                {showEngineTools && (onOptimizeNight || onRunWeek) && (
+                {showEngineTools && onOptimizeNight && (
                   <div
                     className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
                   >
@@ -947,28 +887,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                   >
                     <Sparkles size={14} /> Run Day Placements
                     {engineRunning && (
-                      <span className="ml-auto text-[10px] opacity-60">Running…</span>
-                    )}
-                  </button>
-                )}
-                {showEngineTools && onRunWeek && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    disabled={weekRunBusy}
-                    onClick={() => {
-                      onRunWeek();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <CalendarRange size={14} className="shrink-0" />
-                    <span className="flex min-w-0 flex-col items-start leading-tight">
-                      <span className="truncate">Optimize Week</span>
-                      <span className="truncate text-[10px] font-normal opacity-60">
-                        Cross-night fairness · preview + per-night draft
-                      </span>
-                    </span>
-                    {weekRunBusy && (
                       <span className="ml-auto text-[10px] opacity-60">Running…</span>
                     )}
                   </button>
@@ -1000,7 +918,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                   </button>
                 )}
 
-                {((showEngineTools && (onOptimizeNight || onRunWeek)) || (showDraftTools && onClearDay) || onRefreshDay) && (
+                {((showEngineTools && onOptimizeNight) || (showDraftTools && onClearDay) || onRefreshDay) && (
                   <div className={menuDividerClass} />
                 )}
 
@@ -1160,20 +1078,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                 )}
 
                 {/* Guides & Output */}
-                {onOpenCoverGuide && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onOpenCoverGuide();
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <BookOpen size={14} />
-                    Grave Cover Guide
-                  </button>
-                )}
-
                 {onPrint && (
                   <button
                     type="button"
@@ -1207,37 +1111,11 @@ export default function FloatingNav(props: FloatingNavProps) {
                     )}
                   </button>
                 )}
-
-                {onViewChange && (
-                  <button
-                    type="button"
-                    className={menuItemClass}
-                    onClick={() => {
-                      onViewChange(currentView === "weekly" ? "deployment" : "weekly");
-                      setMoreOpen(false);
-                    }}
-                  >
-                    <CalendarRange size={14} />
-                    {currentView === "weekly" ? "Exit Weekly View" : "Weekly View"}
-                  </button>
-                )}
-
-                {(onOpenCoverGuide || onPrint || onCanvasModeChange) && (
-                  <div className={menuDividerClass} />
-                )}
-
-                {/* Analytics */}
-                {showDraftTools && onToggleWeekHealth && (
-                  <button type="button" className={menuItemClass} onClick={() => { onToggleWeekHealth(); setMoreOpen(false); }}>
-                    {weekHealthVisible ? "Hide" : "Show"} Week Health
-                  </button>
-                )}
               </div>
             )}
           </div>
         </div>
       </nav>
-      <RequestBoardModal open={requestOpen} onClose={() => setRequestOpen(false)} isDark={isDark} />
     </>
   );
 }

@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Bolt,
   Layers,
   ScrollText,
   SlidersHorizontal,
@@ -11,7 +10,6 @@ export type SettingsTab =
   | "defaults"
   | "users"
   | "engine"
-  | "planner"
   | "auditLog";
 
 export type SettingsSection = "operations" | "engine" | "access";
@@ -53,14 +51,6 @@ export const SETTINGS_TABS: SettingsTabDef[] = [
     description: "Placement engine weights and behavior",
   },
   {
-    id: "planner",
-    label: "Batch Planner",
-    shortLabel: "Planner",
-    section: "engine",
-    icon: Bolt,
-    description: "Run weighted planner across nights",
-  },
-  {
     id: "users",
     label: "Users",
     shortLabel: "Users",
@@ -84,7 +74,6 @@ export const TALL_SETTINGS_TABS = new Set<SettingsTab>([
   "users",
   "auditLog",
   "engine",
-  "planner",
 ]);
 
 export const VALID_SETTINGS_TABS = new Set<string>(SETTINGS_TABS.map((t) => t.id));
@@ -109,6 +98,7 @@ const DEPRECATED_SETTINGS_TAB_REDIRECTS: Record<string, SettingsTab> = {
   tasks: "defaults",
   dashboard: "defaults",
   reports: "auditLog",
+  planner: "engine",
 };
 
 export const DEFAULT_SETTINGS_TAB: SettingsTab = "defaults";

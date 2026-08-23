@@ -141,9 +141,6 @@ import { useAuxLayout } from "./hooks/useAuxLayout";
 import { useDayNavigation } from "./hooks/useDayNavigation";
 import { useEngineRunner } from "./hooks/useEngineRunner";
 import { useConfirm } from "./components/ConfirmDialog";
-import { useTimefoldOptimize } from "./hooks/useTimefoldOptimize";
-import { TimefoldResultsSheet } from "./components/timefold/TimefoldResultsSheet";
-import type { TimefoldProposal } from "@/lib/shiftbuilder/timefold/timefoldTypes";
 import { WeekEngineResultsSheet } from "./components/WeekEngineResultsSheet";
 import { EngineRunningOverlay } from "./components/EngineRunningOverlay";
 import { useNotes } from "./hooks/useNotes";
@@ -1317,87 +1314,8 @@ function AuthedShiftBuilder() {
 
   // === Single unified Optimize Night ===
   // Full placements (planner) + optimization (local search + optional AI via unified engine).
-  // One thing for the day: runs the canonical engine path and lands in Draft.
-  // (The previous separate deep timefold path has been incorporated here.)
-  const timefold = useTimefoldOptimize(); // kept for now for sheet if needed, but main path is engine
-  const [timefoldSheetOpen, setTimefoldSheetOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    if (timefold.phase === "results") setTimefoldSheetOpen(true);
-  }, [timefold.phase]);
-
-  /**
-   * Lands an entire Timefold proposal into a fresh Draft, mirroring
-   * applyGrokSuggestions' shape: ensure Draft Mode, build the diff map,
-   * commit it, and record one atomic history entry so undo/audit behave
-   * exactly like every other draft-producing entry point.
-   */
-  const applyTimefoldProposal = React.useCallback(
-    (proposal: TimefoldProposal, selectedDiffs?: import("@/lib/shiftbuilder/timefold/timefoldTypes").TimefoldSlotDiff[]) => {
-      if (isCurrentNightLocked) {
-        showToast("This day is locked — cannot import optimize results", "error");
-        return;
-      }
-
-      // Triage: the sheet can hand us a subset of the proposal's diffs
-      // (e.g. accept the fills + repeat fixes, skip the neutral shuffle).
-      const diffsToApply = selectedDiffs && selectedDiffs.length > 0 ? selectedDiffs : proposal.diffs;
-
-      timefold.markImporting();
-
-      if (!isDraftMode) {
-        setIsDraftMode(true);
-        setDraftAssignments({});
-      }
-
-      const before = {
-        assignments: { ...assignments },
-        auxDefs: [...auxDefs],
-        draft: { ...draftAssignments },
-      };
-
-      const newDraft: Record<string, any> = { ...draftAssignments };
-      diffsToApply.forEach((diff) => {
-        if (diff.proposedTmId) {
-          newDraft[diff.slotKey] = {
-            proposedTmId: diff.proposedTmId,
-            proposedTmName: diff.proposedTmName || diff.proposedTmId,
-            previousTmId: diff.previousTmId ?? undefined,
-            previousTmName: diff.previousTmName ?? undefined,
-          };
-        } else if (diff.previousTmId) {
-          newDraft[diff.slotKey] = {
-            proposedTmId: "",
-            proposedTmName: "",
-            previousTmId: diff.previousTmId,
-            previousTmName: diff.previousTmName ?? undefined,
-            proposedClear: true,
-          };
-        }
-      });
-
-      setDraftAssignments(newDraft);
-      const partial = diffsToApply.length !== proposal.diffs.length;
-      pendingHistoryRef.current = {
-        description: `Optimize Tonight — imported "${proposal.title}" (${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"})`,
-        before,
-      };
-
-      timefold.markImported();
-      showToast(
-        `Imported ${diffsToApply.length}${partial ? ` of ${proposal.diffs.length}` : ""} change${diffsToApply.length === 1 ? "" : "s"} to Draft. Look for blue "D" badges + left borders on cards + "was:" lines.`,
-        "success",
-      );
-
-      // Immediate spotlight flash for the just-imported optimizer changes
-      setTimeout(() => {
-        const canvas = document.querySelector('.sb-builder-canvas') || document.body;
-        canvas.classList.add('sb-draft-flash');
-        setTimeout(() => canvas.classList.remove('sb-draft-flash'), 2200);
-      }, 120);
-    },
-    [isCurrentNightLocked, showToast, timefold, isDraftMode, setIsDraftMode, assignments, auxDefs, draftAssignments],
-  );
+  // One thing for the day: runs the canonical engine path (`runNightEngine`) and lands in Draft.
+  // Timefold UI is unmounted from this tree; hide-before-delete. Live path is not Timefold.
 
   const applyDraft = async () => {
     const draft = useShiftBuilderStore.getState().draftAssignments;
@@ -8230,21 +8148,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           </details>
         </div>
       )}
-
-      <TimefoldResultsSheet
-        open={timefoldSheetOpen}
-        onOpenChange={(open) => {
-          setTimefoldSheetOpen(open);
-          if (!open && (timefold.phase === "results" || timefold.phase === "imported")) {
-            timefold.reset();
-          }
-        }}
-        result={timefold.result}
-        importing={timefold.phase === "importing"}
-        imported={timefold.phase === "imported"}
-        onImport={applyTimefoldProposal}
-        showToast={showToast}
-      />
 
       <WeekEngineResultsSheet
         open={weekRunSheetOpen}

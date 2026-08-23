@@ -38,9 +38,12 @@ export function middleware(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
     const devOnly =
       url.pathname.startsWith("/shiftbuilder/dev") ||
+      url.pathname.startsWith("/sheetbuilder/dev") ||
       url.pathname.startsWith("/dev/") ||
       url.pathname === "/shiftbuilder/components" ||
-      url.pathname === "/shiftbuilder/ai";
+      url.pathname === "/sheetbuilder/components" ||
+      url.pathname === "/shiftbuilder/ai" ||
+      url.pathname === "/sheetbuilder/ai";
     if (devOnly) {
       return NextResponse.redirect(new URL("/shiftbuilder", request.url));
     }
