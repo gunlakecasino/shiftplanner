@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-08-23 — Grok — SheetBuilder canvas pride (RR / chips / overflow)
+
+**Task**: Live sit on `/sheetbuilder` — RR titles truncated, grey trail codes, zone overflow, stuck coverage chips, aux glyphs, unexplained JT red ⚠. Branch from `main` @ fireproof #8 (`925a8ec`). Canvas/cards/RR/aux only. No Golden / engine / Batch Planner / header pride (#9).
+
+**RR labels**: `Women's 6` / `Men's 10` / `Women's 1+2` via `formatCanvasRrSideLabel`. Gender first, wrap at card size. WRR/MRR keys unchanged.
+
+**Trail + repeat**: Grey `RR10M` tokens → human chips (`Men's 10`). Red `!` → `Repeat` with “Same restroom as a recent night”.
+
+**Zone overflow**: Titles wrap (ZONE 7 + SMOKING ROOM). Covered+tasks stack, no 2-col pager. Task lists hide inner scrollbars.
+
+**Coverage / aux**: Footer chips inset (`Covering Zone 9`). Aux diamonds/moons removed. `BRK 2` glass → plain `Break 2` / `Overlaps`.
+
+**Tests**: `canvasPrideLabels`, live-board contract additions. Version 1.254.
+
+**Sacred held**: Golden print, optimizer, Projects/Timefold/Batch Planner stay dead, no Apply/publish, no FloatingNav.
+
+**Status**: Ready for review. No production Apply.
+
+---
+
 ## 2026-08-23 — Grok Build — SheetBuilder fireproof pass (won’t-get-Brian-fired)
 
 **Task**: Make SheetBuilder safe for a live grave night. Sole user Brian. No gimmicks. No silent live writes. No lying UI. Branch from `main` @ `ee41ccb`. No Golden / optimizer.ts / TasksPad / official-flag / production Apply / PIN rewrite.

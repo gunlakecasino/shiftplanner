@@ -8,7 +8,6 @@ import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import {
   type BreakGroup,
   getAuxAccent,
-  getAuxIcon,
 } from "@/lib/shiftbuilder/constants";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { applyAuxRole, applyAuxLabel } from "@/lib/shiftbuilder/auxLayout";
@@ -145,7 +144,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   // even on cards that haven't had a role/label explicitly set yet.
   const isConfigured = hasTM || (isDraftMode && draftInfo?.proposedTmName && !draftInfo?.proposedClear) || coveredBy.length > 0 || !isUnsetBlank;
 
-  const icon = getAuxIcon(def.key, role);
   const isEmpty = !hasTM && !loading;
   const currentTmId = a?.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
@@ -418,7 +416,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       <CardAccentStripe color={(isUnsetBlank && !hasTM) ? "#d1d1d6" : color} />
 
       <CardSlotHeader
-        icon={(isUnsetBlank && !hasTM) && !editingLabel ? undefined : icon}
+        icon={undefined}
         label={headerLabel}
         accentColor={headerAccent}
         compact

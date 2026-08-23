@@ -23,13 +23,13 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
           <div className="flex flex-col flex-1 p-3 min-w-0">
           <div className="flex items-center justify-between mb-2">
             {!noChip
-              ? <span className="sb-canvas-slot-label text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", color: accentColor }}>{cardLabel}</span>
+              ? <span className="sb-canvas-slot-label text-[10px] font-semibold uppercase tracking-[0.04em] leading-snug" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", color: accentColor }}>{cardLabel}</span>
               : <div />}
           </div>
           {coverage && coverage.length > 0 ? (
-            <div className={`flex-1 grid items-center ${hasTasks ? "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2" : "grid-cols-1"}`}>
+            <div className="flex-1 min-h-0 flex flex-col gap-2">
               <div className="min-w-0 flex flex-col gap-1">
-                <div className="text-[8px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>Covered by</div>
+                <div className="sb-covered-by-label text-[8px] font-semibold uppercase tracking-[0.1em] text-[#9aa3b2]">Covered by</div>
                 {coverage.map((c) => (
                   <div key={c.label} className="flex items-baseline gap-1.5 min-w-0">
                     <span className="text-[10px] font-bold text-gray-500 shrink-0">{c.label}</span>
@@ -38,15 +38,14 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
                 ))}
               </div>
               {hasTasks && (
-                <div className="min-w-0 self-stretch border-l border-gray-200/80 pl-2 flex flex-col justify-center gap-1">
-                  <div className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Tasks</div>
+                <div className="min-w-0 mt-auto flex flex-col gap-1">
                   {taskContent ?? notes?.map((note, index) => (
                     <div key={`${note}-${index}`} className="flex items-start gap-1 min-w-0">
                       <span
                         className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full"
                         style={{ backgroundColor: accentColor, opacity: 0.85 }}
                       />
-                      <span className="text-[8px] leading-tight text-gray-600 break-words">{note}</span>
+                      <span className="text-[9px] leading-snug text-gray-600 break-words">{note}</span>
                     </div>
                   ))}
                 </div>
@@ -89,7 +88,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
         <div className="flex flex-col flex-1 p-3 min-w-0">
         <div className={`flex items-center justify-between ${projectPills ? "mb-1" : "mb-2.5"}`}>
           {!noChip
-            ? <span className="sb-canvas-slot-label text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", color: accentColor }}>{cardLabel}</span>
+            ? <span className="sb-canvas-slot-label text-[10px] font-semibold uppercase tracking-[0.04em] leading-snug" style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)", color: accentColor }}>{cardLabel}</span>
             : <div />}
         </div>
         {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
@@ -105,7 +104,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
             {taskContent ?? notes?.map((n, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full mt-[4px] shrink-0" style={{ backgroundColor: accentColor, opacity: 0.85 }} />
-                <span className="text-[10px] font-medium text-gray-600 leading-snug truncate">{n}</span>
+                    <span className="text-[10px] font-medium text-gray-600 leading-snug break-words">{n}</span>
               </div>
             ))}
           </div>

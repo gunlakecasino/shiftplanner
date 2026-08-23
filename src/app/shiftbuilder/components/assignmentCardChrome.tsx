@@ -14,8 +14,11 @@ import {
   resolveDualCoverageSides,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
-import { fitVerdictLabel } from "@/lib/shiftbuilder/placementPadInsightSchema";
 import { trailLabelMatchesSlotKey } from "./placementPadHelpers";
+import {
+  formatCanvasRepeatReason,
+  formatCanvasTrailChip,
+} from "@/lib/shiftbuilder/canvasPrideLabels";
 
 const CRITICAL_REPEAT_MARK_COLOR = "#B91C1C";
 
@@ -37,44 +40,44 @@ export function TmPlacementTrail({
 }) {
   if (!labels?.length) return null;
 
-  const full = labels.join(" → ");
+  const chips = labels.map((code) => ({
+    code,
+    ...formatCanvasTrailChip(code),
+    isRepeat: !!matchSlotKey && trailLabelMatchesSlotKey(code, matchSlotKey),
+  }));
+  const repeatChip = chips.find((chip) => chip.isRepeat);
+  const full = chips.map((chip) => chip.label).join(" → ");
+  const repeatReason = repeatChip
+    ? formatCanvasRepeatReason(matchSlotKey ?? repeatChip.code)
+    : undefined;
 
   return (
     <span
-      className="sb-tm-placement-trail no-print flex items-center gap-x-[3px] min-w-0 max-w-full overflow-hidden mt-[3px] leading-none"
-      title={`Last ${labels.length} placements (newest first): ${full}`}
-      aria-label={`Recent placements: ${labels.join(", ")}`}
+      className="sb-tm-placement-trail no-print flex flex-wrap items-center gap-x-1 gap-y-0.5 min-w-0 max-w-full mt-[3px] leading-none"
+      title={
+        repeatReason
+          ? `${repeatReason}. Last ${labels.length} nights: ${full}`
+          : `Last ${labels.length} placements (newest first): ${full}`
+      }
+      aria-label={
+        repeatReason
+          ? `${repeatReason}. Recent placements: ${chips.map((chip) => chip.label).join(", ")}`
+          : `Recent placements: ${chips.map((chip) => chip.label).join(", ")}`
+      }
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {labels.map((label, i) => {
-        const isRepeat =
-          !!matchSlotKey && trailLabelMatchesSlotKey(label, matchSlotKey);
-        return (
-          <React.Fragment key={`${label}-${i}`}>
-            {i > 0 ? (
-              <span
-                className="text-[6.5px] text-neutral-300/80 select-none leading-none shrink-0"
-                aria-hidden
-              >
-                ·
-              </span>
-            ) : null}
-            <span
-              className={`text-[7.5px] font-semibold uppercase tracking-[0.06em] leading-none tabular-nums shrink-0 ${
-                isRepeat
-                  ? "text-[#B91C1C]"
-                  : "text-[color-mix(in_srgb,var(--ios-label)_38%,transparent)] dark:text-neutral-500"
-              }`}
-              style={{
-                fontFamily: "var(--font-atkinson, var(--font-ui, system-ui))",
-              }}
-            >
-              {label}
-            </span>
-          </React.Fragment>
-        );
-      })}
+      {chips.map((chip, i) => (
+        <span
+          key={`${chip.code}-${i}`}
+          className={`sb-tm-trail-chip ${
+            chip.isRepeat ? "sb-tm-trail-chip--repeat" : ""
+          }`}
+          title={chip.isRepeat ? repeatReason : chip.title}
+        >
+          {chip.label}
+        </span>
+      ))}
     </span>
   );
 }
@@ -114,7 +117,15 @@ export function TmNameBlock({
           {name}
         </span>
         {trailing}
-        {criticalRepeat ? <CriticalRepeatNameMark /> : null}
+        {criticalRepeat ? (
+          <CriticalRepeatNameMark
+            title={
+              placementTrailMatchSlotKey
+                ? formatCanvasRepeatReason(placementTrailMatchSlotKey)
+                : undefined
+            }
+          />
+        ) : null}
       </div>
       <TmPlacementTrail
         labels={placementTrail}
@@ -132,25 +143,24 @@ export function CriticalRepeatNameMark({
 }) {
   const tip =
     title ??
-    `${fitVerdictLabel("critical_repeat")} — same area as one of their last 3 placements (50% rotation health)`;
+    `${formatCanvasRepeatReason()} — rotation health capped at 50%`;
 
   return (
     <span
-      className="sb-critical-repeat-mark no-print inline-flex shrink-0 items-center justify-center rounded-full font-black leading-none text-white"
+      className="sb-critical-repeat-mark no-print inline-flex shrink-0 items-center rounded px-1 font-semibold leading-none"
       style={{
-        width: 10,
-        height: 10,
-        fontSize: 7,
-        background: CRITICAL_REPEAT_MARK_COLOR,
-        boxShadow: "0 0 0 1px rgba(255,255,255,0.45)",
-        marginTop: "0.12em",
+        fontSize: 8,
+        letterSpacing: "0.02em",
+        color: CRITICAL_REPEAT_MARK_COLOR,
+        background: "color-mix(in srgb, #B91C1C 10%, transparent)",
+        marginTop: "0.2em",
       }}
       title={tip}
       aria-label={tip}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      !
+      Repeat
     </span>
   );
 }

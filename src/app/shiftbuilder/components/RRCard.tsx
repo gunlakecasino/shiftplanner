@@ -22,6 +22,7 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
+import { formatCanvasRrSideLabel } from "@/lib/shiftbuilder/canvasPrideLabels";
 
 export interface RRCardProps {
   def: any;
@@ -216,7 +217,7 @@ const RRSide: React.FC<{
             onOpenTasksPad={onOpenTaskTextEdit}
             isLocked={isLocked}
             enabled={showDigitalAssists}
-            className="sb-card-task-scroll flex-1 min-h-[32px] overflow-y-auto px-3 py-2 space-y-0.5"
+            className="sb-card-task-scroll flex-1 min-h-[32px] overflow-hidden px-3 py-2 space-y-0.5"
           >
             {(tasks ?? []).map((t) => (
               <TaskRow
@@ -237,7 +238,7 @@ const RRSide: React.FC<{
       ) : tasks && tasks.length > 0 ? (
         <>
           <div className="mx-3.5 h-px bg-[var(--ios-gray-6)] shrink-0" />
-          <div className="sb-card-task-scroll flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-0.5">
+          <div className="sb-card-task-scroll flex-1 min-h-0 overflow-hidden px-3 py-2 space-y-0.5">
             {tasks.map((t) => (
               <TaskRow
                 key={t.id}
@@ -261,6 +262,7 @@ const RRSide: React.FC<{
 
 function RRSideShell({
   sideLabel,
+  sideTitle,
   color,
   borderColor,
   showDigitalAssists,
@@ -275,6 +277,7 @@ function RRSideShell({
   taskBadge,
 }: {
   sideLabel: string;
+  sideTitle: string;
   color: string;
   borderColor?: string;
   showDigitalAssists: boolean;
@@ -303,9 +306,12 @@ function RRSideShell({
       <CardAccentStripe color={color} />
 
       {/* Refined header to match ZoneCard exactly for visual uniformity */}
-      <div className="sb-card-slot-header sb-rr-card-header px-3 pt-2 flex items-center gap-1 flex-nowrap">
-        <span className="text-[12px] leading-none shrink-0" style={{ color: cardAccentInk(color) }}>◆</span>
-        <span className="text-[10px] font-bold tracking-[0.07em] uppercase min-w-0 truncate" style={{ color: cardAccentInk(color) }}>
+      <div className="sb-card-slot-header sb-rr-card-header px-3 pt-2 flex items-start gap-1.5">
+        <span
+          className="sb-rr-side-label sb-canvas-slot-label text-[10px] font-bold tracking-[0.04em] min-w-0"
+          style={{ color: cardAccentInk(color) }}
+          title={sideTitle}
+        >
           {sideLabel}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">
@@ -375,6 +381,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
   const color = getRRAccent(def.num);
+  const wLabel = formatCanvasRrSideLabel(def.num, "womens");
+  const mLabel = formatCanvasRrSideLabel(def.num, "mens");
 
   const wDraftName =
     isDraftMode && draftInfoW?.proposedTmName && !draftInfoW.proposedClear
@@ -444,7 +452,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
       style={{ ["--card-accent" as string]: color }}
     >
       <RRSideShell
-        sideLabel={`${def.label} WOMEN'S`}
+        sideLabel={wLabel.line}
+        sideTitle={wLabel.title}
         color={color}
         borderColor={borderColor}
         showDigitalAssists={showDigitalAssists}
@@ -470,7 +479,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
       />
 
       <RRSideShell
-        sideLabel={`${def.label} MEN'S`}
+        sideLabel={mLabel.line}
+        sideTitle={mLabel.title}
         color={color}
         borderColor={borderColor}
         showDigitalAssists={showDigitalAssists}
