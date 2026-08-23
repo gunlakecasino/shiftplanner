@@ -23,13 +23,15 @@ const globalsCss = readFileSync(
   "utf8",
 );
 
-describe("PinGate desk — corporate ops console", () => {
-  it("is a quiet paper card with SheetBuilder / Ops PIN and no theater", () => {
-    expect(pinGate).toContain("sb-auth-card--desk");
+describe("PinGate — modern lightweight ops console", () => {
+  it("is SheetBuilder + short ops line + PIN + Enter, with no theater", () => {
+    expect(pinGate).toContain("sb-auth-form");
     expect(pinGate).toContain("SheetBuilder");
-    expect(pinGate).toContain("Ops PIN");
+    expect(pinGate).toContain("Gun Lake graves ops.");
+    expect(pinGate).toContain("sb-auth-field-label");
+    expect(pinGate).toMatch(/sb-auth-field-label">\s*PIN\s*</);
     expect(pinGate).toContain('"Enter"');
-    expect(pinGate).toContain("sr-only");
+    expect(pinGate).not.toContain("sb-auth-card--desk");
     expect(pinGate).not.toContain("sb-auth-accent");
     expect(pinGate).not.toContain("sb-auth-icon");
     expect(pinGate).not.toContain("sb-auth-slots");
@@ -46,17 +48,26 @@ describe("PinGate desk — corporate ops console", () => {
     expect(pinGate).toContain("cleaned.length === 6");
   });
 
-  it("does not paint skeleton, blur, or accent theater behind the PIN card", () => {
-    expect(opsAuthGate).toContain("sb-auth-desk");
+  it("does not paint skeleton, blur, or dusty beige behind the PIN form", () => {
+    expect(opsAuthGate).toContain("sb-auth-split");
+    expect(opsAuthGate).toContain("sb-auth-visual");
+    expect(opsAuthGate).toContain("Graves night board");
     expect(opsAuthGate).not.toContain("BuilderLoadingShell");
     expect(opsAuthGate).not.toContain("backdropFilter");
     expect(opsAuthGate).not.toContain("WebkitBackdropFilter");
     expect(opsAuthGate).not.toContain("sb-auth-pin-scrim");
+    expect(opsAuthGate).not.toContain("sb-auth-desk");
     expect(opsAuthGate).not.toContain("sb-auth-accent");
     expect(opsAuthGate).not.toContain("sb-auth-icon");
     expect(opsAuthGate).not.toContain("warning");
-    expect(authCss).toContain("background: #E8E0D2");
-    expect(authCss).toContain("background: #FBF7F0");
+    expect(opsAuthGate).not.toContain("vault");
+    expect(opsAuthGate).not.toContain("Sign In");
+    expect(opsAuthGate).not.toContain("Signup");
+    expect(authCss).toContain("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)");
+    expect(authCss).toContain("background: #007AFF");
+    expect(authCss).not.toContain("#E8E0D2");
+    expect(authCss).not.toContain("#FBF7F0");
+    expect(authCss).not.toContain("#F4EFE6");
     expect(authCss).not.toContain("backdrop-filter");
     expect(authCss).not.toContain("sb-accent-drift");
     expect(authCss).not.toContain("sb-icon-breathe");
@@ -65,22 +76,21 @@ describe("PinGate desk — corporate ops console", () => {
   });
 
   it("scrubs matching PIN-change theater", () => {
-    expect(pinChange).toContain("sb-auth-card--desk");
+    expect(pinChange).toContain("sb-auth-form");
     expect(pinChange).toContain("Set PIN");
     expect(pinChange).toContain('"Save"');
     expect(pinChange).not.toContain("sb-auth-accent");
     expect(pinChange).not.toContain("sb-auth-slots");
     expect(pinChange).not.toContain("SAVING PIN");
-    expect(authCss).toContain("quiet desk paper");
+    expect(authCss).toContain("modern lightweight ops console");
   });
 
-  it("closes the live-sit 10-item PIN kill-list", () => {
+  it("closes the live-sit PIN kill-list on a corporate split console", () => {
     expect(opsAuthGate).not.toContain("backdropFilter");
     expect(opsAuthGate).not.toContain("BuilderLoadingShell");
     expect(authCss).not.toContain("backdrop-filter");
     expect(authCss).toContain("visibility: hidden");
-    expect(authCss).toMatch(/\.sb-auth-card::before,[\s\S]*content: none !important/);
-    expect(authCss).toContain("border-radius: 8px");
+    expect(authCss).toMatch(/\.sb-auth-form::before,[\s\S]*content: none !important/);
     expect(authCss).not.toContain("rounded-[26px]");
     expect(pinGate).not.toContain("sb-auth-icon");
     expect(pinGate).not.toMatch(/\block\b/);
@@ -92,8 +102,8 @@ describe("PinGate desk — corporate ops console", () => {
     expect(pinGate).not.toContain("ENTER");
     expect(pinGate).not.toContain("arrow_forward");
     expect(authCss).toContain("text-transform: none");
-    expect(authCss).toContain("color: #4A453C");
-    expect(authCss).toContain("color: #1C1910");
+    expect(authCss).toContain("color: #6B7280");
+    expect(authCss).toContain("color: #111827");
   });
 
   it("does not keep PIN theater classes in globals.css", () => {
@@ -109,5 +119,16 @@ describe("PinGate desk — corporate ops console", () => {
     expect(authCss).not.toContain("sb-auth-slot");
     expect(authCss).not.toContain("VERIFYING");
     expect(authCss).not.toContain("SIGNED IN");
+  });
+
+  it("keeps the right panel as a quiet graves floor, not product marketing", () => {
+    expect(opsAuthGate).toContain("#ffcc00");
+    expect(opsAuthGate).toContain("#ff3b30");
+    expect(opsAuthGate).toContain("#007aff");
+    expect(opsAuthGate).toContain("#34c759");
+    expect(opsAuthGate).not.toContain("SmartSave");
+    expect(opsAuthGate).not.toContain("Continue With");
+    expect(authCss).toContain("sb-auth-floor");
+    expect(authCss).toContain("display: none");
   });
 });

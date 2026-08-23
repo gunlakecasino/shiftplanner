@@ -8,6 +8,20 @@ import { cn } from "@/lib/utils";
 
 const AUTH_EXIT_MS = 160;
 
+/** Uniform-code zone rails — same colors as the live desk. Quiet abstract only. */
+const GRAVES_FLOOR_ZONES: ReadonlyArray<{ n: number; c: string }> = [
+  { n: 1, c: "#ffcc00" },
+  { n: 2, c: "#ffcc00" },
+  { n: 3, c: "#ff3b30" },
+  { n: 4, c: "#ff3b30" },
+  { n: 5, c: "#ff3b30" },
+  { n: 6, c: "#C05A98" },
+  { n: 7, c: "#007aff" },
+  { n: 8, c: "#a2845e" },
+  { n: 9, c: "#ff3b30" },
+  { n: 10, c: "#34c759" },
+];
+
 type Props = {
   children: React.ReactNode;
   loadingLabel?: string;
@@ -29,14 +43,17 @@ function PinSessionError({
       aria-modal="true"
       aria-labelledby="pin-session-error-title"
       aria-describedby="pin-session-error-desc"
-      className="sb-auth-card sb-auth-card--desk"
+      className="sb-auth-form"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <div className="sb-auth-card__body">
-        <h2 id="pin-session-error-title" className="sb-auth-title">
-          {title}
-        </h2>
-        <p id="pin-session-error-desc" className="sb-auth-subtitle">
+      <div className="sb-auth-form__body">
+        <div className="sb-auth-brand">
+          <span className="sb-auth-mark" aria-hidden="true" />
+          <h2 id="pin-session-error-title" className="sb-auth-title">
+            {title}
+          </h2>
+        </div>
+        <p id="pin-session-error-desc" className="sb-auth-lead">
           {message}
         </p>
         <button
@@ -51,8 +68,33 @@ function PinSessionError({
   );
 }
 
+function AuthFloorVisual() {
+  return (
+    <aside className="sb-auth-visual" aria-hidden="true">
+      <div className="sb-auth-visual__glow" />
+      <div className="sb-auth-visual__panel">
+        <p className="sb-auth-visual__eyebrow">SheetBuilder</p>
+        <p className="sb-auth-visual__kicker">Graves night board</p>
+        <div className="sb-auth-floor">
+          {GRAVES_FLOOR_ZONES.map((zone) => (
+            <div
+              key={zone.n}
+              className="sb-auth-floor__cell"
+              style={{ ["--floor-rail" as string]: zone.c }}
+            >
+              <span className="sb-auth-floor__rail" />
+              <span className="sb-auth-floor__num">{zone.n}</span>
+            </div>
+          ))}
+        </div>
+        <p className="sb-auth-visual__foot">Gun Lake · ZDS ops</p>
+      </div>
+    </aside>
+  );
+}
+
 /**
- * Auth gate — solid desk paper + PIN card. No skeleton board, no blur theater.
+ * Auth gate — split ops console. No skeleton board, no blur theater.
  * Children stay mounted behind so route chunks hydrate without extra flashes.
  */
 export function OpsAuthGate({
@@ -124,23 +166,26 @@ export function OpsAuthGate({
           )}
           aria-hidden={exiting}
         >
-          <div className="sb-auth-desk" aria-hidden="true" />
-
-          <div className="sb-auth-gate-modal-layer">
-            {ready && modalKind === "pin" ? <PinGate /> : null}
-            {ready && modalKind === "pinChange" && user ? (
-              <PinChangeGate operatorName={user.full_name || user.username} />
-            ) : null}
-            {ready && modalKind === "blocked" ? (
-              <PinSessionError
-                title="PIN setup unavailable"
-                message="Your session couldn't be prepared for a PIN change. Sign out and try again, or contact your supervisor."
-                onLogout={logout}
-              />
-            ) : null}
-            {!ready ? (
-              <p className="sb-auth-waiting">SheetBuilder</p>
-            ) : null}
+          <div className="sb-auth-split">
+            <div className="sb-auth-split__form">
+              <div className="sb-auth-gate-modal-layer">
+                {ready && modalKind === "pin" ? <PinGate /> : null}
+                {ready && modalKind === "pinChange" && user ? (
+                  <PinChangeGate operatorName={user.full_name || user.username} />
+                ) : null}
+                {ready && modalKind === "blocked" ? (
+                  <PinSessionError
+                    title="PIN setup unavailable"
+                    message="Your session couldn't be prepared for a PIN change. Sign out and try again, or contact your supervisor."
+                    onLogout={logout}
+                  />
+                ) : null}
+                {!ready ? (
+                  <p className="sb-auth-waiting">SheetBuilder</p>
+                ) : null}
+              </div>
+            </div>
+            <AuthFloorVisual />
           </div>
         </div>
       ) : null}

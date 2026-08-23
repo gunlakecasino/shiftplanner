@@ -136,14 +136,14 @@ const SHORT_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "S
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 function nightActionClusterStyle(): CSSProperties {
   return {
-    height: 30,
-    padding: 1,
-    borderRadius: 4,
+    height: 32,
+    padding: 2,
+    borderRadius: 8,
     display: "inline-flex",
     alignItems: "center",
-    gap: 0,
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    gap: 2,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
     boxShadow: "none",
   };
 }
@@ -151,14 +151,14 @@ function nightActionClusterStyle(): CSSProperties {
 function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
   return {
     height: 28,
-    minWidth: 64,
+    minWidth: 68,
     padding: "0 12px",
     borderRadius: 6,
     border: 0,
     background: "transparent",
-    color: "var(--sb-text-2, #3C3C43)",
+    color: "rgba(244,244,245,0.92)",
     fontSize: 12,
-    fontWeight: 600,
+    fontWeight: 650,
     letterSpacing: "-0.01em",
     fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
     display: "inline-flex",

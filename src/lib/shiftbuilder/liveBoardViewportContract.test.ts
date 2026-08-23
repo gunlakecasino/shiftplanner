@@ -251,12 +251,38 @@ describe("SheetBuilder live undo toast (PR C)", () => {
   });
 });
 
-describe("SheetBuilder calm desk paper", () => {
-  it("uses warm paper on the live canvas and keeps covering as inset chips", () => {
-    expect(globalsCss).toContain("Calm desk paper — live board cards only");
-    expect(globalsCss).toContain("--sb-card-paper: #FBF7F0");
+describe("SheetBuilder modern lightweight desk", () => {
+  it("uses cool gray canvas, white cards, and keeps covering as inset chips", () => {
+    expect(globalsCss).toContain("Modern lightweight desk — live board cards only");
+    expect(globalsCss).toContain("--sb-card-paper: #FFFFFF");
+    expect(globalsCss).toContain("--sb-paper: #F5F7F9");
     expect(globalsCss).toContain("sb-coverage-chip");
+    expect(globalsCss).not.toContain("#F4EFE6");
+    expect(globalsCss).not.toContain("#FBF7F0");
+    expect(globalsCss).not.toContain("#E8E0D2");
     expect(globalsCss).not.toMatch(/\.print-artboard\s*\{[^}]*sb-card-paper/);
+  });
+
+  it("does not recolor uniform-code zone rails on the live desk", () => {
+    const deskStart = globalsCss.indexOf("Modern lightweight desk — live board cards only");
+    const deskCss = globalsCss.slice(deskStart);
+    expect(deskCss).not.toMatch(/--sb-z1:\s*#C8960C/);
+    expect(deskCss).not.toMatch(/--sb-z3:\s*#D93838/);
+    expect(deskCss).not.toContain("6B5A3A");
+    expect(deskCss).toContain("border-radius: 16px !important");
+  });
+
+  it("keeps redesign zone rails on the uniform code", () => {
+    const tokens = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/redesign/tokens.ts"),
+      "utf8",
+    );
+    expect(tokens).toContain('label: "#ffcc00"');
+    expect(tokens).toContain('label: "#ff3b30"');
+    expect(tokens).toContain('label: "#007aff"');
+    expect(tokens).toContain('label: "#34c759"');
+    expect(tokens).not.toContain('label: "#C8960C"');
+    expect(tokens).not.toContain('label: "#D93838"');
   });
 
   it("quiets the header: velvet night actions, no dead bell, Published as text", () => {
@@ -275,14 +301,14 @@ describe("SheetBuilder calm desk paper", () => {
   });
 });
 
-describe("SheetBuilder calm desk measured sit", () => {
+describe("SheetBuilder modern lightweight desk measured sit", () => {
   it("shares one section-label baseline and letter-spacing for ZONES and AUXILIARY", () => {
-    expect(globalsCss).toContain("Calm desk — measured sit (live zds acceptance)");
+    expect(globalsCss).toContain("Modern lightweight desk — measured sit (live zds acceptance)");
     expect(globalsCss).toContain("padding: 0 10px 12px 12px !important");
     expect(globalsCss).toMatch(
-      /\.sb-with-aux-sidebar > section:nth-child\(3\) \.sheet-section-header \.label \{[\s\S]*?letter-spacing: 0\.14em !important/,
+      /\.sb-with-aux-sidebar > section:nth-child\(3\) \.sheet-section-header \.label \{[\s\S]*?letter-spacing: 0\.08em !important/,
     );
-    expect(globalsCss).toContain("color: #2F2B24 !important");
+    expect(globalsCss).toContain("color: #64748B !important");
   });
 
   it("keeps covering chips inset and fades duty lists instead of mid-glyph clip", () => {
@@ -307,11 +333,11 @@ describe("SheetBuilder calm desk measured sit", () => {
   });
 
   it("evens Engine/Draft/Print width and insets the roster badge off the glyph", () => {
-    expect(floatingNav).toContain("minWidth: 64");
+    expect(floatingNav).toContain("minWidth: 68");
     expect(floatingNav).not.toContain("Bell");
-    expect(globalsCss).toContain("min-width: 64px");
+    expect(globalsCss).toContain("min-width: 68px");
     expect(globalsCss).toContain(".sb-sheetbuilder-roster-alert {\n  top: 1px;\n  right: 1px");
-    expect(globalsCss).toContain(".sb-month-status-diamond {\n  background: #6B7A6A");
+    expect(globalsCss).toContain(".sb-month-status-diamond {\n  background: #34C759");
   });
 });
 

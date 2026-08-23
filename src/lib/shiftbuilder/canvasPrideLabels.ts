@@ -178,8 +178,8 @@ export function coverageChipTone(accent: string): CoverageChipTone {
   const key = accent.trim().toLowerCase();
   if (COVERAGE_CHIP_TONES[key]) return COVERAGE_CHIP_TONES[key];
   return {
-    surface: `color-mix(in srgb, ${accent} 18%, #F6F1E8)`,
-    ink: `color-mix(in srgb, ${accent} 74%, #1C1910)`,
+    surface: `color-mix(in srgb, ${accent} 16%, #F4F6F8)`,
+    ink: `color-mix(in srgb, ${accent} 74%, #111827)`,
     border: `color-mix(in srgb, ${accent} 26%, transparent)`,
   };
 }

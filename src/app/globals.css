@@ -6668,55 +6668,50 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 }
 
 /* ==========================================================================
-   Calm desk paper — live board cards only.
+   Modern lightweight desk — live board cards only.
    Header lives here (PR #9 conflicts). Golden print metrics are untouched.
+   Zone / restroom color rails stay on the uniform code — do not recolor.
    ========================================================================== */
 
 .sb-builder-shell.sb-canvas-builder {
-  --sb-paper: #F4EFE6;
-  --sb-substrate: #EBE4D6;
-  --sb-desk: #E8E0D2;
-  --sb-card-paper: #FBF7F0;
-  --sb-card-line: #E4DDD0;
-  --sb-z1: #C8960C;
-  --sb-z2: #C8960C;
-  --sb-z3: #D93838;
-  --sb-z4: #D93838;
-  --sb-z5: #D93838;
-  --sb-z7: #4B7BE8;
-  --sb-z9: #D93838;
-  --sb-z10: #4CAF7D;
-  --sb-rr1: #C8960C;
-  --sb-rr7: #4B7BE8;
-  --sb-rr10: #4CAF7D;
-  --sb-aux-z9sr: #D93838;
+  --sb-paper: #F5F7F9;
+  --sb-substrate: #EEF1F5;
+  --sb-desk: #F5F7F9;
+  --sb-card-paper: #FFFFFF;
+  --sb-card-line: #E6EAF0;
 }
 
 .sb-builder-shell.sb-canvas-builder .sb-builder-stage {
-  background: var(--sb-desk, #E8E0D2) !important;
+  background: var(--sb-desk, #F5F7F9) !important;
 }
 
 .sb-builder-shell.sb-canvas-builder .sb-builder-fluid-viewport {
-  background: var(--sb-paper, #ffffff) !important;
+  background: var(--sb-paper, #F5F7F9) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace {
+  --sb-grid-gap: 14px;
+  background: var(--sb-paper, #F5F7F9) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid {
+  gap: 14px;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-refined-card,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card {
-  background: var(--sb-card-paper, #FBF7F0) !important;
-  border-color: var(--sb-card-line, #E4DDD0) !important;
-  box-shadow: 0 1px 2px rgba(48, 38, 22, 0.04);
+  background: var(--sb-card-paper, #FFFFFF) !important;
+  border-color: var(--sb-card-line, #E6EAF0) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -18px rgba(15, 23, 42, 0.28);
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.empty,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.sb-card-empty {
-  background: var(--sb-card-paper, #FBF7F0) !important;
-  border-color: var(--sb-card-line, #E4DDD0) !important;
-}
-
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-accent-stripe,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card > .h-\[3px\] {
-  background-color: color-mix(in srgb, var(--card-accent, #8a8378) 82%, #6B5A3A) !important;
+  background: var(--sb-card-paper, #FFFFFF) !important;
+  border-color: var(--sb-card-line, #E6EAF0) !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid,
@@ -6753,17 +6748,46 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   margin-inline: 0;
 }
 
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .sb-break-badge-btn,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card > .sb-card-accent-stripe,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-card-accent-stripe,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card > .h-\[3px\]:not(.sb-card-accent-stripe),
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .h-\[3px\]:not(.sb-card-accent-stripe) {
+  border-radius: 16px 0 0 16px !important;
+}
+
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .sb-fit-chip {
   border-radius: 999px !important;
-  background: color-mix(in srgb, var(--sb-card-paper, #FBF7F0) 70%, #E8E0D2) !important;
-  color: #6B645A !important;
+  background: #EEF2F6 !important;
+  color: #64748B !important;
   font-size: 8.5px !important;
   font-weight: 650 !important;
   letter-spacing: 0.01em !important;
-  padding: 2px 6px !important;
+  padding: 2px 7px !important;
   min-width: 0 !important;
   height: auto !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .sb-break-badge-btn,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-break-badge-btn,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-break-badge-btn {
+  border-radius: 999px !important;
+  background: #E8F7EE !important;
+  color: #147A45 !important;
+  border: 0 !important;
+  font-size: 8.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.01em !important;
+  padding: 2px 7px !important;
+  min-width: 0 !important;
+  height: auto !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-flow-overlap-count,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header .count {
+  border-radius: 999px !important;
+  background: #EEF4FF !important;
+  border-color: transparent !important;
+  color: #3B6BB5 !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--chips {
@@ -6797,13 +6821,13 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
-  background: color-mix(in srgb, var(--sb-paper, #F4EFE6) 78%, #E8E0D2) !important;
-  border-color: var(--sb-card-line, #E4DDD0) !important;
+  background: #F8FAFC !important;
+  border-color: var(--sb-card-line, #E6EAF0) !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .assignment-card {
-  background: var(--sb-card-paper, #FBF7F0) !important;
-  border-color: var(--sb-card-line, #E4DDD0) !important;
+  background: var(--sb-card-paper, #FFFFFF) !important;
+  border-color: var(--sb-card-line, #E6EAF0) !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-primary-name,
@@ -6812,7 +6836,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3)::after {
-  background: linear-gradient(180deg, rgba(244, 239, 230, 0) 0%, rgba(244, 239, 230, 0.92) 70%, #F4EFE6 100%);
+  background: linear-gradient(180deg, rgba(245, 247, 249, 0) 0%, rgba(245, 247, 249, 0.88) 70%, #F5F7F9 100%);
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header,
@@ -6826,10 +6850,10 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header .label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header .label {
-  color: #3F3A32 !important;
+  color: #64748B !important;
   font-size: 11px !important;
   font-weight: 700 !important;
-  letter-spacing: 0.14em !important;
+  letter-spacing: 0.08em !important;
   line-height: 1.2 !important;
 }
 
@@ -6872,12 +6896,12 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 
 .sb-sheetbuilder-redesign .sb-night-action-pill,
 .sb-sheetbuilder-redesign .sb-night-action-pill__segment {
-  min-width: 64px;
+  min-width: 68px;
   justify-content: center;
 }
 
 /* ==========================================================================
-   Calm desk — measured sit (live zds acceptance).
+   Modern lightweight desk — measured sit (live zds acceptance).
    Live canvas only. Does not touch Golden print metrics.
    ========================================================================== */
 
@@ -6898,19 +6922,11 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header .label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar .sheet-section-header .label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sheet-section-header .label {
-  color: #2F2B24 !important;
+  color: #64748B !important;
   font-size: 11px !important;
   font-weight: 700 !important;
-  letter-spacing: 0.14em !important;
+  letter-spacing: 0.08em !important;
   line-height: 1.2 !important;
-}
-
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-canvas-slot-label,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-side-label,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-slot-header > span:first-child,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-slot-header > div:first-child > span:first-child {
-  color: color-mix(in srgb, var(--card-accent, #8a8378) 52%, #4A4034) !important;
-  filter: saturate(0.62) !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
@@ -7002,7 +7018,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 
 .sb-sheetbuilder-redesign .sb-night-action-pill:not(.sb-night-action-pill--split) {
   flex: 1 1 0;
-  min-width: 64px;
+  min-width: 68px;
   padding-inline: 10px;
 }
 
@@ -7016,5 +7032,5 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 }
 
 .sb-sheetbuilder-redesign .sb-month-status-diamond {
-  background: #6B7A6A;
+  background: #34C759;
 }

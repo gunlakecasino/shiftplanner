@@ -141,15 +141,18 @@ export function PinChangeGate({ operatorName, onComplete }: Props) {
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={descId}
-      className="sb-auth-card sb-auth-card--desk sb-auth-card--wide"
+      className="sb-auth-form sb-auth-form--wide"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <form onSubmit={handleSubmit} className="sb-auth-card__body">
-        <h2 id={titleId} className="sb-auth-title">
-          Set PIN
-        </h2>
-        <p id={descId} className="sb-auth-subtitle">
-          {operatorName}: temporary PIN, then a new 6-digit PIN.
+      <form onSubmit={handleSubmit} className="sb-auth-form__body">
+        <div className="sb-auth-brand">
+          <span className="sb-auth-mark" aria-hidden="true" />
+          <h2 id={titleId} className="sb-auth-title">
+            Set PIN
+          </h2>
+        </div>
+        <p id={descId} className="sb-auth-lead">
+          {operatorName}: temporary PIN, then a new PIN.
         </p>
 
         {pinField(tempPin, setTempPin, "Temporary PIN", tempId)}

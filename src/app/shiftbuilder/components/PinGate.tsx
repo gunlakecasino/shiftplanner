@@ -116,19 +116,22 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={descId}
-      className="sb-auth-card sb-auth-card--desk"
+      className="sb-auth-form"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
-      <form onSubmit={handleSubmit} className="sb-auth-card__body">
-        <h2 id={titleId} className="sb-auth-title">
-          SheetBuilder
-        </h2>
-        <p id={descId} className="sb-auth-subtitle">
-          Ops PIN
+      <form onSubmit={handleSubmit} className="sb-auth-form__body">
+        <div className="sb-auth-brand">
+          <span className="sb-auth-mark" aria-hidden="true" />
+          <h2 id={titleId} className="sb-auth-title">
+            SheetBuilder
+          </h2>
+        </div>
+        <p id={descId} className="sb-auth-lead">
+          Gun Lake graves ops.
         </p>
 
-        <label htmlFor={inputId} className="sr-only">
-          Ops PIN
+        <label htmlFor={inputId} className="sb-auth-field-label">
+          PIN
         </label>
         <input
           ref={inputRef}
@@ -162,7 +165,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
             type="submit"
             disabled={!isComplete || submitting}
             className={cn(
-              "sb-interactive sb-auth-primary sb-auth-primary--grow",
+              "sb-interactive sb-auth-primary sb-auth-primary--block",
               isComplete && !submitting
                 ? "sb-auth-primary--active"
                 : "sb-auth-primary--disabled",
@@ -179,7 +182,7 @@ export function PinGate({ onAuthenticated }: PinGateProps) {
               inputRef.current?.focus();
             }}
             disabled={submitting}
-            className="sb-interactive sb-auth-secondary disabled:opacity-45"
+            className="sb-interactive sb-auth-secondary sb-auth-secondary--ghost disabled:opacity-45"
           >
             Clear
           </button>
