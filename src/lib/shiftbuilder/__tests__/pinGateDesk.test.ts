@@ -18,6 +18,10 @@ const authCss = readFileSync(
   resolve(process.cwd(), "src/app/shiftbuilder/authGate.css"),
   "utf8",
 );
+const globalsCss = readFileSync(
+  resolve(process.cwd(), "src/app/globals.css"),
+  "utf8",
+);
 
 describe("PinGate desk — corporate ops console", () => {
   it("is a quiet paper card with SheetBuilder / Ops PIN and no theater", () => {
@@ -68,5 +72,20 @@ describe("PinGate desk — corporate ops console", () => {
     expect(pinChange).not.toContain("sb-auth-slots");
     expect(pinChange).not.toContain("SAVING PIN");
     expect(authCss).toContain("quiet desk paper");
+  });
+
+  it("does not keep PIN theater classes in globals.css", () => {
+    expect(globalsCss).not.toContain("sb-auth-card--access");
+    expect(globalsCss).not.toContain("sb-auth-accent");
+    expect(globalsCss).not.toContain("sb-auth-slot");
+    expect(globalsCss).not.toContain("sb-auth-icon");
+    expect(globalsCss).not.toContain("sb-auth-input--compact");
+    expect(globalsCss).not.toContain("errorFlash");
+    expect(globalsCss).not.toContain("SheetBuilder Access");
+    expect(authCss).not.toContain("sb-auth-card--access");
+    expect(authCss).not.toContain("sb-auth-accent");
+    expect(authCss).not.toContain("sb-auth-slot");
+    expect(authCss).not.toContain("VERIFYING");
+    expect(authCss).not.toContain("SIGNED IN");
   });
 });

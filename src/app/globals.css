@@ -3200,7 +3200,7 @@ button,
      text field must be >= 16px on touch. !important is required to beat Tailwind
      text-[Npx] utilities AND inline `fontSize` styles. Auth/PIN inputs are already
      touch-sized (larger) — leave them; non-text controls don't zoom, so skip them. */
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="color"]):not(.sb-auth-input):not(.sb-auth-input--compact),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="color"]):not(.sb-auth-input),
   textarea,
   select,
   [contenteditable]:not([contenteditable="false"]) {
