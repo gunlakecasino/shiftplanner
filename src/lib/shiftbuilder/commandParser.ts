@@ -1,5 +1,6 @@
 /**
- * Natural-language command parser for the Shift Planner Command Palette.
+ * Natural-language command parser kept for a future palette.
+ * No command-palette UI is mounted in SheetBuilder.
  *
  * Grammar:
  *   make <TM display name> eligible <Full | AM Overlap | PM Overlap>

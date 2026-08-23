@@ -66,7 +66,7 @@ const shiftBuilderCollisionDetection: CollisionDetection = (args) => {
  *
  * Goal: The DndContext should *only* wrap the actual droppable surface
  * (the artboard cards + the roster when it is the active drop target).
- * Everything else (top chrome, command palette, floating controls, print modal, etc.)
+ * Everything else (top chrome, floating controls, print modal, etc.)
  * should live outside this context.
  *
  * This dramatically reduces the number of listeners and re-render cost during drags,

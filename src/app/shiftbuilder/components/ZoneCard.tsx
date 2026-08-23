@@ -4,32 +4,19 @@ import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
   cardAccentInk,
-  getZoneColor, ZONE_ICONS,
+  getZoneColor,
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
-import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
-import { TmPlacementTrail } from "./assignmentCardChrome";
-import { UnassignedDropHint } from "./builderPrimitives";
-import { UnassignedInvite } from "./assignmentCardChrome";
+import { TmPlacementTrail, type SlotAssignmentState } from "./assignmentCardChrome";
 import {
   formatCoveragePositionLabel,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
-import {
-  CardAccentStripe,
-  CardSlotHeader,
-  SlotAssignmentBody,
-  TaskListDivider,
-  CoveredByOverlay,
-  cardBodyInteriorClass,
-  cardBodyInteriorStyle,
-  type SlotAssignmentState,
-} from "./assignmentCardChrome";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { CardTaskZone } from "./CardTaskZone";
 import { ShiftCard as PackageShiftCard } from "../redesign/components/ShiftCard";
@@ -197,7 +184,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   );
 
   const isCovered = coveredBy.length > 0;
-  const icon = ZONE_ICONS[def.key] ?? "●";
   const isEmpty = !hasTM && !loading && !isCovered;
   const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;

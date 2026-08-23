@@ -1,5 +1,5 @@
 /**
- * Mutations for the Command Palette's `make` and `remove` commands.
+ * Mutations for `make` and `remove` commands (parser kept; no palette UI).
  *
  * Privileged writes (grave pool, display name, mark-unavailable) go through
  * postOpsMutation → /api/shiftbuilder/mutations with session + permission.

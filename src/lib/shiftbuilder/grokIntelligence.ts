@@ -1,5 +1,5 @@
 /**
- * Grok Intelligence Layer for the Command Palette
+ * Grok Intelligence Layer for operator suggestions (palette retired; parser kept).
  *
  * This module owns:
  * - The rich, authoritative context snapshot sent to xAI (B in the A+B plan)
@@ -268,7 +268,7 @@ export function buildGrokIntelligenceSystemPrompt(snapshot: GrokBoardSnapshot): 
   const orderText = getPlacementOrderText();
   const eligibilityText = getEligibilityRulesText();
 
-  return `You are an expert GRAVE shift planner for ZDS operations. You are operating inside the ShiftBuilder Command Palette as a trusted assistant.
+  return `You are an expert GRAVE shift planner for ZDS operations. You are a trusted assistant inside SheetBuilder.
 
 You have access to the live board state via the JSON snapshot below.
 

@@ -6,7 +6,7 @@
  *
  * Surfaces:
  *   notes   — Shift Notes textarea (ghost overlay, 400ms debounce)
- *   command — Command Palette free-text input (inline ghost, 250ms debounce)
+ *   command — free-text command input (parser kept; no palette UI)
  *   recap   — Shift Recap textarea (ghost overlay, 500ms debounce)
  *
  * All surfaces use reasoning_effort = "none" to keep p50 latency <300ms.

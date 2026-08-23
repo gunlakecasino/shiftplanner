@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   premiumSpring,
   premiumBuilderCardHost,
@@ -1076,6 +1076,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     if (selectedSlotKey !== slotKey) return null;
     return (
       <PlacementPad
+        key={`place-${slotKey}`}
         {...placementPadProps(slotKey)}
         anchor={anchor}
         hostId={hostId}
@@ -1152,8 +1153,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         conflictingTms={conflictingTms}
         tmConflictSlots={tmConflictSlots}
       />
-      {activePlacementPad?.hostId === slotKey &&
-        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, slotKey)}
     </>
   );
 
@@ -1351,7 +1350,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
       <div className={`flex flex-col w-full flex-1 min-h-0 ${isPrintPreview ? "overflow-hidden" : "min-h-0"}`}>
         {/* Task text edit pad (click any task row). Rendered at content root so available in both deployment + breaks. Portaled. */}
-        {renderTaskTextEditPad()}
+        <AnimatePresence>
+          {renderTaskTextEditPad()}
+        </AnimatePresence>
         {currentView === "deployment" ? (
           <>
             {/* ZONES — custom layout (ZONE_VISUAL_ORDER from constants):
@@ -1467,8 +1468,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         onSwapCoverageSides={onSwapCoverageSides}
                         {...kioskCardFlags(key, accent)}
                       />
-                      {activePlacementPad?.hostId === key &&
-                        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
                     </>
                   );
 
@@ -1603,8 +1602,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             : undefined
                         }
                       />
-                      {activePlacementPad?.hostId === rrHostId &&
-                        renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, rrHostId)}
                     </>
                   );
 
@@ -1768,8 +1765,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             onSetAuxLabel={onSetAuxLabel}
                             {...kioskCardFlags(key, accent)}
                           />
-                          {activePlacementPad?.hostId === key &&
-                            renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
                         </>
                       );
 
@@ -1840,8 +1835,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           onSetAuxLabel={onSetAuxLabel}
                           {...kioskCardFlags(key, accent)}
                         />
-                        {activePlacementPad?.hostId === key &&
-                          renderPlacementPad(activePlacementPad.slotKey, activePlacementPad.anchor, key)}
                       </>
                     );
 
@@ -2143,12 +2136,24 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
 
       {/* iPad inspector dock — full-height right panel; avoids flyout overflow.
           Tasks dock takes priority when the task editor is open. */}
-      {!isPrintPreview && showPlacementDock && activePlacementPad && (
+      <AnimatePresence>
+        {!isPrintPreview && showPlacementDock && activePlacementPad ? (
           <PlacementDock
+            key={`dock-${activePlacementPad.slotKey}`}
             {...placementPadProps(activePlacementPad.slotKey)}
             onClose={() => onSlotClose?.()}
           />
-        )}
+        ) : null}
+      </AnimatePresence>
+      <AnimatePresence>
+        {!isPrintPreview && !useExternalPad && !useTabletDock && activePlacementPad
+          ? renderPlacementPad(
+              activePlacementPad.slotKey,
+              activePlacementPad.anchor,
+              activePlacementPad.hostId,
+            )
+          : null}
+      </AnimatePresence>
 
       {!hideSheetFooter ? (
         <div

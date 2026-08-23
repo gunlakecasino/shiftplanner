@@ -5,7 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { COVERAGE_BAR_H } from "@/lib/shiftbuilder/constants";
 import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
 import { placementIdentityKey } from "@/lib/shiftbuilder/boardMotion";
-import { AssignmentSkeleton, UnassignedDropHint } from "./builderPrimitives";
+import { AssignmentSkeleton } from "./builderPrimitives";
 import { cardAccentInk, isGoldAccent } from "@/lib/shiftbuilder/constants";
 import {
   coveredByNamesFromEntries,
@@ -191,11 +191,11 @@ export type UnassignedInviteSize = "zone" | "rr" | "aux";
 
 const INVITE_CONFIG: Record<
   UnassignedInviteSize,
-  { plusSize: number; labelSize: number; padding: string }
+  { labelSize: number; padding: string }
 > = {
-  zone: { plusSize: 16, labelSize: 11, padding: "py-1" },
-  rr: { plusSize: 14, labelSize: 10, padding: "py-1" },
-  aux: { plusSize: 13, labelSize: 10, padding: "py-0.5" },
+  zone: { labelSize: 12, padding: "py-1" },
+  rr: { labelSize: 11, padding: "py-0.5" },
+  aux: { labelSize: 11, padding: "py-0.5" },
 };
 
 export function coverageBodyPadding(
@@ -312,11 +312,11 @@ function LockIcon({ size }: { size: number }) {
   );
 }
 
-/** Builder-only empty-slot invite. */
+/** Builder-only empty-slot invite — one quiet tap target, no demo stack. */
 export function UnassignedInvite({
   size,
   onClick,
-  title = "Click or drop to assign team member",
+  title = "Assign team member",
 }: {
   size: UnassignedInviteSize;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -327,7 +327,10 @@ export function UnassignedInvite({
   return (
     <motion.div
       key="unassigned-invite"
-      className={`sb-unassigned-invite flex flex-col items-start justify-center text-[#B0B8C4] tracking-[0.01em] rounded-[8px] cursor-pointer w-full flex-1 min-h-0 ${cfg.padding}`}
+      role="button"
+      tabIndex={0}
+      className={`sb-unassigned-invite sb-interactive flex items-center justify-start text-[#94A3B8] tracking-[0.01em] rounded-[8px] cursor-pointer w-full flex-1 min-h-0 ${cfg.padding}`}
+      data-invite-size={size}
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
       }}
@@ -336,25 +339,20 @@ export function UnassignedInvite({
       whileTap={{ scale: 0.99 }}
       transition={premiumSpringReduced}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick(e as unknown as React.MouseEvent<HTMLDivElement>);
+        }
+      }}
       title={title}
     >
       <span
-        className="leading-none text-[#C5CDD8]"
-        style={{ fontSize: cfg.plusSize, fontWeight: 400 }}
-      >
-        +
-      </span>
-      <span
-        className="font-medium tracking-[0.01em] text-[#94A3B8] mt-1"
+        className="font-medium tracking-[0.01em] text-[#94A3B8]"
         style={{ fontSize: cfg.labelSize, opacity: 0.92 }}
       >
         Assign TM
       </span>
-      {size === "zone" ? (
-        <span className="no-print text-[9px] font-normal text-[#B0B8C4] mt-0.5">Drop to assign</span>
-      ) : (
-        <UnassignedDropHint className="mt-0.5" />
-      )}
     </motion.div>
   );
 }
@@ -710,24 +708,13 @@ export function CoveredByPrintLabel({
 }
 
 /** Print / preview unassigned line. */
-export function UnassignedPrintLabel({ showDigitalAssists }: { showDigitalAssists: boolean }) {
+export function UnassignedPrintLabel({ showDigitalAssists: _showDigitalAssists }: { showDigitalAssists: boolean }) {
   return (
     <div
       className="unassigned-label mt-0.5 text-[10.5px] tracking-[0.3px] px-1 py-[1px] text-[var(--ios-label-tertiary)]"
       style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)" }}
     >
       <span className="sb-unassigned-primary">— Unassigned —</span>
-      {showDigitalAssists ? (
-        <span className="sb-unassigned-hint no-print">
-          <span
-            className="ms"
-            style={{ fontSize: 11, fontVariationSettings: '"FILL" 0, "wght" 400, "opsz" 20' }}
-          >
-            south
-          </span>
-          Drop to assign
-        </span>
-      ) : null}
     </div>
   );
 }
@@ -952,7 +939,6 @@ export function SlotAssignmentBody({
           onClick={onUnassignedClick}
         >
           <span className="sb-unassigned-primary">— Unassigned —</span>
-          <UnassignedDropHint className="mt-px" />
         </motion.div>
       ) : (
         <UnassignedPrintLabel key="unassigned" showDigitalAssists={showDigitalAssists} />

@@ -2,7 +2,13 @@
 
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  padFlyoutPresence,
+  padOriginFromHost,
+  queryPadHostRect,
+  type PadOrigin,
+} from "./padMotion";
 import { X, Plus } from "lucide-react";
 import type { NightSlotTask, ZoneDetailEntry } from "@/lib/shiftbuilder/data";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
@@ -611,6 +617,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const padLarge = isDock;
   const dialogRef = useRef<HTMLDivElement>(null);
   const dialogTitleId = React.useId();
+  const reducedMotion = useReducedMotion();
+  const [padOrigin, setPadOrigin] = useState<PadOrigin | null>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -1308,6 +1316,14 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const portalStyleLocal = usePortalPlacementStyle(isDock ? undefined : hostId, anchor, showTmPicker);
   const usePortalLocal = !isDock && !!hostId && !!portalStyleLocal;
 
+  useLayoutEffect(() => {
+    if (isDock || !hostId) {
+      setPadOrigin(null);
+      return;
+    }
+    setPadOrigin(padOriginFromHost(queryPadHostRect(hostId), portalStyleLocal, PAD_W, 420));
+  }, [isDock, hostId, portalStyleLocal]);
+
   const refinedCard = (
     <div
       className="sb-sheetbuilder-placement-pad w-full overflow-hidden flex flex-col min-h-0 flex-1"
@@ -1507,7 +1523,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onOpenTasksPad(slotKey, undefined, { addMode: true, preservePlacement: true }); }}
-                    className="sb-placement-pad-add-task w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border border-dashed border-[#007AFF]/35 bg-[#007AFF]/[0.04] text-[12px] font-semibold text-[#007AFF] hover:bg-[#007AFF]/[0.08] active:scale-[0.99] transition-all"
+                    className="sb-placement-pad-add-task w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border border-dashed border-[#007AFF]/35 bg-[#007AFF]/[0.04] text-[12px] font-semibold text-[#007AFF] hover:bg-[#007AFF]/[0.08] active:scale-[0.99] transition-transform transition-opacity"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>{tasks.length ? "Add another task" : "Add tasks"}</span>
@@ -1771,6 +1787,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     </div>
   );
 
+  const flyoutMotion = padFlyoutPresence(reducedMotion, padOrigin, anchor);
+
   const outer = (
     <motion.div
       ref={dialogRef}
@@ -1779,20 +1797,24 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
       aria-labelledby={dialogTitleId}
       tabIndex={-1}
       className={`placement-pad no-print ${isDock ? "placement-dock-inner h-full" : usePortalLocal ? "fixed" : anchorClass(anchor)} flex flex-col overflow-hidden`}
-      style={
-        isDock 
-          ? { display: "flex", flexDirection: "column", height: "100%", width: "100%" } 
-          : usePortalLocal 
-            ? portalStyleLocal! 
-            : { 
-                width: PAD_W, 
-                // Adaptive: only hard max when we are in tall modes (picker/details). Normal view sizes to content.
+      initial={isDock ? false : flyoutMotion.initial}
+      animate={isDock ? undefined : flyoutMotion.animate}
+      exit={isDock ? undefined : flyoutMotion.exit}
+      transition={isDock ? undefined : flyoutMotion.transition}
+      style={{
+        transformOrigin: "center center",
+        ...(isDock
+          ? { display: "flex", flexDirection: "column", height: "100%", width: "100%" }
+          : usePortalLocal
+            ? portalStyleLocal!
+            : {
+                width: PAD_W,
                 maxHeight: (showTmPicker || analystDetailsOpen) ? PAD_MAX_HEIGHT : undefined,
                 display: "flex",
                 flexDirection: "column",
                 minHeight: 0,
-              }
-      }
+              }),
+      }}
       onClick={e => e.stopPropagation()}
     >
       {refinedCard}

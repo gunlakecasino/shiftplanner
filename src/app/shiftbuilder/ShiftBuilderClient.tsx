@@ -67,7 +67,7 @@ import { canonicalizeAuxSlotKeyForTrail } from "@/lib/shiftbuilder/constants";
 // tmCommands functions are dynamically imported below to avoid pulling heavy deps
 // (e.g. useCommandActions transitive) into the static module graph of this giant file.
 // This follows the established pattern to prevent Turbopack "module factory is not available" HMR errors.
-// See comments around LazyCommandPalette and other await import() sites.
+// See comments around other await import() sites.
 // Legacy runWeightedPlanner is dynamically imported only behind sb_legacy_engine=1 (dev); production uses unified engine/adapters.
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 // EngineRulesContext extracted; import removed to clean unused.
@@ -78,11 +78,8 @@ import type { EngineConfig, FullyResolvedEngineConfig } from "@/lib/shiftbuilder
 // Scheduled data is now fetched via /api/shiftbuilder/scheduled-roster to avoid client-side admin client creation.
 // grokEngine (buildGrokEngineSnapshot / mergeGrokOverridesIntoDraft) dynamically imported in handlers to shrink HMR surface
 // GrokEngineSnapshot extracted; import removed (dynamic where needed).
-// Command palette and Sudo surfaces are *fully dynamically loaded* (the Lazy* modules
-// themselves are imported via `import()` inside effects/handlers, not at the top level
-// of this file). This is the current state of the long-running "shrink the static
-// dependency graph" effort to stop Turbopack from treating useCommandActions (and
-// other heavy modules) as required from the giant Client at module evaluation time.
+// Heavy optional surfaces stay dynamically imported (`import()` in effects/handlers)
+// so Turbopack does not treat their deps as required from this file at evaluation time.
 // XAISphere import removed — was creating a static dependency chain through ./xai → @/lib/xai barrel → grokIntelligence.ts
 // If the sphere is still needed, it should be dynamically imported inside the render where the panel is toggled.
 import { useOpsAuth } from "@/lib/auth/opsAuth";
@@ -278,10 +275,8 @@ import {
   ensureWeekPlacementHistories,
   getCachedWeekPlacementHistories,
 } from "./lib/weekPlacementHistoriesCache";
-// LazyCommandPalette and LazySudoWindow are now dynamically imported (see below) to keep
-// their (and their transitive deps like useCommandActions) out of the initial static
-// module graph of this giant file. This is the latest step in the long-running effort
-// to eliminate Turbopack "module factory is not available" errors during Client evaluation/HMR.
+// Optional heavy surfaces stay dynamically imported so their deps stay out of this
+// file's static graph (avoids Turbopack "module factory is not available" on HMR).
 import { 
   useShiftBuilderStore, 
   useAssignments, 
@@ -375,121 +370,6 @@ import {
  * Background is the accent color of the SOURCE slot.
  */
 // RRCard, AuxCard, OverlapSlot (and their sub-components) now imported from components/ above.
-
-// Compact header overflow menu — houses low-usage actions (Print, Lock &
-// Finalize) so the primary header bar stays short. ESC and outside-click
-// dismiss; the menu is keyboard-navigable via the native button focus order.
-interface HeaderOverflowProps {
-  onOptimizeNight?: () => void;
-  onPrint: () => void;
-  onAddAuxSlot: () => void;
-  // null when there's nothing to remove (we're at the default 5); the menu
-  // item renders disabled in that case so the operator can see the action
-  // exists but is currently unavailable.
-  onRemoveAuxSlot: (() => void) | null;
-  lastAuxSlotLabel: string | null;
-}
-
-const HeaderOverflow: React.FC<HeaderOverflowProps & { onLockDay?: () => void }> = ({ onOptimizeNight, onPrint, onAddAuxSlot, onRemoveAuxSlot, lastAuxSlotLabel, onLockDay }) => {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="h-7 w-7 rounded-md border border-[var(--ios-gray-4)] bg-[var(--ios-background-secondary)] text-[var(--ios-label-tertiary)] hover:bg-[var(--ios-gray-6)] flex items-center justify-center"
-        aria-label="More actions"
-        title="More actions"
-        aria-expanded={open}
-      >
-        <span className="ms" style={{ fontSize: 18, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>more_horiz</span>
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 mt-1 w-[200px] rounded-lg border border-[var(--ios-gray-4)] bg-[var(--ios-background-secondary)] shadow-lg py-1 z-[60]"
-        >
-          <button
-            role="menuitem"
-            onClick={() => { setOpen(false); onOptimizeNight?.(); }}
-            className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
-          >
-            <span className="flex items-center gap-2">
-              <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>bolt</span>
-              Run Engine
-            </span>
-            <span className="text-[11px] text-[var(--ios-label-tertiary)] font-mono">R</span>
-          </button>
-          <div className="h-px bg-[var(--ios-background-secondary)] mx-2 my-1" />
-          <button
-            role="menuitem"
-            onClick={() => { setOpen(false); onPrint(); }}
-            className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
-          >
-            <span className="flex items-center gap-2">
-              <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>print</span>
-              Print
-            </span>
-            <span className="text-[11px] text-[var(--ios-label-tertiary)] font-mono">⌘P</span>
-          </button>
-          <div className="h-px bg-[var(--ios-background-secondary)] mx-2 my-1" />
-          <button
-            role="menuitem"
-            onClick={() => { setOpen(false); onAddAuxSlot(); }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
-          >
-            <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>add</span>
-            Add AUX Slot
-          </button>
-          <button
-            role="menuitem"
-            disabled={!onRemoveAuxSlot}
-            onClick={() => { if (!onRemoveAuxSlot) return; setOpen(false); onRemoveAuxSlot(); }}
-            className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] ${
-              onRemoveAuxSlot
-                ? "text-[var(--ios-label)] hover:bg-[var(--ios-gray-6)]"
-                : "text-[var(--ios-label-tertiary)] cursor-not-allowed"
-            }`}
-            title={onRemoveAuxSlot ? `Remove ${lastAuxSlotLabel}` : "Default AUX slots can't be removed"}
-          >
-            <span className="flex items-center gap-2">
-              <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>remove</span>
-              Remove AUX Slot
-            </span>
-            {lastAuxSlotLabel && (
-              <span className="text-[10px] text-[var(--ios-label-tertiary)] font-mono truncate max-w-[60px]">{lastAuxSlotLabel}</span>
-            )}
-          </button>
-          <div className="h-px bg-[var(--ios-background-secondary)] mx-2 my-1" />
-          <button
-            role="menuitem"
-            onClick={() => { setOpen(false); onLockDay?.(); }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[var(--ios-blue)] font-semibold hover:bg-[color-mix(in_srgb,var(--ios-blue)_10%,transparent)]"
-          >
-            <span className="ms" style={{ fontSize: 15, fontVariationSettings: '"FILL" 0, "wght" 300, "opsz" 20' }}>lock</span>
-            Lock &amp; Finalize
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // Small input row inside the task selector popover. Typing a label + pressing
 // Enter (or clicking +) inserts the label into the catalog and selects it for
@@ -890,9 +770,9 @@ function AuthedShiftBuilder() {
 
   const positioningRef = useRef<HTMLDivElement>(null);
 
-  // Dedicated overlay layer for artboard-centered floating UI (Command Palette, future floating tools).
+  // Dedicated overlay layer for artboard-centered floating UI (pads, future floating tools).
   // Lives in the same flex-centering context as the scaled artboard but is NOT inside the scale transform,
-  // so children render at 1:1 crisp size and can be positioned as "center of the artboard".
+  // so children render at 1:1 crisp size.
   const artboardOverlayRef = useRef<HTMLDivElement>(null);
 
   // Undo/Redo recording coordination
@@ -917,6 +797,7 @@ function AuthedShiftBuilder() {
   const [publishDayBusy, setPublishDayBusy] = useState(false);
   const [publishWeekBusy, setPublishWeekBusy] = useState(false);
   const [applyOverlapTasksBusy, setApplyOverlapTasksBusy] = useState(false);
+  const [draftApplyBusy, setDraftApplyBusy] = useState(false);
 
   // Active drag state declared early so it can be safely read in measurement/zoom setup
   // (before the onDrag* handler definitions later in the file).
@@ -1385,6 +1266,8 @@ function AuthedShiftBuilder() {
       return;
     }
 
+    setDraftApplyBusy(true);
+    try {
     // === P0: DB-first apply — never paint the live board until the write succeeds ===
     const proposalsForGuard = draftEntries.map(([slotKey, info]) => ({
       slotKey,
@@ -1499,6 +1382,9 @@ function AuthedShiftBuilder() {
           : `Could not apply — database rejected the change: ${msg}`,
         "error",
       );
+    }
+    } finally {
+      setDraftApplyBusy(false);
     }
   };
 
@@ -1997,9 +1883,9 @@ function AuthedShiftBuilder() {
     return `— ${pageNum} of 14 —`;
   }, [currentView, selectedDayIndex]);
 
-  // === Apple Pencil Pro squeeze gesture to open Command Palette ===
+  // === Apple Pencil Pro squeeze gesture to open PlacementPad ===
   // When using Pencil Pro, hovering (or having the tip near) a card and
-  // squeezing the barrel instantly opens the contextual Command Palette.
+  // squeezing the barrel opens the same PlacementPad as a card tap.
   useEffect(() => {
     const handlePointerRaw = (e: Event) => {
       const pe = e as PointerEvent;
@@ -8207,6 +8093,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onLogout={logoutOperator}
         onOpenSettings={canAccessSudo ? handleOpenSettings : undefined}
         onPrint={() => setIsPrintCenterOpen(true)}
+        printBusy={isPrinting}
         onOpenCoverGuide={() => setCoverGuideOpen(true)}
         isSyncing={boardBackgroundSync}
         rosterOpen={rosterOpen}
@@ -8245,6 +8132,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               }
             : undefined
         }
+        draftApplyBusy={draftApplyBusy}
         onDiscardDraft={stableDiscardDraft}
         permissions={permissions}
       />
@@ -9242,8 +9130,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             </BuilderUnpublishedNightShell>
 
           {/* Unscaled artboard overlay — centered inside the visual (scaled-size) frame.
-              This + the relative wrapper above restore proper containment while giving
-              Command Palette true "center of the artboard" behavior at 1:1 size. */}
+              This + the relative wrapper above restore proper containment at 1:1 size. */}
           <div
             ref={artboardOverlayRef}
             className="absolute pointer-events-none"
@@ -9276,7 +9163,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
       {mounted && isBuilderLiveCanvas && isDraftMode && !isPrintPreview && (
         <DraftStatusPill
           count={draftSlotCount}
-          applying={engineRunPhase !== "idle"}
+          applying={draftApplyBusy || engineRunPhase !== "idle"}
           onApply={() => { void applyDraft(); }}
           onDiscard={discardDraft}
           onReviewChanges={() => {

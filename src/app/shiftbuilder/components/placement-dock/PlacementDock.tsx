@@ -2,10 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
-import { premiumSpring, premiumSpringReduced } from "@/lib/premiumSpring";
-import { useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import PlacementPad from "../PlacementPad";
+import { padDockPresence } from "../padMotion";
 import type { PlacementDockProps, PlacementDockTab } from "./placementDockTypes";
 
 function defaultTabForSlot(
@@ -28,15 +27,16 @@ export default function PlacementDock(props: PlacementDockProps) {
     setTab(defaultTabForSlot(slotKey, assignments));
   }, [slotKey, assignments]);
 
+  const dockMotion = padDockPresence(reducedMotion);
   const dock = (
     <motion.aside
       className="placement-dock no-print"
       role="dialog"
       aria-label={`Placement dock — ${slotKey}`}
-      initial={reducedMotion ? false : { x: 24, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={reducedMotion ? undefined : { x: 24, opacity: 0 }}
-      transition={reducedMotion ? premiumSpringReduced : premiumSpring}
+      initial={dockMotion.initial}
+      animate={dockMotion.animate}
+      exit={dockMotion.exit}
+      transition={dockMotion.transition}
     >
       <div className="placement-dock-body min-h-0 flex-1 overflow-hidden">
         <PlacementPad

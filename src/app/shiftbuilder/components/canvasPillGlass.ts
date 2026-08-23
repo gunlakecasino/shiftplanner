@@ -14,7 +14,7 @@ export {
   FLOATING_NAV_MAX_WIDTH_PX,
 };
 
-/** Velvet glass shell — matches MarkerPad / command palette (--sb-glass*). */
+/** Velvet glass shell — matches MarkerPad / glass overlays (--sb-glass*). */
 export function velvetGlassPillStyle(extra?: CSSProperties): CSSProperties {
   return {
     background: "var(--sb-glass)",

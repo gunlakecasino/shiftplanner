@@ -2,7 +2,7 @@
  * xAI Grok helper (server-only)
  *
  * Uses native fetch against the xAI OpenAI-compatible /v1/chat/completions endpoint.
- * All Grok calls for the ShiftBuilder (Command Palette + Grok-hybrid engine) flow through here.
+ * All Grok calls for the ShiftBuilder (insights + Grok-hybrid engine) flow through here.
  *
  * Current production model: grok-4.3 (May 2026 flagship).
  * We tune per workload using the `reasoning_effort` parameter for the best

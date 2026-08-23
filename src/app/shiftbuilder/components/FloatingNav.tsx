@@ -85,6 +85,7 @@ export interface FloatingNavProps {
   isZoomed?: boolean;
   onThemeToggle?: () => void;
   onPrint?: () => void;
+  printBusy?: boolean;
   onOpenCoverGuide?: () => void;
   isDark?: boolean;
   contentMaxWidth?: number;
@@ -113,6 +114,7 @@ export interface FloatingNavProps {
   draftSlotCount?: number;
   onToggleDraftMode?: () => void;
   onSaveAllDraft?: () => void;
+  draftApplyBusy?: boolean;
   onDiscardDraft?: () => void;
   isSyncing?: boolean;
   rosterOpen?: boolean;
@@ -167,7 +169,7 @@ function nightActionSegmentStyle(extra?: CSSProperties): CSSProperties {
     gap: 5,
     cursor: "pointer",
     whiteSpace: "nowrap",
-    transition: "background 0.14s var(--sb-spring-snappy), color 0.14s var(--sb-spring-snappy)",
+    transition: "background var(--sb-motion-instant) var(--sb-spring-snappy), color var(--sb-motion-instant) var(--sb-spring-snappy), opacity var(--sb-motion-instant) var(--sb-spring-snappy)",
     ...extra,
   };
 }
@@ -203,6 +205,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     onPrevWeek,
     onNextWeek,
     onPrint,
+    printBusy = false,
     isDark = false,
     userInitials = "OP",
     currentUser,
@@ -216,6 +219,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     draftSlotCount = 0,
     onToggleDraftMode,
     onSaveAllDraft,
+    draftApplyBusy = false,
     rosterOpen = false,
     onToggleRoster,
     canvasMode = "builder",
@@ -320,9 +324,10 @@ export default function FloatingNav(props: FloatingNavProps) {
   return (
     <>
       <style>{`
-        .icon-btn { transition: background 0.12s ease; }
+        .icon-btn { transition: background var(--sb-motion-instant) var(--sb-spring-snappy); }
         .icon-btn:hover { background: rgba(0,0,0,0.06); }
         .icon-btn:active { background: rgba(0,0,0,0.11); }
+        .icon-btn:focus-visible { outline: 2px solid #94A3B8; outline-offset: 2px; }
         .live-dot { box-shadow: none; }
       `}</style>
 
@@ -451,7 +456,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                 color: mutedChromeText,
                 marginTop: 1,
                 transform: calendarOpen ? "rotate(180deg)" : undefined,
-                transition: "transform 0.15s ease",
+                transition: "transform var(--sb-motion-instant) var(--sb-spring-snappy)",
               }}
             />
           </button>
@@ -624,6 +629,8 @@ export default function FloatingNav(props: FloatingNavProps) {
                     type="button"
                     className="sb-night-action-pill__apply sb-interactive"
                     onClick={onSaveAllDraft}
+                    disabled={draftApplyBusy}
+                    aria-busy={draftApplyBusy}
                     title="Apply draft changes to the live board"
                     aria-label={`Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board`}
                     style={nightActionSegmentStyle({
@@ -631,7 +638,7 @@ export default function FloatingNav(props: FloatingNavProps) {
                       fontWeight: 650,
                     })}
                   >
-                    Apply
+                    {draftApplyBusy ? "Applying…" : "Apply"}
                   </button>
                 </div>
               ) : (
@@ -663,10 +670,12 @@ export default function FloatingNav(props: FloatingNavProps) {
                 className="sb-night-action-pill sb-night-action-pill--print sb-interactive"
                 style={nightActionSegmentStyle()}
                 onClick={onPrint}
+                disabled={printBusy}
+                aria-busy={printBusy}
                 title="Open Print Command Center"
                 aria-label="Print"
               >
-                <span>Print</span>
+                {printBusy ? <span>Printing…</span> : <span>Print</span>}
               </button>
             )}
           </div>
