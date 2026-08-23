@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import type { Transition } from "framer-motion";
-import { premiumSpringReduced } from "@/lib/premiumSpring";
 type PadAnchor = "left" | "right" | "bottom";
 
 /** Matches `--sb-motion-pad` / P0 board language. */
@@ -11,6 +10,12 @@ export const padTween: Transition = {
   type: "tween",
   duration: PAD_MOTION_MS / 1000,
   ease: PAD_MOTION_EASE,
+};
+
+/** Reduced-motion pads snap; no fade/slide leftover. */
+export const padInstant: Transition = {
+  type: "tween",
+  duration: 0,
 };
 
 export type PadOrigin = {
@@ -60,14 +65,14 @@ export function padOriginFromHost(
 export function padFlyoutPresence(
   reduced: boolean | null,
   origin: PadOrigin | null,
-  anchor: PadAnchor = "right",
+  _anchor: PadAnchor = "right",
 ) {
   if (reduced) {
     return {
-      initial: { opacity: 0 },
-      animate: { opacity: 1 },
-      exit: { opacity: 0 },
-      transition: premiumSpringReduced,
+      initial: { opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      animate: { opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      exit: { opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      transition: padInstant,
     };
   }
   if (origin) {
@@ -78,12 +83,11 @@ export function padFlyoutPresence(
       transition: padTween,
     };
   }
-  const slide =
-    anchor === "left" ? { x: 14, y: 0 } : anchor === "bottom" ? { x: 0, y: 12 } : { x: -14, y: 0 };
+  // Last-resort: grow from the slot, never a modal slide-over.
   return {
-    initial: { opacity: 0, ...slide },
-    animate: { opacity: 1, x: 0, y: 0 },
-    exit: { opacity: 0, ...slide },
+    initial: { opacity: 0.88, x: 0, y: 0, scaleX: 0.28, scaleY: 0.22 },
+    animate: { opacity: 1, x: 0, y: 0, scaleX: 1, scaleY: 1 },
+    exit: { opacity: 0.88, x: 0, y: 0, scaleX: 0.28, scaleY: 0.22 },
     transition: padTween,
   };
 }
@@ -91,16 +95,16 @@ export function padFlyoutPresence(
 export function padDockPresence(reduced: boolean | null) {
   if (reduced) {
     return {
-      initial: { opacity: 0 },
+      initial: { opacity: 1 },
       animate: { opacity: 1 },
-      exit: { opacity: 0 },
-      transition: premiumSpringReduced,
+      exit: { opacity: 1 },
+      transition: padInstant,
     };
   }
   return {
-    initial: { x: 20, opacity: 0 },
-    animate: { x: 0, opacity: 1 },
-    exit: { x: 20, opacity: 0 },
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
     transition: padTween,
   };
 }

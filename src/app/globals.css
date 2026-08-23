@@ -1094,9 +1094,11 @@ body {
 }
 
 .builder-workspace .sheet-section-header .sb-section-count--empty {
-  background: rgba(142, 142, 147, 0.12);
-  color: #6b7280;
-  border: 1px solid rgba(142, 142, 147, 0.24);
+  background: transparent;
+  color: #94A3B8;
+  border: 0;
+  font-weight: 500;
+  padding-inline: 2px;
 }
 
 .dark .builder-workspace .sheet-section-header .sb-section-count--filled {
@@ -2706,7 +2708,7 @@ body.sb-roster-open .sb-stage-host {
 }
 .assignment-card.sb-dnd-settle,
 .sb-assignment-card.sb-dnd-settle {
-  animation: sb-dnd-settle-kf var(--sb-motion-move) var(--sb-spring-bounce) both;
+  animation: sb-dnd-settle-kf var(--sb-motion-move) var(--sb-spring-snappy) both;
 }
 .assignment-card.sb-dnd-settle .sb-card-accent-stripe,
 .assignment-card.sb-dnd-settle > :first-child,
@@ -5488,9 +5490,9 @@ button,
   border: 1px solid transparent;
   background: transparent;
   transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease;
+    background-color var(--sb-motion-instant) var(--sb-spring-snappy),
+    border-color var(--sb-motion-instant) var(--sb-spring-snappy),
+    box-shadow var(--sb-motion-instant) var(--sb-spring-snappy);
 }
 
 .sb-sheetbuilder-launch-trigger:hover,
@@ -7510,4 +7512,83 @@ body.sb-tablet-dock-open .sb-canvas-veil--active {
   border-top-color: #E6EAF0;
   background: transparent;
   color: #94A3B8;
+}
+
+/* Wave 2 — empty density, pad flyout neighbors, tokenized motion */
+.sb-quiet-open {
+  color: #94A3B8 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em;
+}
+
+.sb-builder-stage .sb-assignment-card.sb-aux-blank,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-aux-blank,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-blank {
+  border-style: solid !important;
+  border-color: transparent !important;
+  background: var(--sb-card-paper, #FFFFFF) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  min-height: 58px !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-flow-overlap-count {
+  font-weight: 500;
+  color: #94A3B8;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.empty.sb-overlap-zone-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card.sb-card-empty.sb-overlap-zone-card {
+  background: var(--sb-card-paper, #FFFFFF) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.sb-builder-stage {
+  position: relative;
+}
+
+body.sb-pad-flyout-open .sb-builder-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background: rgba(15, 23, 42, 0.045);
+  transition: opacity var(--sb-motion-pad) var(--sb-spring-gentle);
+}
+
+body.sb-pad-flyout-open .sb-builder-stage .sb-day-card-host {
+  transform: scale(0.966);
+  transform-origin: center center;
+  transition:
+    transform var(--sb-motion-pad) var(--sb-spring-gentle),
+    opacity var(--sb-motion-pad) var(--sb-spring-gentle);
+}
+
+body.sb-pad-flyout-open .sb-builder-stage .sb-day-card-host[data-pad-active="true"] {
+  transform: none;
+  z-index: 5;
+}
+
+body.sb-pad-flyout-open .sb-builder-stage .assignment-card .sb-card-accent-stripe,
+body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card > .w-\[7px\] {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.sb-pad-flyout-open .sb-builder-stage::after {
+    transition: none;
+  }
+  body.sb-pad-flyout-open .sb-builder-stage .sb-day-card-host {
+    transition: none;
+    transform: none;
+  }
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sheet-section-header .sb-section-count--empty,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sheet-section-header .count.sb-section-count--empty {
+  background: transparent !important;
+  border: 0 !important;
+  color: #94A3B8 !important;
+  font-weight: 500 !important;
 }

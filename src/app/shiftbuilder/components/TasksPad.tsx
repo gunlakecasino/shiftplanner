@@ -687,9 +687,12 @@ const TasksPad: React.FC<TasksPadProps> = ({
     </div>
   );
 
+  const lastOriginRef = useRef<ReturnType<typeof padOriginFromHost>>(null);
+  const nextOrigin = padOriginFromHost(queryPadHostRect(hostId), portalStyle, 312, 420);
+  if (nextOrigin) lastOriginRef.current = nextOrigin;
   const flyoutMotion = padFlyoutPresence(
     reducedMotion,
-    padOriginFromHost(queryPadHostRect(hostId), portalStyle, 312, 420),
+    lastOriginRef.current ?? nextOrigin,
     anchor,
   );
 

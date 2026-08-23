@@ -172,7 +172,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 ref={cancelRef}
                 type="button"
                 onClick={() => settle(false)}
-                className="sb-interactive flex-1 rounded-2xl border border-neutral-200 py-2.5 text-[13px] font-semibold text-neutral-700 transition-all hover:bg-neutral-50 active:scale-[0.985]"
+                className="sb-interactive flex-1 rounded-2xl border border-neutral-200 py-2.5 text-[13px] font-semibold text-neutral-700 transition-transform transition-opacity hover:bg-neutral-50 active:scale-[0.985]"
               >
                 {state.cancelLabel ?? "Cancel"}
               </button>
@@ -180,7 +180,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 type="button"
                 onClick={() => settle(true)}
                 className={cn(
-                  "sb-interactive flex-1 rounded-2xl py-2.5 text-[13px] font-extrabold text-white transition-all active:scale-[0.985]",
+                  "sb-interactive flex-1 rounded-2xl py-2.5 text-[13px] font-extrabold text-white transition-transform transition-opacity active:scale-[0.985]",
                   state.tone === "danger"
                     ? "bg-[#FF3B30] hover:bg-[#E0342A]"
                     : "bg-[#007AFF] hover:bg-[#0063CC] shadow-[0_1px_0_rgba(255,255,255,0.3)_inset,0_4px_14px_-6px_rgba(0,122,255,0.6)]",

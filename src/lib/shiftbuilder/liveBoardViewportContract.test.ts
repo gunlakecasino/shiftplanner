@@ -549,7 +549,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.270"');
+    expect(version).toContain('"1.271"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -622,8 +622,8 @@ describe("SheetBuilder P1 empty craft / pad / microstates / cmdk ghosts", () => 
     expect(floatingNav).toContain("printBusy");
     expect(floatingNav).toContain("draftApplyBusy");
     expect(floatingNav).toContain("Printing…");
-    expect(floatingNav).toContain("Applying…");
-    expect(draftPill).toContain("Applying…");
+    expect(floatingNav).toContain("APPLY_TO_LIVE_BUSY_LABEL");
+    expect(draftPill).toContain("APPLY_TO_LIVE_BUSY_LABEL");
     expect(draftPill).toContain("aria-busy");
     expect(globalsCss).toContain(".sb-day-strip-btn:focus-visible");
     expect(globalsCss).toContain(".sb-night-action-pill:focus-visible");
@@ -674,5 +674,84 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
     expect(globalsCss).toContain("Canvas pride — live board cards only");
     expect(globalsCss).toContain("sb-tm-trail-chip");
     expect(globalsCss).toContain("content: none !important");
+  });
+});
+
+describe("SheetBuilder Wave 2 density / pad QA / Apply honesty", () => {
+  const padMotion = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/padMotion.ts"),
+    "utf8",
+  );
+  const confirmDialog = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/ConfirmDialog.tsx"),
+    "utf8",
+  );
+  const weekHealth = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/WeekHealthTracker.tsx"),
+    "utf8",
+  );
+  const draftPill = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/DraftStatusPill.tsx"),
+    "utf8",
+  );
+  const qaNote = readFileSync(
+    resolve(process.cwd(), "Agentic/QA/SHEETBUILDER_WAVE2_60FPS.md"),
+    "utf8",
+  );
+
+  it("whispers 0 open on empty aux / swings / zone sections and keeps Assign TM", () => {
+    expect(shiftBuilderBoard).toContain("sectionFillCopy");
+    expect(shiftBuilderBoard).toContain('"0 open"');
+    expect(auxCard).toContain("0 open");
+    expect(auxCard).not.toContain("Set role");
+    expect(globalsCss).toContain(".sb-quiet-open");
+    expect(globalsCss).toContain("border-style: solid !important");
+    const chrome = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    expect(chrome).toContain("Assign TM");
+    expect(chrome).toContain("sb-unassigned-invite");
+    expect(chrome).toContain("w-full shrink-0");
+  });
+
+  it("hardens pad morph: shared origin, instant reduced-motion, neighbor compress + scrim", () => {
+    expect(padMotion).toContain("PAD_MOTION_MS = 280");
+    expect(padMotion).toContain("padInstant");
+    expect(padMotion).toContain("duration: 0");
+    expect(padMotion).not.toContain("x: 20");
+    expect(shiftBuilderBoard).toContain("sb-pad-flyout-open");
+    expect(shiftBuilderBoard).toContain("data-pad-active");
+    expect(globalsCss).toContain("body.sb-pad-flyout-open .sb-builder-stage::after");
+    expect(globalsCss).toContain("transform: scale(0.966)");
+  });
+
+  it("mops transition-all off desk Apply / pads / WeekHealth / confirm", () => {
+    expect(confirmDialog).not.toContain("transition-all");
+    expect(weekHealth).not.toContain("transition-all");
+    expect(floatingNav).not.toContain("transition-all");
+    expect(draftPill).not.toContain("transition-all");
+  });
+
+  it("keeps header and confirm Apply honest — same stakes, confirm still required", () => {
+    expect(floatingNav).toContain("APPLY_TO_LIVE_CONFIRM_LABEL");
+    expect(floatingNav).toContain("APPLY_TO_LIVE_OPEN_CONFIRM");
+    expect(floatingNav).toContain("draftApplyConfirming");
+    expect(floatingNav).toContain("aria-haspopup=\"dialog\"");
+    expect(shiftBuilderClient).toContain("setDraftApplyConfirming");
+    expect(shiftBuilderClient).toContain("await confirmDialog(");
+    expect(shiftBuilderClient).toContain("APPLY_TO_LIVE_CONFIRM");
+    expect(draftPill).toContain("APPLY_TO_LIVE_CONFIRM_LABEL");
+    expect(draftPill).toContain("confirming");
+  });
+
+  it("documents 60fps Frontman QA when live PIN blocks filming", () => {
+    expect(qaNote).toContain("day×5");
+    expect(qaNote).toContain("drag×10");
+    expect(qaNote).toContain("Draft×3");
+    expect(qaNote).toContain("pad×5");
+    expect(globalsCss).toContain("var(--sb-spring-snappy) both");
+    expect(shiftBuilderBoard).toContain("key={key}");
+    expect(shiftBuilderBoard).not.toContain("key={`${dayTransitionKey}");
   });
 });

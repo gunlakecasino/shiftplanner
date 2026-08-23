@@ -7,6 +7,11 @@ import Link from "next/link";
 import {
   MONTH_LONG,
 } from "@/lib/shiftbuilder/dateUtils";
+import {
+  APPLY_TO_LIVE_BUSY_LABEL,
+  APPLY_TO_LIVE_CONFIRM_LABEL,
+  APPLY_TO_LIVE_OPEN_CONFIRM,
+} from "@/lib/shiftbuilder/stakesCopy";
 import type { ShiftBuilderPermissions } from "@/lib/auth/opsAuthTypes";
 import { roleLabel } from "@/lib/auth/permissionCatalog";
 import { MiniCalendar } from "../redesign/components/MiniCalendar";
@@ -115,6 +120,8 @@ export interface FloatingNavProps {
   onToggleDraftMode?: () => void;
   onSaveAllDraft?: () => void;
   draftApplyBusy?: boolean;
+  /** Confirm dialog is the write gate — header Apply must not look live. */
+  draftApplyConfirming?: boolean;
   onDiscardDraft?: () => void;
   isSyncing?: boolean;
   rosterOpen?: boolean;
@@ -220,6 +227,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     onToggleDraftMode,
     onSaveAllDraft,
     draftApplyBusy = false,
+    draftApplyConfirming = false,
     rosterOpen = false,
     onToggleRoster,
     canvasMode = "builder",
@@ -629,16 +637,18 @@ export default function FloatingNav(props: FloatingNavProps) {
                     type="button"
                     className="sb-night-action-pill__apply sb-interactive"
                     onClick={onSaveAllDraft}
-                    disabled={draftApplyBusy}
-                    aria-busy={draftApplyBusy}
-                    title="Apply draft changes to the live board"
-                    aria-label={`Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board`}
+                    disabled={draftApplyBusy || draftApplyConfirming}
+                    aria-busy={draftApplyBusy || draftApplyConfirming}
+                    aria-haspopup="dialog"
+                    aria-expanded={draftApplyConfirming || undefined}
+                    title={APPLY_TO_LIVE_OPEN_CONFIRM}
+                    aria-label={`Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board — confirm required`}
                     style={nightActionSegmentStyle({
                       color: "var(--sb-gold-ink)",
                       fontWeight: 650,
                     })}
                   >
-                    {draftApplyBusy ? "Applying…" : "Apply"}
+                    {draftApplyBusy ? APPLY_TO_LIVE_BUSY_LABEL : APPLY_TO_LIVE_CONFIRM_LABEL}
                   </button>
                 </div>
               ) : (

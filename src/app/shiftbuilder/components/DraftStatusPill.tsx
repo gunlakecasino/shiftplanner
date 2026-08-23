@@ -3,12 +3,19 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { Check, X } from "lucide-react";
+import {
+  APPLY_TO_LIVE_BUSY_LABEL,
+  APPLY_TO_LIVE_CONFIRM_LABEL,
+  APPLY_TO_LIVE_OPEN_CONFIRM,
+} from "@/lib/shiftbuilder/stakesCopy";
 
 export interface DraftStatusPillProps {
   /** Number of unapplied draft slot changes. */
   count: number;
   /** Disables actions while the engine is running / a commit is in flight. */
   applying?: boolean;
+  /** Confirm dialog is open — Apply must not look independently live. */
+  confirming?: boolean;
   onApply: () => void;
   onDiscard: () => void;
   /** Optional: open review for the current draft changes (e.g. spotlight cards or re-open proposal sheet). */
@@ -31,6 +38,7 @@ export interface DraftStatusPillProps {
 const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
   count,
   applying = false,
+  confirming = false,
   onApply,
   onDiscard,
   onReviewChanges,
@@ -38,6 +46,7 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
   if (typeof document === "undefined") return null;
 
   const hasChanges = count > 0;
+  const applyLocked = applying || confirming;
 
   return createPortal(
     <div
@@ -68,9 +77,12 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
           <button
             type="button"
             onClick={onApply}
-            disabled={applying}
-            aria-busy={applying}
-            aria-label={`Apply ${count} draft change${count === 1 ? "" : "s"} to the live board`}
+            disabled={applyLocked}
+            aria-busy={applyLocked}
+            aria-haspopup="dialog"
+            aria-expanded={confirming || undefined}
+            title={APPLY_TO_LIVE_OPEN_CONFIRM}
+            aria-label={`Apply ${count} draft change${count === 1 ? "" : "s"} to the live board — confirm required`}
             className="sb-draft-pill-btn sb-draft-pill-btn--apply flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold"
             style={{
               background: "var(--sb-gold-surface)",
@@ -78,13 +90,13 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
               border: "1px solid var(--sb-gold-border)",
             }}
           >
-            <Check size={12} strokeWidth={2.5} /> {applying ? "Applying…" : "Apply to Live"}
+            <Check size={12} strokeWidth={2.5} /> {applying ? APPLY_TO_LIVE_BUSY_LABEL : APPLY_TO_LIVE_CONFIRM_LABEL}
           </button>
           {onReviewChanges && (
             <button
               type="button"
               onClick={onReviewChanges}
-              disabled={applying}
+              disabled={applyLocked}
               className="sb-draft-pill-btn flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium border border-transparent"
               style={{ color: "var(--sb-optimize-ink)" }}
               title="Review the proposed optimizer changes on the board (D badges + left bars + 'was:' lines)"
@@ -97,7 +109,7 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
       <button
         type="button"
         onClick={onDiscard}
-        disabled={applying}
+        disabled={applyLocked}
         aria-label="Discard draft and keep the live board as is"
         title="Discard draft — the live board stays as it is"
         className="sb-draft-pill-btn flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium text-muted-foreground"

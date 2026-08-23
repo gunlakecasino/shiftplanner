@@ -1275,7 +1275,7 @@ function PackagePrintCommandCenterShell({
               return (
                 <div
                   key={day.index}
-                  className="rounded-xl overflow-hidden border transition-all"
+                  className="rounded-xl overflow-hidden border transition-opacity transition-transform"
                   style={{
                     borderColor: anyOn ? day.color : "#f0f0f4",
                     boxShadow: isActive ? `0 0 0 2px ${day.color}40` : undefined,
@@ -1333,7 +1333,7 @@ function PackagePrintCommandCenterShell({
                           {label}
                         </span>
                         <div
-                          className="w-3 h-3 rounded-full border-[1.5px] flex items-center justify-center transition-all shrink-0"
+                          className="w-3 h-3 rounded-full border-[1.5px] flex items-center justify-center transition-transform transition-opacity shrink-0"
                           style={ds[key] ? { backgroundColor: day.color, borderColor: day.color } : { borderColor: "#d1d5db" }}
                         >
                           {ds[key] && (
@@ -1441,7 +1441,7 @@ function PackagePrintCommandCenterShell({
             <button
               onClick={handlePrint}
               disabled={isPrinting || pageCount === 0}
-              className="flex items-center gap-1.5 text-[12px] font-bold text-white px-4 py-2 rounded-xl transition-all disabled:text-white"
+              className="flex items-center gap-1.5 text-[12px] font-bold text-white px-4 py-2 rounded-xl transition-transform transition-opacity disabled:text-white"
               style={{ backgroundColor: pageCount > 0 ? "#2563EB" : "#d1d5db", cursor: pageCount > 0 && !isPrinting ? "pointer" : "not-allowed" }}
             >
               <Printer size={13} />

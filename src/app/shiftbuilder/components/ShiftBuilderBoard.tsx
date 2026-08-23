@@ -61,6 +61,30 @@ function sectionCountClass(filled: number, isTodayBoard: boolean): string {
   return `count ${tone}${today}`;
 }
 
+/** Builder empty sections whisper "0 open"; print keeps Golden FILLED copy. */
+function sectionFillCopy(
+  filled: number,
+  total: number,
+  isPrint: boolean,
+  compact = false,
+): string {
+  if (isPrint) return `${filled} / ${total} FILLED`;
+  if (filled === 0) return "0 open";
+  return compact ? `${filled}/${total}` : `${filled} / ${total}`;
+}
+
+function isPadActiveHost(
+  hostSlotKey: string,
+  selectedSlotKey?: string | null,
+  taskSlotKey?: string | null,
+): boolean {
+  const active = selectedSlotKey || taskSlotKey;
+  if (!active) return false;
+  if (active === hostSlotKey) return true;
+  const rrMatch = active.match(/^[MW]RR(\d+)$/);
+  return Boolean(rrMatch && (hostSlotKey === `RR${rrMatch[1]}` || hostSlotKey === `rr-${rrMatch[1]}`));
+}
+
 /** Stable hosts — no remount fade. Day paper motion lives on CSS, not card keys. */
 function builderDayCardMotionProps(
   _idx: number,
@@ -750,6 +774,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     return () => document.body.classList.remove("sb-tablet-dock-open");
   }, [tabletOverlayOpen]);
 
+  // Desktop flyout: neighbors compress + light scrim. Rails stay; reduced-motion snaps.
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const flyoutOpen =
+      !isPrintPreview && !useTabletDock && !!(selectedSlotKey || activeTaskEditPad);
+    document.body.classList.toggle("sb-pad-flyout-open", flyoutOpen);
+    return () => document.body.classList.remove("sb-pad-flyout-open");
+  }, [isPrintPreview, useTabletDock, selectedSlotKey, activeTaskEditPad]);
+
   // Keep the selected placement visible when an inspector opens or changes
   // shape. In portrait the inspector is a bottom sheet, so centering within
   // the remaining canvas prevents the selected card from being hidden behind
@@ -1399,9 +1432,13 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     isTodayBoard,
                   )}
                 >
-                  {ZONE_DEFS.filter((d) =>
-                    slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
-                  ).length} / 10 FILLED
+                  {sectionFillCopy(
+                    ZONE_DEFS.filter((d) =>
+                      slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                    ).length,
+                    10,
+                    isPrintPreview,
+                  )}
                 </span>
                 {conflictingTms.size > 0 && showDigitalAssists && (
                   <span
@@ -1481,6 +1518,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       className={`${gridHostClass} sb-day-card-host`}
                       data-slot-key={key}
                       data-placement-host={key}
+                      data-pad-active={
+                        isPadActiveHost(key, selectedSlotKey, activeTaskEditPad?.slotKey)
+                          ? "true"
+                          : undefined
+                      }
                       {...builderDayCardMotionProps(idx, reducedMotion, allowCardDayEnter)}
                     >
                       {cardContent}
@@ -1518,11 +1560,15 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     isTodayBoard,
                   )}
                 >
-                  {RR_DEFS.reduce((acc, d) => {
-                    const m = slotShowsFilled(`MRR${d.num}`, assignments, isDraftMode, draftAssignments);
-                    const w = slotShowsFilled(`WRR${d.num}`, assignments, isDraftMode, draftAssignments);
-                    return acc + (m ? 1 : 0) + (w ? 1 : 0);
-                  }, 0)} / 10 FILLED
+                  {sectionFillCopy(
+                    RR_DEFS.reduce((acc, d) => {
+                      const m = slotShowsFilled(`MRR${d.num}`, assignments, isDraftMode, draftAssignments);
+                      const w = slotShowsFilled(`WRR${d.num}`, assignments, isDraftMode, draftAssignments);
+                      return acc + (m ? 1 : 0) + (w ? 1 : 0);
+                    }, 0),
+                    10,
+                    isPrintPreview,
+                  )}
                 </span>
               </div>
               <div ref={restroomsGridRef} className={rrGridClass} style={{ gridAutoRows: builderGridAutoRows }}>
@@ -1622,6 +1668,12 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       data-slot-key={key}
                       data-pad-host={rrHostId}
                       data-placement-host={rrHostId}
+                      data-pad-active={
+                        isPadActiveHost(key, selectedSlotKey, activeTaskEditPad?.slotKey) ||
+                        isPadActiveHost(rrHostId, selectedSlotKey, activeTaskEditPad?.slotKey)
+                          ? "true"
+                          : undefined
+                      }
                       {...builderDayCardMotionProps(idx, reducedMotion, allowCardDayEnter)}
                     >
                       {cardContent}
@@ -1661,10 +1713,22 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                   )}
                 >
                   {/* Rail header is ~200px wide in the builder — compact "N/M" keeps the chip whole. */}
-                  {auxDefs.filter((d) =>
-                    (d.role !== "blank" || !!d.label) && slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
-                  ).length}{isPrintPreview ? " / " : "/"}{auxDefs.filter((d) => d.role !== "blank" || !!d.label).length}{isPrintPreview ? " FILLED" : ""}
-                  {isTodayBoard && todayOpenAuxCount > 0 ? (
+                  {sectionFillCopy(
+                    auxDefs.filter((d) =>
+                      (d.role !== "blank" || !!d.label) &&
+                      slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                    ).length,
+                    auxDefs.filter((d) => d.role !== "blank" || !!d.label).length,
+                    isPrintPreview,
+                    !isPrintPreview,
+                  )}
+                  {isTodayBoard &&
+                  todayOpenAuxCount > 0 &&
+                  auxDefs.some(
+                    (d) =>
+                      (d.role !== "blank" || !!d.label) &&
+                      slotShowsFilled(d.key, assignments, isDraftMode, draftAssignments),
+                  ) ? (
                     <span className="ml-1 font-medium text-[#AEAEB2]">· {todayOpenAuxCount} open</span>
                   ) : null}
                 </span>
@@ -1774,6 +1838,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           className={`${gridHostClass} sb-day-card-host`}
                           data-slot-key={key}
                           data-placement-host={key}
+                          data-pad-active={
+                            isPadActiveHost(key, selectedSlotKey, activeTaskEditPad?.slotKey)
+                              ? "true"
+                              : undefined
+                          }
                           {...builderDayCardMotionProps(idx, reducedMotion, allowCardDayEnter)}
                         >
                           {cardContent}
@@ -1903,7 +1972,9 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                 title={isOpen ? `${row.label} is open` : `Open ${row.label}`}
                               >
                                 <span className="label">{row.label}</span>
-                                <span className="sb-flow-overlap-count">{filledCount}</span>
+                                <span className="sb-flow-overlap-count">
+                                  {filledCount === 0 ? "0 open" : filledCount}
+                                </span>
                                 <span className="sb-flow-overlap-time">{row.countLabel}</span>
                                 <span className="ms sb-flow-overlap-chevron" aria-hidden="true">
                                   chevron_right
@@ -1919,6 +1990,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                     className={`${gridHostClass} sb-day-card-host`}
                                     data-slot-key={slotKey}
                                     data-placement-host={slotKey}
+                                    data-pad-active={
+                                      isPadActiveHost(slotKey, selectedSlotKey, activeTaskEditPad?.slotKey)
+                                        ? "true"
+                                        : undefined
+                                    }
                                     {...builderDayCardMotionProps(i, reducedMotion, allowCardDayEnter)}
                                   >
                                     <OverlapSlot

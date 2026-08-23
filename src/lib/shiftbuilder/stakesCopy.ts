@@ -14,6 +14,12 @@ export const APPLY_TO_LIVE_DISCARD_POINT =
 
 export const APPLY_TO_LIVE_CONFIRM_LABEL = "Apply to Live";
 
+export const APPLY_TO_LIVE_BUSY_LABEL = "Applying…";
+
+/** Header / pill title — confirm is the real write gate. */
+export const APPLY_TO_LIVE_OPEN_CONFIRM =
+  "Opens confirm, then writes to the live board — TMs will see it immediately.";
+
 export const PUBLISH_DAY_CONFIRM =
   "Publishing makes this night visible to TMs on the floor now.";
 

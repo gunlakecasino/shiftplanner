@@ -297,7 +297,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const headerLabel = (isUnsetBlank && !hasTM && !editingLabel) ? (
     <button
       type="button"
-      className="flex items-center gap-1 min-w-0 max-w-full text-left text-[var(--ios-label-tertiary)]"
+      className="sb-quiet-open flex items-center min-w-0 max-w-full text-left"
       onClick={toggleRolePicker}
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -306,10 +306,9 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           setEditingLabel(true);
         }
       }}
-      title="Tap to set role · pick Custom for your own label"
+      title="Tap to set role"
     >
-      <span className="text-[14px] leading-none shrink-0 font-light">+</span>
-      <span>Set role</span>
+      <span>0 open</span>
     </button>
   ) : editingLabel ? (
     <input
@@ -351,7 +350,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       title={isBlank ? "Tap to set role · double-click to edit label" : "Tap to change role · double-click to edit label"}
     >
       {/* Role icon lives in CardSlotHeader's icon slot — repeating it here doubled the glyph and squeezed the label. */}
-      <span className="truncate">{def.label || (isBlank ? "Set role" : "")}</span>
+      <span className="truncate">{def.label || (isBlank ? "0 open" : "")}</span>
     </button>
   );
 
@@ -487,6 +486,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         className={cardBodyInteriorClass(showDigitalAssists, "min-h-0")}
         style={cardBodyInteriorStyle(showDigitalAssists, showDigitalAssists ? 8 : 10)}
       >
+        {isUnsetBlank && !hasTM ? null : (
         <div
           className="sb-card-assign-zone shrink-0"
           {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
@@ -514,6 +514,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             onUnassignedClick={(e) => handleAssignZoneClick(e, def.key, onCardClick, isLocked)}
           />
         </div>
+        )}
 
             {showDigitalAssists && !isTodayKiosk ? (
               <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />
