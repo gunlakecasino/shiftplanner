@@ -92,7 +92,7 @@ export interface FloatingNavProps {
   currentUser?: { full_name: string; username: string; role: string };
   onLogout?: () => void;
   onOpenSettings?: (tab?: string) => void;
-  /** Primary day placement action: opens the SheetBuilder run confirmation. */
+  /** Hidden from topbar chrome. Prop retained so callers do not have to unwire; engine runtime stays. */
   onOptimizeNight?: () => void;
   engineRunning?: boolean;
   /** Hidden from chrome (PR A). Prop retained so callers do not have to unwire yet. */
@@ -208,8 +208,6 @@ export default function FloatingNav(props: FloatingNavProps) {
     currentUser,
     onLogout,
     onOpenSettings,
-    onOptimizeNight,
-    engineRunning = false,
     onClearDay,
     onRefreshDay,
     refreshDayBusy = false,
@@ -232,15 +230,12 @@ export default function FloatingNav(props: FloatingNavProps) {
 
   const canEditAssignments = permissions?.canEditAssignments ?? false;
   const canPublish = permissions?.canPublish ?? false;
-  const canRunEngine = permissions?.canRunEngine ?? false;
   const canAccessSudo = permissions?.canAccessSudo ?? false;
   const canManageTeam = permissions?.canManageTeam ?? false;
   const canApplySchedules = permissions?.canApplySchedules ?? false;
   const canSeeDraftData = permissions?.canSeeDraftData ?? false;
   const showDraftTools = canSeeDraftData && canEditAssignments;
   const showPublishControls = canPublish;
-  const showEngineTools = canRunEngine;
-  const engineBusy = engineRunning;
   const showAdminLinks = canAccessSudo;
   const showTeamLink = canManageTeam || canApplySchedules || canAccessSudo;
 
@@ -604,25 +599,6 @@ export default function FloatingNav(props: FloatingNavProps) {
             aria-label="Night actions"
             style={nightActionClusterStyle()}
           >
-            {showEngineTools && onOptimizeNight && (
-              <button
-                type="button"
-                className="sb-night-action-pill sb-night-action-pill--engine sb-interactive"
-                style={nightActionSegmentStyle(
-                  engineBusy
-                    ? { color: "var(--sb-optimize-ink)" }
-                    : undefined,
-                )}
-                disabled={engineBusy}
-                onClick={onOptimizeNight}
-                aria-busy={engineBusy}
-                title="Engine — results land in Draft"
-                aria-label="Engine — run day placements"
-              >
-                <span>{engineRunning ? "Running…" : "Engine"}</span>
-              </button>
-            )}
-
             {showDraftTools && onToggleDraftMode && (
               isDraftMode && draftSlotCount > 0 && onSaveAllDraft ? (
                 <div

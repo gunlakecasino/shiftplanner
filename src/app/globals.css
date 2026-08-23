@@ -6443,7 +6443,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
     touch-action: manipulation;
   }
 
-  /* Night-action pills stay labeled and compact so Engine / Draft / Print
+  /* Night-action pills stay labeled and compact so Draft / Print
      remain visible at iPad landscape (~1024) without opening More. */
   .sb-sheetbuilder-topbar .sb-night-action-pill,
   .sb-sheetbuilder-topbar .sb-night-action-pill__segment,

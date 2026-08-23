@@ -124,13 +124,13 @@ describe("SheetBuilder desk refine + Projects retirement", () => {
     expect(shiftBuilderClient).not.toContain("useTimefoldOptimize");
   });
 
-  it("keeps Engine / Draft / Print as one quiet velvet cluster without sparkle chrome", () => {
+  it("keeps Draft / Print as one quiet velvet cluster without sparkle chrome", () => {
     expect(floatingNav).toContain("nightActionClusterStyle");
     expect(floatingNav).not.toContain("velvetGlassPillStyle");
-    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
-    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).not.toContain("Sparkles");
@@ -171,14 +171,14 @@ describe("SheetBuilder desk refine + Projects retirement", () => {
 });
 
 describe("SheetBuilder night actions (PR B)", () => {
-  it("surfaces Engine, Draft, and Print as velvet glass pills", () => {
+  it("surfaces Draft and Print as velvet glass pills", () => {
     expect(floatingNav).toContain("nightActionClusterStyle");
     expect(floatingNav).not.toContain("velvetGlassPillStyle");
-    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
-    expect(floatingNav).toContain("Running…");
-    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).not.toContain("Running…");
+    expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).toContain("aria-label=\"Night actions\"");
@@ -206,7 +206,7 @@ describe("SheetBuilder night actions (PR B)", () => {
   });
 
   it("does not invent a third accent palette", () => {
-    expect(floatingNav).toContain("var(--sb-optimize-ink)");
+    expect(floatingNav).not.toContain("var(--sb-optimize-ink)");
     expect(floatingNav).toContain("var(--sb-gold-ink)");
     expect(floatingNav).not.toContain("--sb-night-accent");
     expect(floatingNav).not.toContain("#339CFF");
@@ -298,7 +298,7 @@ describe("SheetBuilder modern lightweight desk", () => {
     expect(floatingNav).not.toContain("velvetGlassPillStyle");
     expect(floatingNav).not.toContain("backdropFilter");
     expect(floatingNav).toContain('background: "#FFFFFF"');
-    expect(floatingNav).toContain('"Engine"');
+    expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).not.toContain("Bell");
@@ -340,7 +340,7 @@ describe("SheetBuilder modern lightweight desk measured sit", () => {
     expect(globalsCss).toContain(".sb-builder-pinned-footer {\n  padding-left: 16px !important");
   });
 
-  it("evens Engine/Draft/Print width and insets the roster badge off the glyph", () => {
+  it("evens Draft/Print width and insets the roster badge off the glyph", () => {
     expect(floatingNav).toContain("minWidth: 68");
     expect(floatingNav).not.toContain("Bell");
     expect(globalsCss).toContain("min-width: 68px");
@@ -448,9 +448,9 @@ describe("SheetBuilder chrome match (light topbar)", () => {
     expect(globalsCss).not.toContain("#E8E0D2");
   });
 
-  it("keeps Engine / Draft / Print, date strip, Published, and account chrome", () => {
+  it("keeps Draft / Print, date strip, Published, and account chrome", () => {
     expect(floatingNav).toContain("nightActionClusterStyle");
-    expect(floatingNav).toContain("sb-night-action-pill--engine");
+    expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
     expect(floatingNav).toContain("sb-topbar-day-strip");
