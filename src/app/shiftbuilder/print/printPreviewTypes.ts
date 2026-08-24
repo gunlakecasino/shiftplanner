@@ -63,7 +63,17 @@ export type PrintOverlapRow = {
 export type PrintDaySnapshot = {
   dayIndex: number;
   day: DayDef;
-  assignments: Record<string, { tmId?: string; tmName?: string; breakGroup?: number; isLocked?: boolean }>;
+  assignments: Record<
+    string,
+    {
+      tmId?: string;
+      tmName?: string;
+      breakGroup?: number;
+      isLocked?: boolean;
+      additionalCoverageSlots?: string[] | null;
+      additional_coverage_slots?: string[] | null;
+    }
+  >;
   tasksBySlot: Record<string, NightSlotTask[]>;
   auxDefs: AuxDef[];
   amOverlapDayName: string;

@@ -6,8 +6,12 @@ import {
   buildPlannerRoster,
   buildPortraitPlannerPages,
   paginatePlannerRoster,
+  plannerAuxLabel,
   plannerRosterBand,
+  plannerRosterMark,
+  plannerSlotCode,
 } from "@/app/shiftbuilder/print/buildPortraitPlannerModel";
+import { rasterArtboardSizePx } from "@/app/shiftbuilder/print/rasterPrep";
 import { assembleGoldenPrintPages } from "@/app/shiftbuilder/print/assemblePages";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "@/app/shiftbuilder/print/goldenConstants";
 import { LETTER_PORTRAIT_PT, PLANNER_ROSTER_PER_PAGE, PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "@/app/shiftbuilder/print/portraitConstants";
@@ -77,10 +81,33 @@ describe("portrait planner model", () => {
     expect(printPageOrientation("planner")).toBe("portrait");
   });
 
-  it("marks overlaps quietly and leaves full-grave unmarked", () => {
+  it("marks overlaps and full-grave with quiet FG / PM / AM pills", () => {
     expect(plannerRosterBand({ isFullGrave: true })).toBe("grave");
     expect(plannerRosterBand({ isPMOverlap: true })).toBe("pm");
     expect(plannerRosterBand({ isAMOverlap: true })).toBe("am");
+    expect(plannerRosterBand({})).toBe("other");
+    expect(plannerRosterMark("grave")).toBe("FG");
+    expect(plannerRosterMark("pm")).toBe("PM");
+    expect(plannerRosterMark("am")).toBe("AM");
+    expect(plannerRosterMark("other")).toBeNull();
+  });
+
+  it("uses short huddle codes instead of Golden long titles", () => {
+    expect(plannerSlotCode("Z5")).toBe("Z5");
+    expect(plannerSlotCode("Z10")).toBe("Z10");
+    expect(plannerSlotCode("WRR7")).toBe("WRR7");
+    expect(plannerSlotCode("MRR1")).toBe("MRR1");
+    expect(plannerSlotCode("OL-PM-0")).toBe("PM 1");
+    expect(plannerSlotCode("OL-AM-5")).toBe("AM 6");
+    expect(plannerAuxLabel({ key: "AUX1", role: "admin", label: "ADMIN", locations: [] }, [
+      { key: "AUX1", role: "admin", label: "ADMIN", locations: [] },
+    ])).toBe("ADM");
+    expect(plannerAuxLabel({ key: "AUX2", role: "z9sr", label: "Z9 SR", locations: [] }, [
+      { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: [] },
+    ])).toBe("Z9SR");
+    expect(plannerAuxLabel({ key: "AUX3", role: "blank", label: "", locations: [] }, [
+      { key: "AUX3", role: "blank", label: "", locations: [] },
+    ])).toBe("AUX");
   });
 
   it("builds a GDS roster and marks who is already placed", () => {
@@ -121,6 +148,46 @@ describe("portrait planner model", () => {
     expect(model.zones.filter((card) => card.empty).length).toBeGreaterThan(0);
     expect(model.aux.find((card) => card.key === "AUX3")?.empty).toBe(true);
     expect(model.zones.find((card) => card.key === "Z1")?.tmName).toBe("Jordan");
+    expect(model.zones.find((card) => card.key === "Z5")?.label).toBe("Z5");
+    expect(model.restrooms.find((card) => card.key === "MRR1")?.label).toBe("MRR1");
+    expect(model.aux.find((card) => card.key === "AUX1")?.label).toBe("ADM");
+    expect(model.aux.find((card) => card.key === "AUX3")?.label).toBe("AUX");
+    expect(model.overlaps[0].slots[0].label).toBe("PM 1");
+  });
+
+  it("keeps the primary TM on the primary slot and marks dual coverage honestly", () => {
+    const model = buildPortraitPlannerPages(
+      snapshot({
+        assignments: {
+          Z6: {
+            tmId: "tm-darlene",
+            tmName: "Darlene",
+            additionalCoverageSlots: ["Z7"],
+          },
+        },
+      }),
+    )[0];
+    const z6 = model.zones.find((card) => card.key === "Z6");
+    const z7 = model.zones.find((card) => card.key === "Z7");
+    expect(z6?.tmName).toBe("Darlene");
+    expect(z6?.empty).toBe(false);
+    expect(z6?.covers).toEqual(["Z7"]);
+    expect(z7?.tmName).toBeNull();
+    expect(z7?.empty).toBe(true);
+    expect(z7?.coveredVia).toBe("Z6");
+  });
+
+  it("does not invent a primary by moving a TM onto a covered slot", () => {
+    const model = buildPortraitPlannerPages(
+      snapshot({
+        assignments: {
+          Z7: { tmId: "tm-darlene", tmName: "Darlene" },
+        },
+      }),
+    )[0];
+    expect(model.zones.find((card) => card.key === "Z6")?.tmName).toBeNull();
+    expect(model.zones.find((card) => card.key === "Z7")?.tmName).toBe("Darlene");
+    expect(model.zones.find((card) => card.key === "Z6")?.coveredVia).toBeNull();
   });
 });
 
@@ -140,11 +207,59 @@ describe("portrait planner page", () => {
     expect(html).toContain(">AM<");
     expect(html).toContain("Restrooms");
     expect(html).toContain("Zones");
-    expect(html).toContain("Auxiliary");
+    expect(html).toContain(">Aux<");
     expect(html).toContain("Overlaps");
     expect(html).toContain("sb-planner-slot-open");
+    expect(html).toContain("sb-planner-slot-dash");
+    expect(html).toContain("Planner");
+    expect(html).toContain("Friday");
+    expect(html).toContain("huddle / clipboard");
+    expect(html).toContain("Z5");
+    expect(html).toContain("MRR1");
+    expect(html).toContain("ADM");
+    expect(html).toContain(">FG<");
+    expect(html).not.toContain("ZONE 5 + HIGH LIMITS");
+    expect(html).not.toContain("ZONE 7 + SMOKING ROOM");
+    expect(html).not.toContain("OPEN AUX");
     expect(html).not.toContain("Break");
     expect(html).not.toContain("WAVE");
+  });
+
+  it("prints dual coverage as a primary +cue and a via mark, not a second owner", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortraitPlannerPage, {
+        model: buildPortraitPlannerPages(
+          snapshot({
+            assignments: {
+              Z6: {
+                tmId: "tm-darlene",
+                tmName: "Darlene",
+                additionalCoverageSlots: ["Z7"],
+              },
+            },
+          }),
+        )[0],
+      }),
+    );
+    expect(html).toContain("Darlene");
+    expect(html).toContain("+Z7");
+    expect(html).toContain("via Z6");
+    expect(html.match(/Darlene/g)?.length).toBe(1);
+  });
+});
+
+describe("portrait planner raster sizing", () => {
+  it("does not force Golden landscape metrics onto a planner artboard", () => {
+    const planner = {
+      getAttribute: (name: string) => (name === "data-print-view" ? "planner" : null),
+      classList: { contains: (name: string) => name === "sb-planner-sheet" },
+    } as unknown as HTMLElement;
+    const golden = {
+      getAttribute: () => "deployment",
+      classList: { contains: () => false },
+    } as unknown as HTMLElement;
+    expect(rasterArtboardSizePx(planner)).toEqual({ width: 816, height: 1056 });
+    expect(rasterArtboardSizePx(golden)).toEqual({ width: 1056, height: 816 });
   });
 });
 

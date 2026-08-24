@@ -8,6 +8,7 @@ import type { PrintConfig } from "@/app/shiftbuilder/components/PrintCommandCent
 import { MARGIN_ZOOM } from "@/app/shiftbuilder/components/PrintCommandCenter";
 import { assembleGoldenPrintPages } from "@/app/shiftbuilder/print/assemblePages";
 import { LETTER_LANDSCAPE_PT } from "@/app/shiftbuilder/print/goldenConstants";
+import { LETTER_PORTRAIT_PT } from "@/app/shiftbuilder/print/portraitConstants";
 import {
   getPrintImagePlacementPt,
   getPrintZoom,
@@ -91,6 +92,16 @@ describe("Golden PDF placement (undistorted inside browser margins)", () => {
         8,
       );
     }
+  });
+
+  it("places a portrait planner page on portrait letter without landscape crop", () => {
+    const p = getPrintImagePlacementPt(baseConfig({ margins: "narrow" }), "portrait");
+    expect(p.width / p.height).toBeCloseTo(
+      LETTER_PORTRAIT_PT.width / LETTER_PORTRAIT_PT.height,
+      8,
+    );
+    expect(p.x + p.width).toBeLessThanOrEqual(LETTER_PORTRAIT_PT.width + 0.01);
+    expect(p.y + p.height).toBeLessThanOrEqual(LETTER_PORTRAIT_PT.height + 0.01);
   });
 });
 

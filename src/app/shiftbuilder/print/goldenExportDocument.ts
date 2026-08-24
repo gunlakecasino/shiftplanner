@@ -87,15 +87,15 @@ async function waitForIframeAssets(doc: Document): Promise<void> {
   await doc.fonts.ready;
 }
 
-function buildExportIframe(): HTMLIFrameElement {
+function buildExportIframe(widthPx = GOLDEN_WIDTH_PX, heightPx = GOLDEN_HEIGHT_PX): HTMLIFrameElement {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText = [
     "position:fixed",
     `left:${GOLDEN_RASTER_STAGING_LEFT_PX}px`,
     "top:0",
-    `width:${GOLDEN_WIDTH_PX}px`,
-    `height:${GOLDEN_HEIGHT_PX}px`,
+    `width:${widthPx}px`,
+    `height:${heightPx}px`,
     "border:0",
     "margin:0",
     "padding:0",
@@ -335,7 +335,8 @@ export async function rasterizeGoldenPageHtml(args: {
   pixelRatio: number;
   usePng: boolean;
 }): Promise<RasterResult> {
-  const iframe = buildExportIframe();
+  const iframeSize = printArtboardSizePx(args.kind);
+  const iframe = buildExportIframe(iframeSize.width, iframeSize.height);
 
   try {
     const doc = iframe.contentDocument;
@@ -359,7 +360,7 @@ export async function rasterizeGoldenPageHtml(args: {
       `<link rel="stylesheet" href="${PRINT_PREVIEW_STYLESHEET_HREF}" />` +
       "</head><body class=\"printing-dual-mode golden-export-raster\" " +
       'style="margin:0;padding:0;background:#ffffff">' +
-      `<div class="print-dual-container" style="width:${GOLDEN_WIDTH_PX}px;height:${GOLDEN_HEIGHT_PX}px;background:#ffffff;overflow:hidden;margin:0;padding:0">` +
+      `<div class="print-dual-container" style="width:${printArtboardSizePx(args.kind).width}px;height:${printArtboardSizePx(args.kind).height}px;background:#ffffff;overflow:visible;margin:0;padding:0">` +
       `${args.pageHtml}</div></body></html>`,
     );
     doc.close();
@@ -381,17 +382,22 @@ export async function rasterizeGoldenPageHtml(args: {
     } else if (!isGravesSheet && args.kind === "deploy") {
       postProcessOfficialDeploymentArtboard(artboard);
     }
-    applyArtboardContract(artboard);
+    applyArtboardContract(artboard, args.kind);
     artboard.getBoundingClientRect();
     await waitForGoldenRenderSettled();
     await new Promise<void>((r) => {
       requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     });
 
+    const size = printArtboardSizePx(args.kind);
     return withWhiteDocumentBackground(() =>
       captureArtboardPixels(artboard, {
         pixelRatio: args.pixelRatio,
         usePng: args.usePng,
+        center: args.kind !== "planner",
+        direct: args.kind === "planner",
+        widthPx: size.width,
+        heightPx: size.height,
       }),
     );
   } finally {

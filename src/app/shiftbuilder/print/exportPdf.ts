@@ -202,7 +202,9 @@ export async function rasterizeGoldenPrintPages(
         ab.style.visibility = j === i ? "visible" : "hidden";
       });
       const size = printArtboardSizePx(page.kind);
+      session.container.style.width = `${size.width}px`;
       session.container.style.height = `${size.height}px`;
+      session.container.style.overflow = "visible";
       // Force a layout + paint pass for the newly-shown artboard before capture.
       artboards[i].getBoundingClientRect();
       await waitForGoldenRenderSettled();
