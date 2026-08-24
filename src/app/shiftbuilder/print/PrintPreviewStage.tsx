@@ -136,7 +136,7 @@ export function PrintPreviewStage({
     day: selectedDay,
     dayIndex: selectedDayIndex,
     enabled: true,
-    includePlacementTrails: printVariant === "planning",
+    includePlacementTrails: printVariant === "planning" || isPlanner,
     isDraftMode,
     draftAssignments,
     liveBoard,

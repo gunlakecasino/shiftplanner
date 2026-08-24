@@ -84,7 +84,10 @@ export type PrintDaySnapshot = {
   /** Approved Graves work due for this exact shift date. */
   sideTasks?: PrintSideTask[];
   nightStatus?: "published" | "draft";
-  /** Last three worked-grave placement labels per TM, newest first. */
+  /**
+   * Newest-first worked-grave placement labels per TM.
+   * Planner prints up to 5; Golden still displays 3.
+   */
   placementTrailsByTmId?: Record<string, string[]>;
   /**
    * Graves Default Schedule + on-call for the left-hand portrait planner column.

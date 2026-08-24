@@ -60,7 +60,7 @@ export async function capturePrintPreviewPages(args: {
 
     onProgress?.(`Loading ${def.name}…`);
     let snapshot = await buildPrintDaySnapshot(def, dayIdx, {
-      includePlacementTrails: printVariant === "planning",
+      includePlacementTrails: printVariant === "planning" || Boolean(dayConf.printPlanner),
     });
     const liveOverlay = liveOverlaysByDay?.get(dayIdx);
     if (liveOverlay) {
@@ -73,7 +73,7 @@ export async function capturePrintPreviewPages(args: {
     ) {
       snapshot = applyDraftToPrintSnapshot(snapshot, draftAssignments);
     }
-    if (printVariant === "planning") {
+    if (printVariant === "planning" || Boolean(dayConf.printPlanner)) {
       snapshot = await hydratePrintPlacementTrails(snapshot);
     }
     const entry: { deployHTML?: string; breaksHTML?: string; plannerHTML?: string[] } = {};

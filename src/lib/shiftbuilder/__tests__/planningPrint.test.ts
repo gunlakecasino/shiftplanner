@@ -175,19 +175,21 @@ describe("planning worksheet print", () => {
     expect(applyPrintRoleDefaults(base, false).includeTimestamp).toBe(true);
   });
 
-  it("anchors the history read to the planned night and keeps three newest placements", async () => {
+  it("anchors the history read to the planned night and keeps five newest placements", async () => {
     const history: ZoneDetailEntry = {
       tmId: "tm-jack",
       tmName: "Jack",
       zoneDates: {
-        Z4: ["2026-08-13"],
-        Z3: ["2026-08-12"],
-        Z2: ["2026-08-11"],
-        Z1: ["2026-08-10"],
+        Z5: ["2026-08-13"],
+        Z4: ["2026-08-12"],
+        Z3: ["2026-08-11"],
+        Z2: ["2026-08-10"],
+        Z1: ["2026-08-09"],
+        Z9: ["2026-08-08"],
       },
-      zoneCounts: { Z1: 1, Z2: 1, Z3: 1, Z4: 1 },
-      totalAssignments: 4,
-      totalNights: 4,
+      zoneCounts: { Z1: 1, Z2: 1, Z3: 1, Z4: 1, Z5: 1, Z9: 1 },
+      totalAssignments: 6,
+      totalNights: 6,
       lastDate: "2026-08-13",
       zoneDow: {},
     };
@@ -202,9 +204,11 @@ describe("planning worksheet print", () => {
     const hydrated = await hydratePrintPlacementTrails(base);
 
     expect(hydrated.placementTrailsByTmId?.["tm-jack"]).toEqual([
+      "Z5",
       "Z4",
       "Z3",
       "Z2",
+      "Z1",
     ]);
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(request.throughDate).toBe("2026-08-14");
