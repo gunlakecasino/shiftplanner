@@ -3,7 +3,16 @@ import {
   GOLDEN_RASTER_STAGING_LEFT_PX,
   GOLDEN_WIDTH_PX,
 } from "./goldenConstants";
+import { printArtboardSizePx } from "./printPageGeometry";
 import type { GoldenPrintSession } from "./printSession";
+
+/** Size the raster shell from the artboard kind — never force Golden onto planner. */
+export function rasterArtboardSizePx(artboard: HTMLElement): { width: number; height: number } {
+  const view = artboard.getAttribute("data-print-view");
+  const kind =
+    view === "planner" || artboard.classList.contains("sb-planner-sheet") ? "planner" : "deploy";
+  return printArtboardSizePx(kind);
+}
 
 /**
  * Stage export artboards off-screen at full opacity so html-to-image captures faithfully
@@ -255,9 +264,11 @@ export function prepareExportSessionForRaster(session: GoldenPrintSession): void
     "visibility:visible",
     "pointer-events:none",
     "z-index:-1",
-    `width:${GOLDEN_WIDTH_PX}px`,
-    `height:${GOLDEN_HEIGHT_PX}px`,
-    "overflow:hidden",
+    `min-width:${GOLDEN_WIDTH_PX}px`,
+    `min-height:${GOLDEN_HEIGHT_PX}px`,
+    "width:auto",
+    "height:auto",
+    "overflow:visible",
     "background:#ffffff",
   ].join(";");
 
@@ -274,13 +285,14 @@ export function prepareArtboardForRaster(artboard: HTMLElement, _printZoom = 1):
   artboard.classList.add("print-artboard");
 
   const isGoldenArtboard = artboard.classList.contains("print-artboard");
+  const size = rasterArtboardSizePx(artboard);
   if (!isGoldenArtboard) {
     artboard.style.cssText = [
-      `width:${GOLDEN_WIDTH_PX}px`,
-      `height:${GOLDEN_HEIGHT_PX}px`,
-      `min-height:${GOLDEN_HEIGHT_PX}px`,
-      `max-height:${GOLDEN_HEIGHT_PX}px`,
-      `max-width:${GOLDEN_WIDTH_PX}px`,
+      `width:${size.width}px`,
+      `height:${size.height}px`,
+      `min-height:${size.height}px`,
+      `max-height:${size.height}px`,
+      `max-width:${size.width}px`,
       "overflow:hidden",
       "box-sizing:border-box",
       "margin:0",
@@ -296,11 +308,12 @@ export function prepareArtboardForRaster(artboard: HTMLElement, _printZoom = 1):
       "opacity:1",
     ].join(";");
   } else {
-    artboard.style.width = `${GOLDEN_WIDTH_PX}px`;
-    artboard.style.height = `${GOLDEN_HEIGHT_PX}px`;
-    artboard.style.minHeight = `${GOLDEN_HEIGHT_PX}px`;
-    artboard.style.maxHeight = `${GOLDEN_HEIGHT_PX}px`;
-    // Capture at native Golden size; margin zoom is applied when placing in PDF (matches browser print).
+    artboard.style.width = `${size.width}px`;
+    artboard.style.height = `${size.height}px`;
+    artboard.style.minHeight = `${size.height}px`;
+    artboard.style.maxHeight = `${size.height}px`;
+    artboard.style.maxWidth = `${size.width}px`;
+    // Capture at native sheet size; margin zoom is applied when placing in PDF.
     artboard.style.zoom = "1";
     artboard.style.transform = "none";
     artboard.style.margin = "0";

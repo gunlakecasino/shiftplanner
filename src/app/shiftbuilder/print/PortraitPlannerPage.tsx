@@ -1,32 +1,36 @@
 import React from "react";
 import type { PortraitPlannerPageModel, PlannerRosterEntry, PlannerSlotCard } from "./buildPortraitPlannerModel";
+import { plannerRosterMark } from "./buildPortraitPlannerModel";
 import "./printPreview.css";
 
 export type PortraitPlannerPageProps = {
   model: PortraitPlannerPageModel;
 };
 
-function bandMark(band: PlannerRosterEntry["band"]): string {
-  if (band === "pm") return "PM";
-  if (band === "am") return "AM";
-  return "";
-}
-
 function PlannerSlotBox({ card }: { card: PlannerSlotCard }) {
+  const coverCue = card.covers.length > 0 ? `+${card.covers.join(" +")}` : null;
+  const viaCue = card.coveredVia ? `via ${card.coveredVia}` : null;
+  const isCovered = Boolean(card.empty && card.coveredVia);
+  const stateClass = card.empty ? (isCovered ? " is-covered" : " is-empty") : "";
+
   return (
     <div
-      className={`sb-planner-slot${card.empty ? " is-empty" : ""}`}
+      className={`sb-planner-slot${stateClass}`}
       style={{ ["--sb-planner-accent" as string]: card.accent }}
       data-slot-key={card.key}
     >
       <div className="sb-planner-slot-stripe" />
       <div className="sb-planner-slot-label">{card.label}</div>
       {card.empty ? (
-        <div className="sb-planner-slot-open" aria-label="Open">
-          <span />
+        <div className="sb-planner-slot-open" aria-label={isCovered ? `Covered ${viaCue}` : "Open"}>
+          <span className="sb-planner-slot-dash">—</span>
+          {viaCue ? <span className="sb-planner-slot-via">{viaCue}</span> : null}
         </div>
       ) : (
-        <div className="sb-planner-slot-name">{card.tmName}</div>
+        <div className="sb-planner-slot-name-row">
+          <div className="sb-planner-slot-name">{card.tmName}</div>
+          {coverCue ? <div className="sb-planner-slot-covers">{coverCue}</div> : null}
+        </div>
       )}
     </div>
   );
@@ -59,6 +63,10 @@ function filledCount(cards: PlannerSlotCard[]): number {
   return cards.filter((card) => !card.empty).length;
 }
 
+function rosterRowClass(row: PlannerRosterEntry): string {
+  return `sb-planner-roster-row${row.placed ? " is-placed" : ""}`;
+}
+
 export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
   const pageNote =
     model.pageCount > 1 ? ` · ${model.pageIndex} of ${model.pageCount}` : "";
@@ -71,10 +79,9 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
       data-print-orientation="portrait"
     >
       <header className="sb-planner-header">
-        <div className="sb-planner-header-stripe" style={{ background: model.dayColor }} />
         <div className="sb-planner-header-row">
           <div className="sb-planner-header-left">
-            <div className="sb-planner-kicker">Planner sheet</div>
+            <div className="sb-planner-kicker">Planner</div>
             <div className="sb-planner-title">
               {model.dayName}
               {pageNote}
@@ -99,14 +106,11 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
               <li className="sb-planner-roster-empty">No Graves schedule loaded</li>
             ) : (
               model.roster.map((row) => {
-                const mark = bandMark(row.band);
+                const mark = plannerRosterMark(row.band);
                 return (
-                  <li
-                    key={row.tmId}
-                    className={`sb-planner-roster-row${row.placed ? " is-placed" : ""}`}
-                  >
+                  <li key={row.tmId} className={rosterRowClass(row)}>
                     <span className="sb-planner-roster-name">{row.name}</span>
-                    {mark ? <span className="sb-planner-roster-band">{mark}</span> : null}
+                    {mark ? <span className="sb-planner-roster-pill">{mark}</span> : null}
                   </li>
                 );
               })
@@ -138,7 +142,7 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
           </Section>
 
           <Section
-            label="Auxiliary"
+            label="Aux"
             count={`${filledCount(model.aux)} / ${Math.max(model.aux.length, 1)}`}
           >
             <div className="sb-planner-grid sb-planner-grid-aux">

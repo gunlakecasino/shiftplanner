@@ -2347,97 +2347,113 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 /* ── Portrait planner sheet (US Letter 8.5×11) ─────────────────────────── */
 .print-artboard.sb-planner-sheet,
 .print-artboard[data-print-view="planner"] {
-  width: 816px;
-  height: 1056px;
-  min-height: 1056px;
-  max-height: 1056px;
-  padding: 22px 20px 18px;
-  margin: 0;
+  width: 816px !important;
+  height: 1056px !important;
+  min-width: 816px !important;
+  max-width: 816px !important;
+  min-height: 1056px !important;
+  max-height: 1056px !important;
+  padding: 20px 22px 16px !important;
+  margin: 0 !important;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   background: #ffffff;
   box-sizing: border-box;
+  contain: none;
   font-family: var(--font-atkinson), "Atkinson Hyperlegible", system-ui, sans-serif;
   color: #1c1c1e;
 }
 
 .sb-planner-header {
   flex: 0 0 auto;
-}
-
-.sb-planner-header-stripe {
-  height: 3px;
-  border-radius: 2px;
-  margin-bottom: 10px;
+  min-width: 0;
+  overflow: visible;
 }
 
 .sb-planner-header-row {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   padding-bottom: 10px;
-  border-bottom: 1px solid #e5e5ea;
+  border-bottom: 1px solid #ececf0;
+}
+
+.sb-planner-header-left {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: visible;
+}
+
+.sb-planner-header-right {
+  flex: 0 0 auto;
 }
 
 .sb-planner-kicker {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #8e8e93;
+  line-height: 1.2;
 }
 
 .sb-planner-title {
   margin-top: 2px;
   font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.4px;
-  line-height: 1.05;
+  letter-spacing: -0.2px;
+  line-height: 1.1;
   color: #1c1c1e;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .sb-planner-sub {
   margin-top: 3px;
   font-size: 10px;
   font-weight: 500;
+  letter-spacing: 0;
   color: #6b7280;
+  line-height: 1.3;
 }
 
 .sb-planner-daynum {
-  font-size: 42px;
+  font-size: 34px;
   font-weight: 800;
-  line-height: 0.85;
-  letter-spacing: -1.5px;
+  line-height: 0.95;
+  letter-spacing: -0.6px;
   font-variant-numeric: tabular-nums;
 }
 
 .sb-planner-body {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 16px;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   padding-top: 12px;
 }
 
 .sb-planner-roster {
   min-width: 0;
   border-right: 1px solid #ececf0;
-  padding-right: 10px;
+  padding-right: 12px;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .sb-planner-roster-head {
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #8e8e93;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .sb-planner-roster-list {
@@ -2446,23 +2462,24 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
 }
 
 .sb-planner-roster-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  min-height: 22px;
+  gap: 8px;
+  min-height: 21px;
   padding: 2px 0;
   border-bottom: 1px solid #f2f2f7;
 }
 
 .sb-planner-roster-name {
-  font-size: 11.5px;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: -0.15px;
+  letter-spacing: 0;
   color: #1c1c1e;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2473,17 +2490,24 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   color: #3a3a3c;
 }
 
-.sb-planner-roster-band {
-  flex-shrink: 0;
-  font-size: 8px;
+.sb-planner-roster-pill {
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 1px 4px;
+  border: 1px solid #e5e5ea;
+  border-radius: 3px;
+  font-size: 7.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-align: center;
   color: #8e8e93;
+  background: #ffffff;
 }
 
 .sb-planner-roster-empty {
   font-size: 11px;
-  color: #aeaeB2;
+  color: #aeaeb2;
   font-weight: 500;
 }
 
@@ -2492,7 +2516,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
 }
 
 .sb-planner-section {
@@ -2503,13 +2527,13 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .sb-planner-section-label {
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #6b7280;
 }
@@ -2529,7 +2553,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-planner-grid {
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .sb-planner-grid-rr {
@@ -2541,7 +2565,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-planner-grid-aux {
-  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
 }
 
 .sb-planner-grid-ol {
@@ -2551,13 +2575,13 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .sb-planner-slot {
   position: relative;
   min-width: 0;
-  min-height: 54px;
-  border: 1px solid #d8d8de;
-  border-radius: 4px;
+  min-height: 48px;
+  border: 1px solid #e5e5ea;
+  border-radius: 3px;
   background: #ffffff;
   overflow: hidden;
   box-sizing: border-box;
-  padding: 8px 7px 6px;
+  padding: 8px 6px 5px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -2568,59 +2592,79 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 2px;
   background: var(--sb-planner-accent, #8e8e93);
 }
 
 .sb-planner-slot-label {
   font-size: 8px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--sb-planner-accent, #6b7280);
+  color: #6b7280;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.sb-planner-slot-name-row {
+  min-width: 0;
+}
+
 .sb-planner-slot-name {
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: -0.2px;
+  font-weight: 700;
+  letter-spacing: 0;
   color: #1c1c1e;
   line-height: 1.15;
 }
 
-.sb-planner-slot.is-empty {
-  background: #fafafa;
-  border-style: solid;
-  border-color: #e5e5ea;
+.sb-planner-slot-covers,
+.sb-planner-slot-via {
+  margin-top: 1px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #8e8e93;
+}
+
+.sb-planner-slot.is-empty,
+.sb-planner-slot.is-covered {
+  background: #fcfcfd;
+  border-color: #ececf0;
 }
 
 .sb-planner-slot-open {
-  height: 16px;
-  border: 1px solid #d1d1d6;
-  border-radius: 3px;
-  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 16px;
+}
+
+.sb-planner-slot-dash {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: #c7c7cc;
 }
 
 .sb-planner-overlaps {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 
 .sb-planner-overlap-meta {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .sb-planner-overlap-day {
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: -0.2px;
+  letter-spacing: 0;
 }
 
 .sb-planner-overlap-time {

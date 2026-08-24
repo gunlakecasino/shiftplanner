@@ -2,12 +2,16 @@ import {
   ZONE_DEFS,
   RR_DEFS,
   ZONE_VISUAL_ORDER,
+  NUMBERED_AUX_ROLES,
+  auxRoleTrailCode,
+  canonicalizeAuxSlotKeyForTrail,
   getZoneColor,
   getRRAccent,
   getAuxAccent,
-  overlapSlotLabel,
   getOverlapAccent,
 } from "@/lib/shiftbuilder/constants";
+import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
+import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import { printAssigneeName } from "./printAssigneeName";
 import { PLANNER_ROSTER_PER_PAGE } from "./portraitConstants";
 import type { PrintDaySnapshot } from "./printPreviewTypes";
@@ -19,8 +23,15 @@ import type { PrintDaySnapshot } from "./printPreviewTypes";
  * scheduled). Right grids = the same placement snapshot Golden print uses:
  * persisted night-core assignments, then live-board overlay for the open
  * night, then draft overlay when Draft Mode is on. Breaks are omitted.
+ *
+ * Dual-coverage rule (huddle clipboard):
+ * - The primary owner prints on the primary assignment slot only.
+ * - Extra coverage from `additional_coverage_slots` / coverage tasks is a
+ *   quiet +Z7-style cue on that primary card.
+ * - The covered slot stays a structured open box with a quiet “via Z6” mark.
+ * - We never move a TM onto a slot they are not assigned to.
  */
-export type PlannerRosterBand = "grave" | "pm" | "am";
+export type PlannerRosterBand = "grave" | "pm" | "am" | "other";
 
 export type PlannerRosterEntry = {
   tmId: string;
@@ -36,6 +47,10 @@ export type PlannerSlotCard = {
   accent: string;
   tmName: string | null;
   empty: boolean;
+  /** Short codes this primary also covers (e.g. Z7). */
+  covers: string[];
+  /** Short code of the primary slot when this card is covered, not owned. */
+  coveredVia: string | null;
 };
 
 export type PlannerOverlapRow = {
@@ -63,6 +78,8 @@ export type PortraitPlannerPageModel = {
   overlaps: PlannerOverlapRow[];
 };
 
+type PlannerAssignment = PrintDaySnapshot["assignments"][string];
+
 function assignedName(
   assignments: PrintDaySnapshot["assignments"],
   slotKey: string,
@@ -87,7 +104,15 @@ export function plannerRosterBand(row: {
 }): PlannerRosterBand {
   if (row.isPMOverlap) return "pm";
   if (row.isAMOverlap) return "am";
-  return "grave";
+  if (row.isFullGrave) return "grave";
+  return "other";
+}
+
+export function plannerRosterMark(band: PlannerRosterBand): "FG" | "PM" | "AM" | null {
+  if (band === "pm") return "PM";
+  if (band === "am") return "AM";
+  if (band === "grave") return "FG";
+  return null;
 }
 
 export function buildPlannerRoster(snapshot: PrintDaySnapshot): PlannerRosterEntry[] {
@@ -117,71 +142,191 @@ export function paginatePlannerRoster<T>(
   return pages;
 }
 
-function zoneCards(snapshot: PrintDaySnapshot): PlannerSlotCard[] {
+/** Compact huddle codes: Z5, WRR7, ADM, PM 1. Never the long Golden title. */
+export function plannerSlotCode(slotKey: string): string {
+  const raw = slotKey.trim();
+  if (!raw) return raw;
+
+  const overlap = raw.match(/^OL-(PM|AM)-(\d+)$/i);
+  if (overlap) return `${overlap[1].toUpperCase()} ${Number(overlap[2]) + 1}`;
+
+  const rr = raw.match(/^([MW])RR(\d+)$/i);
+  if (rr) return `${rr[1].toUpperCase()}RR${rr[2]}`;
+
+  const zone = raw.match(/^(?:Z|ZONE\s*)(10|[1-9])$/i);
+  if (zone) return `Z${zone[1]}`;
+
+  const compact = raw.replace(/\s+/g, "").toUpperCase();
+  if (compact === "ADMIN" || compact === "ADM") return "ADM";
+  if (compact === "Z9SR" || compact === "Z9SMOKINGROOM") return "Z9SR";
+  return compact.slice(0, 8);
+}
+
+export function plannerAuxLabel(def: AuxDef, auxDefs: AuxDef[]): string {
+  if (def.role === "admin") return "ADM";
+  if (def.role && def.role !== "blank") {
+    const nth = NUMBERED_AUX_ROLES.has(def.role)
+      ? auxDefs.filter((row) => row.role === def.role).findIndex((row) => row.key === def.key)
+      : 0;
+    const code = auxRoleTrailCode(def.role as AuxRole, nth >= 0 ? nth : 0);
+    return code === "ADMIN" ? "ADM" : code;
+  }
+  if (!def.label?.trim()) return "AUX";
+  const trail = canonicalizeAuxSlotKeyForTrail(def.key, auxDefs);
+  if (trail === "ADMIN") return "ADM";
+  if (/^AUX\d+$/i.test(trail)) {
+    const compact = def.label.replace(/\s+/g, "").toUpperCase();
+    return compact.slice(0, 8) || "AUX";
+  }
+  return plannerSlotCode(trail);
+}
+
+function coverageTargetsFromAssignment(row: PlannerAssignment | undefined): string[] {
+  const raw = row?.additionalCoverageSlots ?? row?.additional_coverage_slots ?? [];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((key): key is string => typeof key === "string" && key.trim().length > 0))];
+}
+
+function uniqueCodes(keys: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const key of keys) {
+    const code = plannerSlotCode(key);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    out.push(code);
+  }
+  return out;
+}
+
+function buildCoverageMaps(snapshot: PrintDaySnapshot): {
+  coversBySource: Record<string, string[]>;
+  coveredViaByTarget: Record<string, string>;
+} {
+  const coveredByIndex = buildCoveredByIndex(
+    snapshot.assignments,
+    snapshot.tasksBySlot,
+    snapshot.auxDefs,
+  );
+  const coversBySource: Record<string, string[]> = {};
+  const coveredViaByTarget: Record<string, string> = {};
+
+  const addCover = (sourceKey: string, targetKey: string) => {
+    if (!sourceKey || !targetKey || sourceKey === targetKey) return;
+    if (assignedName(snapshot.assignments, targetKey)) return;
+    (coversBySource[sourceKey] ??= []);
+    if (!coversBySource[sourceKey].includes(targetKey)) {
+      coversBySource[sourceKey].push(targetKey);
+    }
+    if (!coveredViaByTarget[targetKey]) {
+      coveredViaByTarget[targetKey] = sourceKey;
+    }
+  };
+
+  for (const [sourceKey, assignment] of Object.entries(snapshot.assignments)) {
+    if (!assignedName(snapshot.assignments, sourceKey)) continue;
+    for (const targetKey of coverageTargetsFromAssignment(assignment)) {
+      addCover(sourceKey, targetKey);
+    }
+  }
+
+  for (const [targetKey, entries] of Object.entries(coveredByIndex)) {
+    for (const entry of entries) {
+      addCover(entry.sourceKey, targetKey);
+    }
+  }
+
+  return { coversBySource, coveredViaByTarget };
+}
+
+function slotCard(
+  snapshot: PrintDaySnapshot,
+  maps: ReturnType<typeof buildCoverageMaps>,
+  args: {
+    key: string;
+    kind: PlannerSlotCard["kind"];
+    label: string;
+    accent: string;
+  },
+): PlannerSlotCard {
+  const tmName = assignedName(snapshot.assignments, args.key);
+  const covers = tmName ? uniqueCodes(maps.coversBySource[args.key] ?? []) : [];
+  const coveredVia = !tmName ? plannerSlotCode(maps.coveredViaByTarget[args.key] ?? "") || null : null;
+  return {
+    key: args.key,
+    kind: args.kind,
+    label: args.label,
+    accent: args.accent,
+    tmName,
+    empty: !tmName,
+    covers,
+    coveredVia,
+  };
+}
+
+function zoneCards(
+  snapshot: PrintDaySnapshot,
+  maps: ReturnType<typeof buildCoverageMaps>,
+): PlannerSlotCard[] {
   return ZONE_VISUAL_ORDER.map((key) => {
     const def = ZONE_DEFS.find((z) => z.key === key);
-    const tmName = assignedName(snapshot.assignments, key);
-    return {
+    return slotCard(snapshot, maps, {
       key,
-      kind: "zone" as const,
-      label: def?.label ?? key,
+      kind: "zone",
+      label: plannerSlotCode(def?.key ?? key),
       accent: getZoneColor(key),
-      tmName,
-      empty: !tmName,
-    };
+    });
   });
 }
 
-function restroomCards(snapshot: PrintDaySnapshot): PlannerSlotCard[] {
+function restroomCards(
+  snapshot: PrintDaySnapshot,
+  maps: ReturnType<typeof buildCoverageMaps>,
+): PlannerSlotCard[] {
   const cards: PlannerSlotCard[] = [];
   for (const def of RR_DEFS) {
-    for (const side of [
-      { prefix: "M", label: "M" },
-      { prefix: "W", label: "W" },
-    ] as const) {
-      const key = `${side.prefix}RR${def.num}`;
-      const tmName = assignedName(snapshot.assignments, key);
-      cards.push({
-        key,
-        kind: "rr",
-        label: `${def.label} ${side.label}`,
-        accent: getRRAccent(def.num),
-        tmName,
-        empty: !tmName,
-      });
+    for (const side of ["M", "W"] as const) {
+      const key = `${side}RR${def.num}`;
+      cards.push(
+        slotCard(snapshot, maps, {
+          key,
+          kind: "rr",
+          label: plannerSlotCode(key),
+          accent: getRRAccent(def.num),
+        }),
+      );
     }
   }
   return cards;
 }
 
-function auxCards(snapshot: PrintDaySnapshot): PlannerSlotCard[] {
-  return snapshot.auxDefs.map((def) => {
-    const tmName = assignedName(snapshot.assignments, def.key);
-    const isBlank = def.role === "blank" && !def.label?.trim();
-    return {
+function auxCards(
+  snapshot: PrintDaySnapshot,
+  maps: ReturnType<typeof buildCoverageMaps>,
+): PlannerSlotCard[] {
+  return snapshot.auxDefs.map((def) =>
+    slotCard(snapshot, maps, {
       key: def.key,
-      kind: "aux" as const,
-      label: def.label?.trim() || (isBlank ? "OPEN AUX" : def.key),
+      kind: "aux",
+      label: plannerAuxLabel(def, snapshot.auxDefs),
       accent: getAuxAccent(def.key, def.role),
-      tmName,
-      empty: !tmName,
-    };
-  });
+    }),
+  );
 }
 
-function overlapRows(snapshot: PrintDaySnapshot): PlannerOverlapRow[] {
+function overlapRows(
+  snapshot: PrintDaySnapshot,
+  maps: ReturnType<typeof buildCoverageMaps>,
+): PlannerOverlapRow[] {
   const mk = (half: "PM" | "AM"): PlannerSlotCard[] =>
     Array.from({ length: 6 }, (_, i) => {
       const key = `OL-${half}-${i}`;
-      const tmName = assignedName(snapshot.assignments, key);
-      return {
+      return slotCard(snapshot, maps, {
         key,
-        kind: "overlap" as const,
-        label: overlapSlotLabel(key),
+        kind: "overlap",
+        label: plannerSlotCode(key),
         accent: getOverlapAccent(key),
-        tmName,
-        empty: !tmName,
-      };
+      });
     });
 
   return [
@@ -207,10 +352,11 @@ function overlapRows(snapshot: PrintDaySnapshot): PlannerOverlapRow[] {
 export function buildPortraitPlannerPages(snapshot: PrintDaySnapshot): PortraitPlannerPageModel[] {
   const roster = buildPlannerRoster(snapshot);
   const chunks = paginatePlannerRoster(roster);
-  const restrooms = restroomCards(snapshot);
-  const zones = zoneCards(snapshot);
-  const aux = auxCards(snapshot);
-  const overlaps = overlapRows(snapshot);
+  const maps = buildCoverageMaps(snapshot);
+  const restrooms = restroomCards(snapshot, maps);
+  const zones = zoneCards(snapshot, maps);
+  const aux = auxCards(snapshot, maps);
+  const overlaps = overlapRows(snapshot, maps);
 
   return chunks.map((chunk, index) => ({
     dayName: snapshot.day.name,

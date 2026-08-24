@@ -154,13 +154,16 @@ function applyGoldenArtboardContract(
   }
 }
 
-function buildIframePrintOverrides(config: PrintConfig): string {
+function buildIframePrintOverrides(config: PrintConfig, pages: GoldenPrintPage[]): string {
   const marginValue = MARGIN_VALUES[config.margins];
   const zoomValue = MARGIN_ZOOM[config.margins];
   const scaledHeight = GOLDEN_HEIGHT_PX * zoomValue;
   const portraitScaledHeight = PORTRAIT_HEIGHT_PX * zoomValue;
+  const hasPortrait = pages.some((page) => printPageOrientation(page.kind) === "portrait");
+  const hasLandscape = pages.some((page) => printPageOrientation(page.kind) !== "portrait");
+  const defaultPageSize = hasPortrait && !hasLandscape ? "letter portrait" : "letter landscape";
   return `
-    @page { size: letter landscape; margin: ${marginValue} !important; }
+    @page { size: ${defaultPageSize}; margin: ${marginValue} !important; }
     @page planner-sheet { size: letter portrait; margin: ${marginValue} !important; }
     html, body {
       margin: 0 !important;
@@ -335,8 +338,8 @@ function buildPrintIframe(): HTMLIFrameElement {
     "position:fixed",
     "left:-10960px",
     "top:0",
-    `width:${GOLDEN_WIDTH_PX}px`,
-    `height:${GOLDEN_HEIGHT_PX}px`,
+    `width:${Math.max(GOLDEN_WIDTH_PX, PORTRAIT_WIDTH_PX)}px`,
+    `height:${Math.max(GOLDEN_HEIGHT_PX, PORTRAIT_HEIGHT_PX)}px`,
     "border:0",
     "margin:0",
     "padding:0",
@@ -516,7 +519,7 @@ async function mountGoldenBrowserPrintSession(
     .map((href) => `<link rel="stylesheet" href="${href}" crossorigin="anonymous" />`)
     .join("");
   const pagesHtml = buildWrappedPagesHtml(pages);
-  const printOverrides = buildIframePrintOverrides(config);
+  const printOverrides = buildIframePrintOverrides(config, pages);
 
   doc.open();
   doc.write(

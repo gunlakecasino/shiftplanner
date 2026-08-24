@@ -553,9 +553,12 @@ body {
 .print-artboard[data-print-view="planner"] {
   width: 816px;   /* 8.5" × 96 dpi */
   height: 1056px; /* 11"  × 96 dpi */
+  min-width: 816px;
+  max-width: 816px;
   min-height: 1056px;
   max-height: 1056px;
-  padding: 22px 20px 18px;
+  padding: 20px 22px 16px;
+  contain: none;
 }
 
 /* Sheet header (date + shift meta).
