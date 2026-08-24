@@ -2431,11 +2431,11 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: grid;
   grid-template-columns: 168px minmax(0, 1fr);
   gap: 12px;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   padding-top: 7px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .sb-planner-roster {
@@ -2463,6 +2463,8 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   padding: 0;
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .sb-planner-roster-row {
@@ -2470,7 +2472,9 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  flex: 1 1 auto;
   min-height: 18px;
+  max-height: 24px;
   padding: 1px 0;
   border-bottom: 1px solid #f2f2f7;
 }
@@ -2512,6 +2516,20 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   font-weight: 500;
 }
 
+.sb-planner-roster-writein {
+  flex: 1 1 0;
+  min-height: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 21px,
+    #f2f2f7 21px,
+    #f2f2f7 22px
+  );
+  background-repeat: repeat-y;
+  background-size: 100% 22px;
+}
+
 .sb-planner-main {
   min-width: 0;
   min-height: 0;
@@ -2522,6 +2540,22 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-planner-section {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-planner-section-rr,
+.sb-planner-section-zones {
+  flex: 2 1 0;
+}
+
+.sb-planner-section-aux {
+  flex: 1 1 0;
+}
+
+.sb-planner-section-ol {
+  flex: 2.3 1 0;
 }
 
 .sb-planner-section-head {
@@ -2555,6 +2589,9 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .sb-planner-grid {
   display: grid;
   gap: 3px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: stretch;
 }
 
 .sb-planner-grid-rr {
@@ -2577,6 +2614,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   position: relative;
   min-width: 0;
   min-height: 42px;
+  height: 100%;
   border: 1px solid #e5e5ea;
   border-radius: 3px;
   background: #ffffff;
@@ -2653,6 +2691,15 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: flex;
   flex-direction: column;
   gap: 5px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sb-planner-overlap-row {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .sb-planner-overlap-meta {
@@ -2675,8 +2722,9 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-planner-notes {
-  flex: 1 1 auto;
+  flex: 0 0 168px;
   min-height: 168px;
+  max-height: 168px;
   display: flex;
   flex-direction: column;
   min-width: 0;

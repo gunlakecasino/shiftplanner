@@ -229,6 +229,9 @@ describe("portrait planner page", () => {
     expect(html).toContain("sb-planner-notes");
     expect(html).toContain("Huddle notes");
     expect(html).toContain("sb-planner-notes-rules");
+    expect(html).toContain("sb-planner-section-rr");
+    expect(html).toContain("sb-planner-section-zones");
+    expect(html).toContain("sb-planner-roster-writein");
     expect(html).not.toContain("Passdown:");
     expect(html).not.toContain("TODO");
   });
@@ -272,8 +275,10 @@ describe("portrait planner density css", () => {
     expect(planner).toContain("min-height: 42px;");
     expect(planner).toContain("min-height: 18px;");
     expect(planner).toContain("gap: 6px;");
+    expect(planner).toContain("flex: 1 1 auto;");
+    expect(planner).toContain(".sb-planner-section-rr");
     expect(planner).toContain(".sb-planner-notes");
-    expect(planner).toContain(`min-height: ${PLANNER_NOTES_MIN_PX}px;`);
+    expect(planner).toContain(`flex: 0 0 ${PLANNER_NOTES_MIN_PX}px;`);
     expect(planner).toContain("repeating-linear-gradient");
     expect(planner).not.toContain("min-height: 48px;");
     expect(planner).not.toContain("padding: 20px 22px 16px !important;");

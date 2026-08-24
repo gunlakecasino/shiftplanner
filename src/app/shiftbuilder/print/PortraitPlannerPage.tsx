@@ -117,10 +117,12 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
               })
             )}
           </ol>
+          <div className="sb-planner-roster-writein" aria-hidden="true" />
         </aside>
 
         <main className="sb-planner-main">
           <Section
+            className="sb-planner-section-rr"
             label="Restrooms"
             count={`${filledCount(model.restrooms)} / ${model.restrooms.length}`}
           >
@@ -132,6 +134,7 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
           </Section>
 
           <Section
+            className="sb-planner-section-zones"
             label="Zones"
             count={`${filledCount(model.zones)} / ${model.zones.length}`}
           >
@@ -143,6 +146,7 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
           </Section>
 
           <Section
+            className="sb-planner-section-aux"
             label="Aux"
             count={`${filledCount(model.aux)} / ${Math.max(model.aux.length, 1)}`}
           >
@@ -154,6 +158,7 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
           </Section>
 
           <Section
+            className="sb-planner-section-ol"
             label="Overlaps"
             count={`${filledCount(model.overlaps.flatMap((row) => row.slots))} / 12`}
           >
