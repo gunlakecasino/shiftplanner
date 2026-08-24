@@ -1,4 +1,6 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PortraitPlannerPage } from "@/app/shiftbuilder/print/PortraitPlannerPage";
@@ -14,7 +16,7 @@ import {
 import { rasterArtboardSizePx } from "@/app/shiftbuilder/print/rasterPrep";
 import { assembleGoldenPrintPages } from "@/app/shiftbuilder/print/assemblePages";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "@/app/shiftbuilder/print/goldenConstants";
-import { LETTER_PORTRAIT_PT, PLANNER_ROSTER_PER_PAGE, PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "@/app/shiftbuilder/print/portraitConstants";
+import { LETTER_PORTRAIT_PT, PLANNER_NOTES_MIN_PX, PLANNER_ROSTER_PER_PAGE, PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "@/app/shiftbuilder/print/portraitConstants";
 import { printArtboardSizePx, printPageOrientation } from "@/app/shiftbuilder/print/printPageGeometry";
 import {
   buildPrintQueue,
@@ -79,6 +81,7 @@ describe("portrait planner model", () => {
     expect(printArtboardSizePx("planner")).toEqual({ width: 816, height: 1056 });
     expect(printPageOrientation("deploy")).toBe("landscape");
     expect(printPageOrientation("planner")).toBe("portrait");
+    expect(PLANNER_NOTES_MIN_PX).toBe(168);
   });
 
   it("marks overlaps and full-grave with quiet FG / PM / AM pills", () => {
@@ -223,6 +226,14 @@ describe("portrait planner page", () => {
     expect(html).not.toContain("OPEN AUX");
     expect(html).not.toContain("Break");
     expect(html).not.toContain("WAVE");
+    expect(html).toContain("sb-planner-notes");
+    expect(html).toContain("Huddle notes");
+    expect(html).toContain("sb-planner-notes-rules");
+    expect(html).toContain("sb-planner-section-rr");
+    expect(html).toContain("sb-planner-section-zones");
+    expect(html).toContain("sb-planner-roster-writein");
+    expect(html).not.toContain("Passdown:");
+    expect(html).not.toContain("TODO");
   });
 
   it("prints dual coverage as a primary +cue and a via mark, not a second owner", () => {
@@ -245,6 +256,33 @@ describe("portrait planner page", () => {
     expect(html).toContain("+Z7");
     expect(html).toContain("via Z6");
     expect(html.match(/Darlene/g)?.length).toBe(1);
+  });
+});
+
+describe("portrait planner density css", () => {
+  const previewCss = join(process.cwd(), "src/app/shiftbuilder/print/printPreview.css");
+  const publicCss = join(process.cwd(), "public/shiftbuilder-print-preview.css");
+
+  it("keeps preview and public print CSS byte-identical", () => {
+    expect(readFileSync(publicCss, "utf8")).toBe(readFileSync(previewCss, "utf8"));
+  });
+
+  it("packs Letter portrait rhythm and reserves a ruled huddle-notes band", () => {
+    const css = readFileSync(previewCss, "utf8");
+    const planner = css.slice(css.indexOf("/* ── Portrait planner sheet"));
+
+    expect(planner).toContain("padding: 14px 18px 12px !important;");
+    expect(planner).toContain("min-height: 42px;");
+    expect(planner).toContain("min-height: 18px;");
+    expect(planner).toContain("gap: 6px;");
+    expect(planner).toContain("flex: 1 1 auto;");
+    expect(planner).toContain(".sb-planner-section-rr");
+    expect(planner).toContain(".sb-planner-notes");
+    expect(planner).toContain(`flex: 0 0 ${PLANNER_NOTES_MIN_PX}px;`);
+    expect(planner).toContain("repeating-linear-gradient");
+    expect(planner).not.toContain("min-height: 48px;");
+    expect(planner).not.toContain("padding: 20px 22px 16px !important;");
+    expect(planner).not.toContain("min-height: 21px;");
   });
 });
 

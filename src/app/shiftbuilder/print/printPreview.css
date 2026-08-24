@@ -2353,7 +2353,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   max-width: 816px !important;
   min-height: 1056px !important;
   max-height: 1056px !important;
-  padding: 20px 22px 16px !important;
+  padding: 14px 18px 12px !important;
   margin: 0 !important;
   overflow: hidden;
   display: flex;
@@ -2375,8 +2375,8 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 10px;
+  gap: 12px;
+  padding-bottom: 6px;
   border-bottom: 1px solid #ececf0;
 }
 
@@ -2396,51 +2396,52 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #8e8e93;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .sb-planner-title {
-  margin-top: 2px;
-  font-size: 22px;
+  margin-top: 1px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.2px;
-  line-height: 1.1;
+  line-height: 1.05;
   color: #1c1c1e;
   overflow: visible;
   white-space: nowrap;
 }
 
 .sb-planner-sub {
-  margin-top: 3px;
+  margin-top: 1px;
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0;
   color: #6b7280;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .sb-planner-daynum {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 800;
-  line-height: 0.95;
+  line-height: 0.92;
   letter-spacing: -0.6px;
   font-variant-numeric: tabular-nums;
 }
 
 .sb-planner-body {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 12px;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  padding-top: 12px;
+  padding-top: 7px;
+  align-items: stretch;
 }
 
 .sb-planner-roster {
   min-width: 0;
   border-right: 1px solid #ececf0;
-  padding-right: 12px;
+  padding-right: 10px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2453,7 +2454,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #8e8e93;
-  margin-bottom: 6px;
+  margin-bottom: 3px;
 }
 
 .sb-planner-roster-list {
@@ -2462,15 +2463,19 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   padding: 0;
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .sb-planner-roster-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 21px;
-  padding: 2px 0;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 18px;
+  max-height: 24px;
+  padding: 1px 0;
   border-bottom: 1px solid #f2f2f7;
 }
 
@@ -2511,23 +2516,53 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   font-weight: 500;
 }
 
+.sb-planner-roster-writein {
+  flex: 1 1 0;
+  min-height: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 21px,
+    #f2f2f7 21px,
+    #f2f2f7 22px
+  );
+  background-repeat: repeat-y;
+  background-size: 100% 22px;
+}
+
 .sb-planner-main {
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 6px;
 }
 
 .sb-planner-section {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-planner-section-rr,
+.sb-planner-section-zones {
+  flex: 2 1 0;
+}
+
+.sb-planner-section-aux {
+  flex: 1 1 0;
+}
+
+.sb-planner-section-ol {
+  flex: 2.3 1 0;
 }
 
 .sb-planner-section-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
+  gap: 6px;
+  margin-bottom: 3px;
 }
 
 .sb-planner-section-label {
@@ -2553,7 +2588,10 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-planner-grid {
   display: grid;
-  gap: 4px;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: stretch;
 }
 
 .sb-planner-grid-rr {
@@ -2575,13 +2613,14 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .sb-planner-slot {
   position: relative;
   min-width: 0;
-  min-height: 48px;
+  min-height: 42px;
+  height: 100%;
   border: 1px solid #e5e5ea;
   border-radius: 3px;
   background: #ffffff;
   overflow: hidden;
   box-sizing: border-box;
-  padding: 8px 6px 5px;
+  padding: 5px 5px 3px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -2616,7 +2655,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   font-weight: 700;
   letter-spacing: 0;
   color: #1c1c1e;
-  line-height: 1.15;
+  line-height: 1.1;
 }
 
 .sb-planner-slot-covers,
@@ -2638,7 +2677,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: 16px;
+  min-height: 13px;
 }
 
 .sb-planner-slot-dash {
@@ -2651,14 +2690,23 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .sb-planner-overlaps {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sb-planner-overlap-row {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .sb-planner-overlap-meta {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 3px;
+  gap: 6px;
+  margin-bottom: 2px;
 }
 
 .sb-planner-overlap-day {
@@ -2671,4 +2719,40 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   font-size: 9px;
   font-weight: 700;
   color: #8e8e93;
+}
+
+.sb-planner-notes {
+  flex: 0 0 168px;
+  min-height: 168px;
+  max-height: 168px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #ececf0;
+}
+
+.sb-planner-notes-head {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8e8e93;
+  margin-bottom: 4px;
+}
+
+.sb-planner-notes-rules {
+  flex: 1 1 auto;
+  min-height: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 21px,
+    #ececf0 21px,
+    #ececf0 22px
+  );
+  background-repeat: repeat-y;
+  background-size: 100% 22px;
 }
