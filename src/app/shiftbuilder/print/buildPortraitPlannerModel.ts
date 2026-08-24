@@ -13,7 +13,7 @@ import {
 import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
 import type { AuxDef, AuxRole } from "@/lib/shiftbuilder/placement";
 import { printAssigneeName } from "./printAssigneeName";
-import { PLANNER_ROSTER_PER_PAGE } from "./portraitConstants";
+import { PLANNER_ROSTER_PER_PAGE, PLANNER_TRAIL_COUNT } from "./portraitConstants";
 import type { PrintDaySnapshot } from "./printPreviewTypes";
 
 /**
@@ -30,14 +30,28 @@ import type { PrintDaySnapshot } from "./printPreviewTypes";
  *   quiet +Z7-style cue on that primary card.
  * - The covered slot stays a structured open box with a quiet “via Z6” mark.
  * - We never move a TM onto a slot they are not assigned to.
+ *
+ * Workbook rule: the same sheet must work blank, partial, or filled. Trails
+ * are real history only. Missing / empty `placementTrailsByTmId` prints no
+ * codes — the trail line stays a quiet write-in, never a fabricated dash
+ * of invented slots.
  */
-export type PlannerRosterBand = "grave" | "pm" | "am" | "other";
+export type PlannerRosterBand = "grave" | "pm" | "am";
 
 export type PlannerRosterEntry = {
   tmId: string;
   name: string;
   band: PlannerRosterBand;
   placed: boolean;
+  /** Newest-first short codes, at most PLANNER_TRAIL_COUNT. Empty = no history. */
+  trail: string[];
+};
+
+export type PlannerRosterGroup = {
+  band: PlannerRosterBand;
+  label: string;
+  continued: boolean;
+  rows: PlannerRosterEntry[];
 };
 
 export type PlannerSlotCard = {
@@ -45,8 +59,11 @@ export type PlannerSlotCard = {
   kind: "zone" | "rr" | "aux" | "overlap";
   label: string;
   accent: string;
+  tmId: string | null;
   tmName: string | null;
   empty: boolean;
+  /** Newest-first short codes under a placed name. Empty when unowned or no history. */
+  trail: string[];
   /** Short codes this primary also covers (e.g. Z7). */
   covers: string[];
   /** Short code of the primary slot when this card is covered, not owned. */
@@ -72,6 +89,7 @@ export type PortraitPlannerPageModel = {
   pageCount: number;
   rosterContinued: boolean;
   roster: PlannerRosterEntry[];
+  rosterGroups: PlannerRosterGroup[];
   restrooms: PlannerSlotCard[];
   zones: PlannerSlotCard[];
   aux: PlannerSlotCard[];
@@ -97,6 +115,14 @@ function placedTmIds(assignments: PrintDaySnapshot["assignments"]): Set<string> 
   return ids;
 }
 
+export const PLANNER_ROSTER_GROUP_ORDER: PlannerRosterBand[] = ["pm", "grave", "am"];
+
+export const PLANNER_ROSTER_GROUP_LABEL: Record<PlannerRosterBand, string> = {
+  pm: "PM",
+  grave: "Graves",
+  am: "AM",
+};
+
 export function plannerRosterBand(row: {
   isFullGrave?: boolean;
   isPMOverlap?: boolean;
@@ -104,29 +130,81 @@ export function plannerRosterBand(row: {
 }): PlannerRosterBand {
   if (row.isPMOverlap) return "pm";
   if (row.isAMOverlap) return "am";
-  if (row.isFullGrave) return "grave";
-  return "other";
+  return "grave";
 }
 
-export function plannerRosterMark(band: PlannerRosterBand): "FG" | "PM" | "AM" | null {
-  if (band === "pm") return "PM";
-  if (band === "am") return "AM";
-  if (band === "grave") return "FG";
-  return null;
+/**
+ * Last-5 trail for a TM. Missing key, empty array, or blank labels → [].
+ * Never invents codes. Truncates to PLANNER_TRAIL_COUNT, newest first as stored.
+ */
+export function plannerTrailLabels(
+  trailsByTmId: Record<string, string[]> | undefined,
+  tmId: string | null | undefined,
+  count = PLANNER_TRAIL_COUNT,
+): string[] {
+  if (!tmId) return [];
+  const raw = trailsByTmId?.[tmId];
+  if (!raw?.length) return [];
+  return raw
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0)
+    .slice(0, count);
+}
+
+/** Compact middot line for print. Empty history → "" (caller keeps a write-in). */
+export function formatPlannerTrailLine(labels: string[]): string {
+  return labels
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0)
+    .slice(0, PLANNER_TRAIL_COUNT)
+    .join(" · ");
+}
+
+function emptyRosterGroups(): PlannerRosterGroup[] {
+  return PLANNER_ROSTER_GROUP_ORDER.map((band) => ({
+    band,
+    label: PLANNER_ROSTER_GROUP_LABEL[band],
+    continued: false,
+    rows: [],
+  }));
+}
+
+export function buildPlannerRosterGroups(snapshot: PrintDaySnapshot): PlannerRosterGroup[] {
+  const placed = placedTmIds(snapshot.assignments);
+  const trails = snapshot.placementTrailsByTmId;
+  const byBand: Record<PlannerRosterBand, PlannerRosterEntry[]> = {
+    pm: [],
+    grave: [],
+    am: [],
+  };
+
+  for (const row of snapshot.scheduledRoster ?? []) {
+    const name = row.name.trim();
+    if (!name) continue;
+    const band = plannerRosterBand(row);
+    byBand[band].push({
+      tmId: row.tmId,
+      name,
+      band,
+      placed: placed.has(row.tmId),
+      trail: plannerTrailLabels(trails, row.tmId),
+    });
+  }
+
+  for (const band of PLANNER_ROSTER_GROUP_ORDER) {
+    byBand[band].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return PLANNER_ROSTER_GROUP_ORDER.map((band) => ({
+    band,
+    label: PLANNER_ROSTER_GROUP_LABEL[band],
+    continued: false,
+    rows: byBand[band],
+  }));
 }
 
 export function buildPlannerRoster(snapshot: PrintDaySnapshot): PlannerRosterEntry[] {
-  const placed = placedTmIds(snapshot.assignments);
-  const rows = snapshot.scheduledRoster ?? [];
-  return rows
-    .map((row) => ({
-      tmId: row.tmId,
-      name: row.name.trim(),
-      band: plannerRosterBand(row),
-      placed: placed.has(row.tmId),
-    }))
-    .filter((row) => row.name.length > 0)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return buildPlannerRosterGroups(snapshot).flatMap((group) => group.rows);
 }
 
 export function paginatePlannerRoster<T>(
@@ -140,6 +218,100 @@ export function paginatePlannerRoster<T>(
     pages.push(rows.slice(i, i + perPage));
   }
   return pages;
+}
+
+/**
+ * Pack named groups across pages. Repeat a group head when it continues.
+ * Avoid starting a group in the last slot, and avoid leaving a single name
+ * on the next page when two can travel together.
+ */
+export function paginatePlannerRosterGroups(
+  groups: PlannerRosterGroup[],
+  perPage = PLANNER_ROSTER_PER_PAGE,
+): PlannerRosterGroup[][] {
+  const named = groups.filter((group) => group.rows.length > 0);
+  if (named.length === 0) return [emptyRosterGroups()];
+
+  const pages: PlannerRosterGroup[][] = [];
+  let page: PlannerRosterGroup[] = [];
+  let used = 0;
+
+  const flush = () => {
+    if (page.length > 0) pages.push(page);
+    page = [];
+    used = 0;
+  };
+
+  for (const group of named) {
+    let offset = 0;
+    while (offset < group.rows.length) {
+      let slots = perPage - used;
+      if (offset === 0 && slots <= 1 && used > 0) {
+        flush();
+        slots = perPage;
+      }
+      const remaining = group.rows.length - offset;
+      let take = Math.min(slots, remaining);
+      if (remaining - take === 1 && take > 1 && used + take >= perPage) {
+        take -= 1;
+      }
+      if (take <= 0) {
+        flush();
+        continue;
+      }
+      page.push({
+        band: group.band,
+        label: group.label,
+        continued: offset > 0,
+        rows: group.rows.slice(offset, offset + take),
+      });
+      used += take;
+      offset += take;
+      if (used >= perPage) flush();
+    }
+  }
+  flush();
+  return insertEmptyBandShells(pages.length ? pages : [[]], groups);
+}
+
+function insertEmptyBandShells(
+  packed: PlannerRosterGroup[][],
+  allGroups: PlannerRosterGroup[],
+): PlannerRosterGroup[][] {
+  const emptyByBand = new Map(
+    allGroups.filter((group) => group.rows.length === 0).map((group) => [group.band, group]),
+  );
+  if (emptyByBand.size === 0) return packed;
+
+  return packed.map((page, pageIndex) => {
+    const bandsOnPage = page.map((group) => group.band);
+    const firstIndex = bandsOnPage.length
+      ? PLANNER_ROSTER_GROUP_ORDER.indexOf(bandsOnPage[0])
+      : 0;
+    const lastIndex = bandsOnPage.length
+      ? PLANNER_ROSTER_GROUP_ORDER.indexOf(bandsOnPage[bandsOnPage.length - 1])
+      : -1;
+    const isLastPage = pageIndex === packed.length - 1;
+    const out: PlannerRosterGroup[] = [];
+
+    for (let bandIndex = 0; bandIndex < PLANNER_ROSTER_GROUP_ORDER.length; bandIndex += 1) {
+      const band = PLANNER_ROSTER_GROUP_ORDER[bandIndex];
+      const existing = page.find((group) => group.band === band);
+      if (existing) {
+        out.push(existing);
+        continue;
+      }
+      const shell = emptyByBand.get(band);
+      if (!shell) continue;
+      const inSpan = bandIndex >= firstIndex && bandIndex <= lastIndex;
+      const afterLastOnLastPage = isLastPage && bandIndex > lastIndex;
+      const beforeFirstOnFirstPage = pageIndex === 0 && bandIndex < firstIndex;
+      if (inSpan || afterLastOnLastPage || beforeFirstOnFirstPage) {
+        out.push(shell);
+      }
+    }
+    return out;
+  });
 }
 
 /** Compact huddle codes: Z5, WRR7, ADM, PM 1. Never the long Golden title. */
@@ -239,6 +411,14 @@ function buildCoverageMaps(snapshot: PrintDaySnapshot): {
   return { coversBySource, coveredViaByTarget };
 }
 
+function assignedTmId(
+  assignments: PrintDaySnapshot["assignments"],
+  slotKey: string,
+): string | null {
+  const id = assignments[slotKey]?.tmId?.trim();
+  return id || null;
+}
+
 function slotCard(
   snapshot: PrintDaySnapshot,
   maps: ReturnType<typeof buildCoverageMaps>,
@@ -250,6 +430,7 @@ function slotCard(
   },
 ): PlannerSlotCard {
   const tmName = assignedName(snapshot.assignments, args.key);
+  const tmId = tmName ? assignedTmId(snapshot.assignments, args.key) : null;
   const covers = tmName ? uniqueCodes(maps.coversBySource[args.key] ?? []) : [];
   const coveredVia = !tmName ? plannerSlotCode(maps.coveredViaByTarget[args.key] ?? "") || null : null;
   return {
@@ -257,8 +438,10 @@ function slotCard(
     kind: args.kind,
     label: args.label,
     accent: args.accent,
+    tmId,
     tmName,
     empty: !tmName,
+    trail: tmId ? plannerTrailLabels(snapshot.placementTrailsByTmId, tmId) : [],
     covers,
     coveredVia,
   };
@@ -350,15 +533,15 @@ function overlapRows(
 }
 
 export function buildPortraitPlannerPages(snapshot: PrintDaySnapshot): PortraitPlannerPageModel[] {
-  const roster = buildPlannerRoster(snapshot);
-  const chunks = paginatePlannerRoster(roster);
+  const groups = buildPlannerRosterGroups(snapshot);
+  const chunks = paginatePlannerRosterGroups(groups);
   const maps = buildCoverageMaps(snapshot);
   const restrooms = restroomCards(snapshot, maps);
   const zones = zoneCards(snapshot, maps);
   const aux = auxCards(snapshot, maps);
   const overlaps = overlapRows(snapshot, maps);
 
-  return chunks.map((chunk, index) => ({
+  return chunks.map((pageGroups, index) => ({
     dayName: snapshot.day.name,
     dateNum: snapshot.day.dateNum,
     monthYear: snapshot.day.monthYear,
@@ -367,7 +550,8 @@ export function buildPortraitPlannerPages(snapshot: PrintDaySnapshot): PortraitP
     pageIndex: index + 1,
     pageCount: chunks.length,
     rosterContinued: index > 0,
-    roster: chunk,
+    roster: pageGroups.flatMap((group) => group.rows),
+    rosterGroups: pageGroups,
     restrooms,
     zones,
     aux,

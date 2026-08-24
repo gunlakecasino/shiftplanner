@@ -6,12 +6,15 @@ import { describe, expect, it } from "vitest";
 import { PortraitPlannerPage } from "@/app/shiftbuilder/print/PortraitPlannerPage";
 import {
   buildPlannerRoster,
+  buildPlannerRosterGroups,
   buildPortraitPlannerPages,
+  formatPlannerTrailLine,
   paginatePlannerRoster,
+  paginatePlannerRosterGroups,
   plannerAuxLabel,
   plannerRosterBand,
-  plannerRosterMark,
   plannerSlotCode,
+  plannerTrailLabels,
 } from "@/app/shiftbuilder/print/buildPortraitPlannerModel";
 import { rasterArtboardSizePx } from "@/app/shiftbuilder/print/rasterPrep";
 import { assembleGoldenPrintPages } from "@/app/shiftbuilder/print/assemblePages";
@@ -66,6 +69,10 @@ function snapshot(over: Partial<PrintDaySnapshot> = {}): PrintDaySnapshot {
       { tmId: "tm-morgan", name: "Morgan", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
       { tmId: "tm-admin", name: "Reese", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
     ],
+    placementTrailsByTmId: {
+      "tm-jordan": ["Z3", "RR8M", "ADMIN", "OL-PM", "Z9SR", "Z1"],
+      "tm-alex": [],
+    },
     ...over,
   };
 }
@@ -84,15 +91,73 @@ describe("portrait planner model", () => {
     expect(PLANNER_NOTES_MIN_PX).toBe(168);
   });
 
-  it("marks overlaps and full-grave with quiet FG / PM / AM pills", () => {
+  it("maps overlap flags to PM / Graves / AM and treats unmarked as grave", () => {
     expect(plannerRosterBand({ isFullGrave: true })).toBe("grave");
     expect(plannerRosterBand({ isPMOverlap: true })).toBe("pm");
     expect(plannerRosterBand({ isAMOverlap: true })).toBe("am");
-    expect(plannerRosterBand({})).toBe("other");
-    expect(plannerRosterMark("grave")).toBe("FG");
-    expect(plannerRosterMark("pm")).toBe("PM");
-    expect(plannerRosterMark("am")).toBe("AM");
-    expect(plannerRosterMark("other")).toBeNull();
+    expect(plannerRosterBand({})).toBe("grave");
+  });
+
+  it("groups the scheduled rail PM → Graves → AM with A–Z names inside each band", () => {
+    const groups = buildPlannerRosterGroups(
+      snapshot({
+        scheduledRoster: [
+          { tmId: "tm-zoe", name: "Zoe", isFullGrave: false, isPMOverlap: true, isAMOverlap: false },
+          { tmId: "tm-amy", name: "Amy", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
+          { tmId: "tm-ben", name: "Ben", isFullGrave: false, isPMOverlap: false, isAMOverlap: true },
+          { tmId: "tm-cara", name: "Cara", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
+        ],
+      }),
+    );
+    expect(groups.map((group) => group.label)).toEqual(["PM", "Graves", "AM"]);
+    expect(groups.map((group) => group.rows.map((row) => row.name))).toEqual([
+      ["Zoe"],
+      ["Amy", "Cara"],
+      ["Ben"],
+    ]);
+    expect(buildPlannerRoster(snapshot({
+      scheduledRoster: [
+        { tmId: "tm-zoe", name: "Zoe", isFullGrave: false, isPMOverlap: true, isAMOverlap: false },
+        { tmId: "tm-amy", name: "Amy", isFullGrave: true, isPMOverlap: false, isAMOverlap: false },
+        { tmId: "tm-ben", name: "Ben", isFullGrave: false, isPMOverlap: false, isAMOverlap: true },
+      ],
+    })).map((row) => row.name)).toEqual(["Zoe", "Amy", "Ben"]);
+  });
+
+  it("attaches last-5 trails, leaves missing/empty quiet, and truncates extras", () => {
+    expect(plannerTrailLabels(undefined, "tm-jordan")).toEqual([]);
+    expect(plannerTrailLabels({}, "tm-jordan")).toEqual([]);
+    expect(plannerTrailLabels({ "tm-jordan": [] }, "tm-jordan")).toEqual([]);
+    expect(plannerTrailLabels({ "tm-jordan": ["Z3", "", "RR8M"] }, "tm-jordan")).toEqual([
+      "Z3",
+      "RR8M",
+    ]);
+    expect(
+      plannerTrailLabels(
+        { "tm-jordan": ["Z3", "RR8M", "ADMIN", "OL-PM", "Z9SR", "Z1"] },
+        "tm-jordan",
+      ),
+    ).toEqual(["Z3", "RR8M", "ADMIN", "OL-PM", "Z9SR"]);
+    expect(formatPlannerTrailLine(["Z3", "RR8M", "ADMIN"])).toBe("Z3 · RR8M · ADMIN");
+    expect(formatPlannerTrailLine([])).toBe("");
+
+    const roster = buildPlannerRoster(snapshot());
+    expect(roster.find((row) => row.name === "Jordan")?.trail).toEqual([
+      "Z3",
+      "RR8M",
+      "ADMIN",
+      "OL-PM",
+      "Z9SR",
+    ]);
+    expect(roster.find((row) => row.name === "Alex")?.trail).toEqual([]);
+    expect(roster.find((row) => row.name === "Morgan")?.trail).toEqual([]);
+
+    const z1 = buildPortraitPlannerPages(snapshot())[0].zones.find((card) => card.key === "Z1");
+    expect(z1?.tmName).toBe("Jordan");
+    expect(z1?.trail).toEqual(["Z3", "RR8M", "ADMIN", "OL-PM", "Z9SR"]);
+    const open = buildPortraitPlannerPages(snapshot())[0].zones.find((card) => card.key === "Z5");
+    expect(open?.empty).toBe(true);
+    expect(open?.trail).toEqual([]);
   });
 
   it("uses short huddle codes instead of Golden long titles", () => {
@@ -122,7 +187,7 @@ describe("portrait planner model", () => {
     expect(roster.find((row) => row.name === "Jordan")?.placed).toBe(true);
   });
 
-  it("paginates a long roster instead of crushing type", () => {
+  it("paginates a long roster and repeats the group head on the next sheet", () => {
     const names = Array.from({ length: PLANNER_ROSTER_PER_PAGE + 3 }, (_, i) => `TM ${String(i + 1).padStart(2, "0")}`);
     const pages = paginatePlannerRoster(names);
     expect(pages).toHaveLength(2);
@@ -140,6 +205,35 @@ describe("portrait planner model", () => {
     expect(models).toHaveLength(2);
     expect(models[1].rosterContinued).toBe(true);
     expect(models[1].zones).toHaveLength(10);
+    expect(models[1].rosterGroups[0]?.label).toBe("Graves");
+    expect(models[1].rosterGroups[0]?.continued).toBe(true);
+    expect(models[1].rosterGroups.some((group) => group.label === "AM")).toBe(true);
+
+    const packed = paginatePlannerRosterGroups(
+      buildPlannerRosterGroups(snapshot({ scheduledRoster: longRoster })),
+      PLANNER_ROSTER_PER_PAGE,
+    );
+    expect(packed[0].find((group) => group.band === "grave")?.rows).toHaveLength(PLANNER_ROSTER_PER_PAGE);
+    expect(packed[1].find((group) => group.band === "grave")?.continued).toBe(true);
+    expect(packed[1].find((group) => group.band === "grave")?.rows[0]?.name).toBeTruthy();
+  });
+
+  it("builds a blank-night workbook without crashing", () => {
+    const models = buildPortraitPlannerPages(
+      snapshot({
+        assignments: {},
+        scheduledRoster: [],
+        placementTrailsByTmId: undefined,
+      }),
+    );
+    expect(models).toHaveLength(1);
+    expect(models[0].roster).toEqual([]);
+    expect(models[0].rosterGroups.map((group) => [group.label, group.rows.length])).toEqual([
+      ["PM", 0],
+      ["Graves", 0],
+      ["AM", 0],
+    ]);
+    expect(models[0].zones.every((card) => card.empty && card.trail.length === 0)).toBe(true);
   });
 
   it("keeps empty zone / RR / aux / overlap slots as open boxes", () => {
@@ -206,21 +300,26 @@ describe("portrait planner page", () => {
     expect(html).toContain("sb-planner-roster");
     expect(html).toContain("Jordan");
     expect(html).toContain("Sam");
+    expect(html).toContain("sb-planner-roster-group-head");
     expect(html).toContain(">PM<");
+    expect(html).toContain(">Graves<");
     expect(html).toContain(">AM<");
     expect(html).toContain("Restrooms");
     expect(html).toContain("Zones");
     expect(html).toContain(">Aux<");
     expect(html).toContain("Overlaps");
     expect(html).toContain("sb-planner-slot-open");
-    expect(html).toContain("sb-planner-slot-dash");
+    expect(html).toContain("sb-planner-slot-line");
+    expect(html).toContain("sb-planner-trail");
+    expect(html).toContain("Z3 · RR8M · ADMIN · OL-PM · Z9SR");
     expect(html).toContain("Planner");
     expect(html).toContain("Friday");
-    expect(html).toContain("huddle / clipboard");
+    expect(html).toContain("huddle worksheet");
     expect(html).toContain("Z5");
     expect(html).toContain("MRR1");
     expect(html).toContain("ADM");
-    expect(html).toContain(">FG<");
+    expect(html).not.toContain(">FG<");
+    expect(html).not.toContain("sb-planner-roster-pill");
     expect(html).not.toContain("ZONE 5 + HIGH LIMITS");
     expect(html).not.toContain("ZONE 7 + SMOKING ROOM");
     expect(html).not.toContain("OPEN AUX");
@@ -232,8 +331,30 @@ describe("portrait planner page", () => {
     expect(html).toContain("sb-planner-section-rr");
     expect(html).toContain("sb-planner-section-zones");
     expect(html).toContain("sb-planner-roster-writein");
+    expect(html).toContain("sb-planner-roster-writein-row");
     expect(html).not.toContain("Passdown:");
     expect(html).not.toContain("TODO");
+  });
+
+  it("keeps write-in cells when the night is blank", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortraitPlannerPage, {
+        model: buildPortraitPlannerPages(
+          snapshot({
+            assignments: {},
+            scheduledRoster: [],
+            placementTrailsByTmId: undefined,
+          }),
+        )[0],
+      }),
+    );
+    expect(html).toContain(">PM<");
+    expect(html).toContain(">Graves<");
+    expect(html).toContain(">AM<");
+    expect(html).toContain("sb-planner-slot-line");
+    expect(html).toContain("sb-planner-roster-writein-row");
+    expect(html).toContain("Huddle notes");
+    expect(html).not.toContain("No Graves schedule loaded");
   });
 
   it("prints dual coverage as a primary +cue and a via mark, not a second owner", () => {
@@ -280,6 +401,9 @@ describe("portrait planner density css", () => {
     expect(planner).toContain(".sb-planner-notes");
     expect(planner).toContain(`flex: 0 0 ${PLANNER_NOTES_MIN_PX}px;`);
     expect(planner).toContain("repeating-linear-gradient");
+    expect(planner).toContain(".sb-planner-roster-group-head");
+    expect(planner).toContain(".sb-planner-trail");
+    expect(planner).toContain(".sb-planner-slot-line");
     expect(planner).not.toContain("min-height: 48px;");
     expect(planner).not.toContain("padding: 20px 22px 16px !important;");
     expect(planner).not.toContain("min-height: 21px;");

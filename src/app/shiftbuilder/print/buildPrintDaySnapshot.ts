@@ -24,6 +24,7 @@ import {
   buildPlacementTrailLabels,
   PLACEMENT_HISTORY_FETCH_CALENDAR_DAYS,
 } from "@/app/shiftbuilder/components/placementPadHelpers";
+import { PLANNER_TRAIL_COUNT } from "./portraitConstants";
 import type {
   PrintDaySnapshot,
   PrintPlanningCardModel,
@@ -67,9 +68,10 @@ export async function hydratePrintPlacementTrails(
 ): Promise<PrintDaySnapshot> {
   const tmIds = [
     ...new Set(
-      Object.values(snapshot.assignments)
-        .map((assignment) => assignment?.tmId)
-        .filter((tmId): tmId is string => Boolean(tmId)),
+      [
+        ...Object.values(snapshot.assignments).map((assignment) => assignment?.tmId),
+        ...(snapshot.scheduledRoster ?? []).map((row) => row.tmId),
+      ].filter((tmId): tmId is string => Boolean(tmId?.trim())),
     ),
   ].sort();
   if (tmIds.length === 0) return snapshot;
@@ -102,6 +104,7 @@ export async function hydratePrintPlacementTrails(
         placementTrailsByTmId[tmId] = buildPlacementTrailLabels(
           payload.histories?.[tmId] ?? null,
           beforeIso,
+          PLANNER_TRAIL_COUNT,
         );
       }
     }

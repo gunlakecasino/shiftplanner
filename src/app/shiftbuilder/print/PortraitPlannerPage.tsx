@@ -1,12 +1,26 @@
 import React from "react";
-import type { PortraitPlannerPageModel, PlannerRosterEntry, PlannerSlotCard } from "./buildPortraitPlannerModel";
-import { plannerRosterMark } from "./buildPortraitPlannerModel";
+import type {
+  PlannerRosterGroup,
+  PlannerRosterEntry,
+  PlannerSlotCard,
+  PortraitPlannerPageModel,
+} from "./buildPortraitPlannerModel";
+import { formatPlannerTrailLine } from "./buildPortraitPlannerModel";
 import { PLANNER_NOTES_MIN_PX } from "./portraitConstants";
 import "./printPreview.css";
 
 export type PortraitPlannerPageProps = {
   model: PortraitPlannerPageModel;
 };
+
+function PlannerTrail({ labels }: { labels: string[] }) {
+  const line = formatPlannerTrailLine(labels);
+  return (
+    <div className="sb-planner-trail" aria-hidden={line ? undefined : true}>
+      {line}
+    </div>
+  );
+}
 
 function PlannerSlotBox({ card }: { card: PlannerSlotCard }) {
   const coverCue = card.covers.length > 0 ? `+${card.covers.join(" +")}` : null;
@@ -22,17 +36,20 @@ function PlannerSlotBox({ card }: { card: PlannerSlotCard }) {
     >
       <div className="sb-planner-slot-stripe" />
       <div className="sb-planner-slot-label">{card.label}</div>
-      {card.empty ? (
-        <div className="sb-planner-slot-open" aria-label={isCovered ? `Covered ${viaCue}` : "Open"}>
-          <span className="sb-planner-slot-dash">—</span>
-          {viaCue ? <span className="sb-planner-slot-via">{viaCue}</span> : null}
-        </div>
-      ) : (
-        <div className="sb-planner-slot-name-row">
-          <div className="sb-planner-slot-name">{card.tmName}</div>
-          {coverCue ? <div className="sb-planner-slot-covers">{coverCue}</div> : null}
-        </div>
-      )}
+      <div className="sb-planner-slot-writein">
+        {card.empty ? (
+          <div className="sb-planner-slot-open" aria-label={isCovered ? `Covered ${viaCue}` : "Open"}>
+            <span className="sb-planner-slot-name sb-planner-slot-line" />
+            {viaCue ? <span className="sb-planner-slot-via">{viaCue}</span> : <PlannerTrail labels={[]} />}
+          </div>
+        ) : (
+          <div className="sb-planner-slot-name-row">
+            <div className="sb-planner-slot-name sb-planner-slot-line">{card.tmName}</div>
+            <PlannerTrail labels={card.trail} />
+            {coverCue ? <div className="sb-planner-slot-covers">{coverCue}</div> : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -68,6 +85,40 @@ function rosterRowClass(row: PlannerRosterEntry): string {
   return `sb-planner-roster-row${row.placed ? " is-placed" : ""}`;
 }
 
+function RosterWriteins({ lines = 2 }: { lines?: number }) {
+  return (
+    <ul className="sb-planner-roster-writeins" aria-hidden="true">
+      {Array.from({ length: lines }, (_, index) => (
+        <li key={index} className="sb-planner-roster-writein-row">
+          <span className="sb-planner-roster-mark" />
+          <span className="sb-planner-roster-writein-line" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function RosterGroup({ group }: { group: PlannerRosterGroup }) {
+  const head = group.continued ? `${group.label} · cont.` : group.label;
+  return (
+    <li className="sb-planner-roster-group">
+      <div className="sb-planner-roster-group-head">{head}</div>
+      <ol className="sb-planner-roster-names">
+        {group.rows.map((row) => (
+          <li key={row.tmId} className={rosterRowClass(row)}>
+            <span className="sb-planner-roster-mark" aria-hidden="true" />
+            <span className="sb-planner-roster-copy">
+              <span className="sb-planner-roster-name">{row.name}</span>
+              <PlannerTrail labels={row.trail} />
+            </span>
+          </li>
+        ))}
+      </ol>
+      <RosterWriteins lines={2} />
+    </li>
+  );
+}
+
 export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
   const pageNote =
     model.pageCount > 1 ? ` · ${model.pageIndex} of ${model.pageCount}` : "";
@@ -88,7 +139,7 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
               {pageNote}
             </div>
             <div className="sb-planner-sub">
-              {model.monthYear} · {model.nightMeta} · huddle / clipboard
+              {model.monthYear} · {model.nightMeta} · huddle worksheet
             </div>
           </div>
           <div className="sb-planner-header-right">
@@ -103,19 +154,9 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
         <aside className="sb-planner-roster" aria-label="Scheduled tonight">
           <div className="sb-planner-roster-head">{rosterLabel}</div>
           <ol className="sb-planner-roster-list">
-            {model.roster.length === 0 ? (
-              <li className="sb-planner-roster-empty">No Graves schedule loaded</li>
-            ) : (
-              model.roster.map((row) => {
-                const mark = plannerRosterMark(row.band);
-                return (
-                  <li key={row.tmId} className={rosterRowClass(row)}>
-                    <span className="sb-planner-roster-name">{row.name}</span>
-                    {mark ? <span className="sb-planner-roster-pill">{mark}</span> : null}
-                  </li>
-                );
-              })
-            )}
+            {model.rosterGroups.map((group) => (
+              <RosterGroup key={`${group.band}-${group.continued ? "cont" : "start"}`} group={group} />
+            ))}
           </ol>
           <div className="sb-planner-roster-writein" aria-hidden="true" />
         </aside>
