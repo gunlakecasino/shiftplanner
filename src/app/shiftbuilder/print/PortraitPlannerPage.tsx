@@ -1,6 +1,7 @@
 import React from "react";
 import type { PortraitPlannerPageModel, PlannerRosterEntry, PlannerSlotCard } from "./buildPortraitPlannerModel";
 import { plannerRosterMark } from "./buildPortraitPlannerModel";
+import { PLANNER_NOTES_MIN_PX } from "./portraitConstants";
 import "./printPreview.css";
 
 export type PortraitPlannerPageProps = {
@@ -176,6 +177,15 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
           </Section>
         </main>
       </div>
+
+      <section
+        className="sb-planner-notes"
+        aria-label="Huddle notes"
+        style={{ minHeight: PLANNER_NOTES_MIN_PX }}
+      >
+        <div className="sb-planner-notes-head">Huddle notes</div>
+        <div className="sb-planner-notes-rules" aria-hidden="true" />
+      </section>
     </div>
   );
 }

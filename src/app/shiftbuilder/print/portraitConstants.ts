@@ -7,3 +7,10 @@ export const LETTER_PORTRAIT_PT = { width: 612, height: 792 } as const;
 
 /** Quiet roster column: prefer one page; overflow continues on a second sheet. */
 export const PLANNER_ROSTER_PER_PAGE = 36;
+
+/**
+ * Ruled huddle-notes band on Letter portrait. Absorbs leftover artboard
+ * height after packed RR / zone / aux / overlap grids. Print-useful;
+ * never filled with invented copy.
+ */
+export const PLANNER_NOTES_MIN_PX = 168;
