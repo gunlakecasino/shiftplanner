@@ -1597,10 +1597,10 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-approved-deployment-body {
-  flex: 0 0 689px;
-  height: 689px;
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-rows: 296px 275px 118px;
+  grid-template-rows: 296px 275px minmax(118px, 1fr);
 }
 
 .sb-approved-deployment-body > section {

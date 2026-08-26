@@ -261,5 +261,8 @@ describe("official zone row layout", () => {
 
     expect(tracks.auxiliary).toBeGreaterThanOrEqual(108);
     expect(tracks.zones + tracks.restrooms + tracks.auxiliary).toBe(689);
+    expect(tracks.cssValue).toBe(
+      `${tracks.zones}px ${tracks.restrooms}px minmax(${tracks.auxiliary}px, 1fr)`,
+    );
   });
 });

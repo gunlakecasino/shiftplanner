@@ -347,7 +347,7 @@ export function solveOfficialDeploymentTracks({
 
   return {
     ...tracks,
-    cssValue: `${tracks.zones}px ${tracks.restrooms}px ${tracks.auxiliary}px`,
+    cssValue: `${tracks.zones}px ${tracks.restrooms}px minmax(${tracks.auxiliary}px, 1fr)`,
     restroomRows: solvedRestroomRows,
   };
 }
