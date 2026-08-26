@@ -1,3 +1,4 @@
+import { DROP_ZONE_PLATE_VIEWBOX } from "@/lib/shiftbuilder/dropZones";
 import { taskHierarchyDepth } from "@/lib/shiftbuilder/taskHierarchy";
 
 export type OfficialZoneCardLoad = {
@@ -62,6 +63,8 @@ const AUX_SECTION_HEADER_PX = 33;
 const ROW_GAP_PX = 8;
 const MIN_AUX_CARD_TRACK_PX = 59;
 const MIN_AUX_MINI_ROW_PX = 48;
+/** Brian's plate is 74.84 tall — never squeeze AUX below that or the row clips. */
+const MIN_DROP_ZONES_TRACK_PX = Math.ceil(DROP_ZONE_PLATE_VIEWBOX.height);
 
 export type OfficialTaskRow = {
   depth: 0 | 1;
@@ -265,8 +268,10 @@ function auxSectionNeed(
   if (rowCount > 1) {
     return (
       AUX_SECTION_HEADER_PX +
-      rowCount * MIN_AUX_MINI_ROW_PX +
-      (rowCount - 1) * ROW_GAP_PX
+      Math.max(
+        rowCount * MIN_AUX_MINI_ROW_PX + (rowCount - 1) * ROW_GAP_PX,
+        MIN_DROP_ZONES_TRACK_PX,
+      )
     );
   }
 
@@ -274,6 +279,7 @@ function auxSectionNeed(
     AUX_SECTION_HEADER_PX +
     Math.max(
       MIN_AUX_CARD_TRACK_PX,
+      MIN_DROP_ZONES_TRACK_PX,
       ...cards.map(estimateOfficialZoneCardHeight),
     )
   );

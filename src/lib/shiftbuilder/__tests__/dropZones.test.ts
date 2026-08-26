@@ -47,8 +47,8 @@ function snapshot(overrides: Partial<PrintDaySnapshot> = {}): PrintDaySnapshot {
 }
 
 describe("drop zone rotation", () => {
-  it("locks group 1 to Brian's mock and leaves 2/3 empty", () => {
-    expect(DROP_ZONE_GROUPS[1]).toEqual([3, 5, 8, 10]);
+  it("keeps all three groups empty until Brian sends the lists", () => {
+    expect(DROP_ZONE_GROUPS[1]).toEqual([]);
     expect(DROP_ZONE_GROUPS[2]).toEqual([]);
     expect(DROP_ZONE_GROUPS[3]).toEqual([]);
     expect(parseDropZoneGroup(2)).toBe(2);
@@ -67,14 +67,14 @@ describe("drop zone rotation", () => {
     const explicit = resolveDropZones(3, "2026-08-14");
     expect(explicit.explicitGroup).toBe(3);
     expect(explicit.scheduledGroup).toBe(3);
-    expect(explicit.usedFallback).toBe(true);
-    expect(explicit.displayGroup).toBe(1);
-    expect(explicit.zones).toEqual([3, 5, 8, 10]);
+    expect(explicit.usedFallback).toBe(false);
+    expect(explicit.displayGroup).toBe(3);
+    expect(explicit.zones).toEqual([]);
 
     const cycled = resolveDropZones(null, "2026-08-14");
     expect(cycled.explicitGroup).toBeNull();
     expect(cycled.scheduledGroup).toBe(a);
-    expect(cycled.zones).toEqual([3, 5, 8, 10]);
+    expect(cycled.zones).toEqual([]);
   });
 });
 
@@ -106,7 +106,7 @@ describe("drop zone artwork", () => {
 });
 
 describe("Golden and desk drop zones card", () => {
-  it("puts group 1 discs on Golden page 1 bottom-right, not page 2", () => {
+  it("puts a blank DROP ZONES plate on Golden page 1 bottom-right, not page 2", () => {
     const pageOne = renderToStaticMarkup(
       React.createElement(PrintPreviewPage, {
         view: "deployment",
@@ -130,10 +130,10 @@ describe("Golden and desk drop zones card", () => {
 
     expect(pageOne).toContain("sb-approved-drop-zones-slot");
     expect(pageOne).toContain("/drop-zones/dropZoneBox.svg");
-    expect(pageOne).toContain("/drop-zones/dz03.svg");
-    expect(pageOne).toContain("/drop-zones/dz05.svg");
-    expect(pageOne).toContain("/drop-zones/dz08.svg");
-    expect(pageOne).toContain("/drop-zones/dz10.svg");
+    expect(pageOne).not.toContain("/drop-zones/dz03.svg");
+    expect(pageOne).not.toContain("/drop-zones/dz05.svg");
+    expect(pageOne).not.toContain("/drop-zones/dz08.svg");
+    expect(pageOne).not.toContain("/drop-zones/dz10.svg");
     expect(pageOne).toContain('data-drop-zone-group="1"');
     expect(pageOne).not.toContain("sb-side-task-summary-blank-row");
     expect(pageTwo).toContain(">Projects<");
@@ -155,15 +155,16 @@ describe("Golden and desk drop zones card", () => {
     expect(html).toContain("sb-planner-sheet");
   });
 
-  it("keeps the same group 1 discs on the desk card", () => {
+  it("keeps the same blank plate on the desk card", () => {
     const html = renderToStaticMarkup(
       React.createElement(DropZonesCard, {
         resolution: resolveDropZones(1, "2026-08-14"),
         showPicker: true,
       }),
     );
-    expect(html).toContain("/drop-zones/dz03.svg");
-    expect(html).toContain("/drop-zones/dz10.svg");
+    expect(html).toContain("/drop-zones/dropZoneBox.svg");
+    expect(html).not.toContain("/drop-zones/dz03.svg");
+    expect(html).not.toContain("/drop-zones/dz10.svg");
     expect(html).toContain("sb-drop-zones-picker");
     expect(html).toContain('aria-label="Drop zone group"');
     expect(html).toContain('aria-label="DROP ZONES group 1"');

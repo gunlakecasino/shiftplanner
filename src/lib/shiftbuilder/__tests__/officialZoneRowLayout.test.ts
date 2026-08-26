@@ -206,7 +206,7 @@ describe("official zone row layout", () => {
     });
 
     expect(tracks.restrooms).toBe(292);
-    expect(tracks.auxiliary).toBe(101);
+    expect(tracks.auxiliary).toBe(108);
     expect(tracks.zones + tracks.restrooms + tracks.auxiliary).toBe(689);
     expect(tracks.restroomRows).toEqual({
       first: 127,
@@ -230,6 +230,36 @@ describe("official zone row layout", () => {
     });
 
     expect(tracks.auxiliary).toBeGreaterThanOrEqual(137);
+    expect(tracks.zones + tracks.restrooms + tracks.auxiliary).toBe(689);
+  });
+
+  it("never squeezes AUX below the DROP ZONES plate", () => {
+    const denseRestroom: OfficialZoneCardLoad = {
+      names: ["Porter"],
+      tasks: [
+        "Table Games / PIT",
+        "Zone 8 Family Restroom",
+        "T.D.R. Restroom",
+        "Team Member Locker Room",
+        "Team Member Restroom",
+      ],
+      hasFooter: true,
+      compact: true,
+    };
+
+    const tracks = solveOfficialDeploymentTracks({
+      zoneRows: [
+        Array.from({ length: 5 }, () => emptyCard),
+        Array.from({ length: 5 }, () => emptyCard),
+      ],
+      restroomRows: [
+        [emptyCard, emptyCard, emptyCard, denseRestroom, emptyCard],
+        [emptyCard, emptyCard, emptyCard, denseRestroom, emptyCard],
+      ],
+      auxiliaryCards: [emptyCard, emptyCard, emptyCard],
+    });
+
+    expect(tracks.auxiliary).toBeGreaterThanOrEqual(108);
     expect(tracks.zones + tracks.restrooms + tracks.auxiliary).toBe(689);
   });
 });

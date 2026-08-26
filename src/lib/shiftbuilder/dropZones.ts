@@ -1,14 +1,13 @@
 /**
  * DROP ZONES card — night-level rotation, not a TM attribute.
  *
- * Group 1 is Brian's mock (3, 5, 8, 10) until he corrects it.
- * Groups 2 and 3 stay empty until he sends those lists — do not invent them.
- * An empty group falls back to group 1 discs so the visual PR is not blocked.
+ * All three groups stay empty until Brian sends the zone lists.
+ * Do not invent discs. An empty group renders the plate only.
  * An explicit night group wins over the 3-night cycle.
  */
 
 export const DROP_ZONE_GROUPS = {
-  1: [3, 5, 8, 10],
+  1: [] as number[],
   2: [] as number[],
   3: [] as number[],
 } as const;
@@ -58,12 +57,11 @@ export function resolveDropZones(
   const explicitGroup = parseDropZoneGroup(explicit);
   const scheduledGroup = explicitGroup ?? cycleDropZoneGroupFromGraveDate(graveDateIso);
   const listed = DROP_ZONE_GROUPS[scheduledGroup];
-  const empty = listed.length === 0;
   return {
     scheduledGroup,
     explicitGroup,
-    displayGroup: empty ? 1 : scheduledGroup,
-    zones: empty ? [...DROP_ZONE_GROUPS[1]] : [...listed],
-    usedFallback: empty,
+    displayGroup: scheduledGroup,
+    zones: [...listed],
+    usedFallback: false,
   };
 }

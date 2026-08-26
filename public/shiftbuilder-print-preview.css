@@ -1659,7 +1659,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: grid;
   grid-template-columns: minmax(0, 1fr) 192px;
   column-gap: 11px;
-  min-height: 0;
+  min-height: 75px;
 }
 
 .sb-approved-aux-card-grid {
@@ -2147,6 +2147,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   justify-content: center;
   align-self: stretch;
   min-width: 192px;
+  min-height: 75px;
 }
 
 .print-artboard .sb-drop-zones-picker {

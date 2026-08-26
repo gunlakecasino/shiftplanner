@@ -170,10 +170,10 @@ describe("planning worksheet print", () => {
 
     expect(html).toContain("sb-approved-drop-zones-slot");
     expect(html).toContain("/drop-zones/dropZoneBox.svg");
-    expect(html).toContain("/drop-zones/dz03.svg");
-    expect(html).toContain("/drop-zones/dz05.svg");
-    expect(html).toContain("/drop-zones/dz08.svg");
-    expect(html).toContain("/drop-zones/dz10.svg");
+    expect(html).not.toContain("/drop-zones/dz03.svg");
+    expect(html).not.toContain("/drop-zones/dz05.svg");
+    expect(html).not.toContain("/drop-zones/dz08.svg");
+    expect(html).not.toContain("/drop-zones/dz10.svg");
     expect(html).not.toContain("sb-side-task-summary-blank-row");
   });
 

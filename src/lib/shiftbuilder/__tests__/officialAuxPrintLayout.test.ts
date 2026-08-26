@@ -59,7 +59,10 @@ describe("official AUX print layout", () => {
         /\.sb-approved-aux-card-grid\s*\{[^}]*grid-column:\s*1;[^}]*width:\s*100%;/s,
       );
       expect(css).toMatch(
-        /\.sb-approved-drop-zones-slot\s*\{[^}]*grid-column:\s*2;/s,
+        /\.sb-approved-drop-zones-slot\s*\{[^}]*grid-column:\s*2;[^}]*min-height:\s*75px;/s,
+      );
+      expect(css).toMatch(
+        /\.sb-approved-aux-grid\s*\{[^}]*min-height:\s*75px;/s,
       );
     });
   });

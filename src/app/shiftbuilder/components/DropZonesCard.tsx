@@ -41,19 +41,21 @@ export function DropZonesCard({
           className="sb-drop-zone-svg sb-drop-zones-plate"
           draggable={false}
         />
-        <div className="sb-drop-zones-discs" aria-hidden="true">
-          {resolution.zones.map((zone) => (
-            <img
-              key={zone}
-              src={dropZoneDiscSrc(zone)}
-              alt=""
-              width={disc.width}
-              height={disc.height}
-              className="sb-drop-zone-svg sb-drop-zone-disc"
-              draggable={false}
-            />
-          ))}
-        </div>
+        {resolution.zones.length > 0 ? (
+          <div className="sb-drop-zones-discs" aria-hidden="true">
+            {resolution.zones.map((zone) => (
+              <img
+                key={zone}
+                src={dropZoneDiscSrc(zone)}
+                alt=""
+                width={disc.width}
+                height={disc.height}
+                className="sb-drop-zone-svg sb-drop-zone-disc"
+                draggable={false}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
       {showPicker ? (
         <div className="sb-drop-zones-picker" role="group" aria-label="Drop zone group">
