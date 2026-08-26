@@ -622,7 +622,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.278"');
+    expect(version).toContain('"1.279"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -894,10 +894,10 @@ describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
     expect(cheatsheet).toContain("previousFocusRef");
   });
 
-  it("improves the PIN side toward a cool desk and bumps 1.278", () => {
+  it("improves the PIN side toward a cool desk and bumps 1.279", () => {
     expect(authGateCss).toContain("sb-auth-visual__desk");
     expect(authGateCss).toContain("#F4F6FA");
     expect(authGateCss).toContain("object-fit: contain");
-    expect(version).toContain('"1.278"');
+    expect(version).toContain('"1.279"');
   });
 });

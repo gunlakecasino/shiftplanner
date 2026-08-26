@@ -1657,9 +1657,9 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 .sb-approved-aux-grid {
   height: calc(100% - 33px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 192px;
+  grid-template-columns: minmax(0, 1fr);
   column-gap: 11px;
-  min-height: 75px;
+  min-height: 0;
 }
 
 .sb-approved-aux-card-grid {
@@ -2138,16 +2138,6 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   background-image: radial-gradient(circle, #d1d5db 0.45px, transparent 0.45px) !important;
   background-size: 7px 7px !important;
   background-position: 1px 1px !important;
-}
-
-.sb-approved-drop-zones-slot {
-  grid-column: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  align-self: stretch;
-  min-width: 192px;
-  min-height: 75px;
 }
 
 .print-artboard .sb-drop-zones-picker {

@@ -106,7 +106,7 @@ describe("drop zone artwork", () => {
 });
 
 describe("Golden and desk drop zones card", () => {
-  it("puts a blank DROP ZONES plate on Golden page 1 bottom-right, not page 2", () => {
+  it("hides DROP ZONES on the Golden print PDF until lists arrive", () => {
     const pageOne = renderToStaticMarkup(
       React.createElement(PrintPreviewPage, {
         view: "deployment",
@@ -128,14 +128,10 @@ describe("Golden and desk drop zones card", () => {
       }),
     );
 
-    expect(pageOne).toContain("sb-approved-drop-zones-slot");
-    expect(pageOne).toContain("/drop-zones/dropZoneBox.svg");
-    expect(pageOne).not.toContain("/drop-zones/dz03.svg");
-    expect(pageOne).not.toContain("/drop-zones/dz05.svg");
-    expect(pageOne).not.toContain("/drop-zones/dz08.svg");
-    expect(pageOne).not.toContain("/drop-zones/dz10.svg");
-    expect(pageOne).toContain('data-drop-zone-group="1"');
-    expect(pageOne).not.toContain("sb-side-task-summary-blank-row");
+    expect(pageOne).not.toContain("sb-approved-drop-zones-slot");
+    expect(pageOne).not.toContain("/drop-zones/");
+    expect(pageOne).not.toContain("DROP ZONES");
+    expect(pageOne).toContain("sb-approved-aux-grid");
     expect(pageTwo).toContain(">Projects<");
     expect(pageTwo).not.toContain("/drop-zones/");
     expect(pageTwo).not.toContain("sb-approved-drop-zones-slot");

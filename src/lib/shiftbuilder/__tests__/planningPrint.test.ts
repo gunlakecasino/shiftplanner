@@ -158,7 +158,7 @@ describe("planning worksheet print", () => {
     expect(html).not.toContain("Saved shift note should not print");
   });
 
-  it("puts the DROP ZONES card beside the official AUX grid on page 1", () => {
+  it("hides the DROP ZONES plate on the official print PDF", () => {
     const html = renderToStaticMarkup(
       React.createElement(PrintPreviewPage, {
         view: "deployment",
@@ -168,12 +168,9 @@ describe("planning worksheet print", () => {
       }),
     );
 
-    expect(html).toContain("sb-approved-drop-zones-slot");
-    expect(html).toContain("/drop-zones/dropZoneBox.svg");
-    expect(html).not.toContain("/drop-zones/dz03.svg");
-    expect(html).not.toContain("/drop-zones/dz05.svg");
-    expect(html).not.toContain("/drop-zones/dz08.svg");
-    expect(html).not.toContain("/drop-zones/dz10.svg");
+    expect(html).toContain("sb-approved-aux-grid");
+    expect(html).not.toContain("sb-approved-drop-zones-slot");
+    expect(html).not.toContain("/drop-zones/");
     expect(html).not.toContain("sb-side-task-summary-blank-row");
   });
 

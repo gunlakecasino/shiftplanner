@@ -37,11 +37,8 @@ import {
 } from "./officialZoneRowLayout";
 import { AsOfTimestamp } from "./AsOfTimestamp";
 import { GoldenPlanningNotesPanel } from "./GoldenPrintComponents";
-import { DropZonesCard } from "../components/DropZonesCard";
 import { CardVectorMark } from "../components/CardVectorMark";
 import { parseCardVector } from "@/lib/shiftbuilder/cardVectors";
-import { resolveDropZones } from "@/lib/shiftbuilder/dropZones";
-import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
@@ -59,9 +56,8 @@ export function officialAuxCardGridShape(auxCardCount: number): {
   columns: number;
   rows: number;
 } {
-  // The AUX rail owns the tracks immediately beside the page-1 DROP ZONES card.
-  // Keep up to five configured cards on one full-width row so they meet that
-  // 192-wide plate instead of wrapping early and leaving a blank pocket.
+  // Keep up to five configured cards on one full-width row. DROP ZONES is
+  // hidden on the print PDF until Brian sends the group lists.
   const columns = Math.max(1, Math.min(5, auxCardCount));
   return {
     columns,
@@ -580,17 +576,6 @@ export function OfficialGravesDeploymentPage({
                   blankWhenEmpty={def.role === "admin" || def.role === "z9sr"}
                 />
               ))}
-            </div>
-            <div className="sb-approved-drop-zones-slot">
-              <DropZonesCard
-                resolution={
-                  snapshot.dropZones ??
-                  resolveDropZones(
-                    snapshot.dropZoneGroup ?? null,
-                    formatLocalDateISO(snapshot.day.date),
-                  )
-                }
-              />
             </div>
           </div>
         </section>
