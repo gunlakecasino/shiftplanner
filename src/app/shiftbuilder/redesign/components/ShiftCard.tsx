@@ -101,9 +101,9 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
           </div>
           {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
           <div className="flex flex-col gap-0.5 mb-2 items-start text-left">
-            <div className="flex items-baseline gap-1.5 min-w-0 w-full">
+            <div className="flex items-baseline gap-1.5 min-w-0 w-full flex-nowrap">
               <div className="text-[17px] font-bold text-[#111827] leading-tight truncate min-w-0">{name}</div>
-              {nameVector}
+              {nameVector ? <span className="sb-tm-name-vector shrink-0">{nameVector}</span> : null}
             </div>
             {nameMeta}
             {secondName && (

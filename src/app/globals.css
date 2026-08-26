@@ -7935,6 +7935,7 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
 .sb-tm-name-vector {
   display: inline-flex;
   align-items: baseline;
+  flex: 0 0 auto;
   min-width: 0;
-  margin-left: 6px;
+  margin-left: 2px;
 }
