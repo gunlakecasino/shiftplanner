@@ -1,9 +1,10 @@
 /**
  * DROP ZONES card — night-level rotation, not a TM attribute.
  *
- * Group 1 is locked to Brian's mock (3, 5, 8, 10). Groups 2 and 3 are
- * reserved empty lists — do not invent zones. An empty group falls back
- * to group 1 discs. An explicit night group wins over the 3-night cycle.
+ * Group 1 is Brian's mock (3, 5, 8, 10) until he corrects it.
+ * Groups 2 and 3 stay empty until he sends those lists — do not invent them.
+ * An empty group falls back to group 1 discs so the visual PR is not blocked.
+ * An explicit night group wins over the 3-night cycle.
  */
 
 export const DROP_ZONE_GROUPS = {
