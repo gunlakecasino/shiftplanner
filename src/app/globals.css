@@ -7853,10 +7853,12 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
 
 .sb-card-vector {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   flex: 0 0 auto;
   min-width: 0;
-  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 0;
   transform: rotate(-2deg);
   pointer-events: none;
 }
@@ -7864,13 +7866,24 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
 .sb-card-vector-svg {
   display: block;
   width: auto;
-  height: auto;
+  height: 100%;
+  max-width: 100%;
   object-fit: contain;
 }
 
+.sb-card-vector--desk {
+  height: 12px;
+  max-width: 72px;
+}
+
 .sb-card-vector--desk .sb-card-vector-svg {
-  height: 18px;
-  max-width: 118px;
+  height: 12px;
+  max-width: 72px;
+}
+
+.sb-card-vector--pad {
+  height: 16px;
+  max-width: 108px;
 }
 
 .sb-card-vector--pad .sb-card-vector-svg {
@@ -7878,9 +7891,24 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
   max-width: 108px;
 }
 
+.sb-card-vector--planner {
+  height: 11px;
+  max-width: 76px;
+}
+
 .sb-card-vector--planner .sb-card-vector-svg {
   height: 11px;
   max-width: 76px;
+}
+
+.sb-card-vector--golden {
+  height: 9px;
+  max-width: 62px;
+}
+
+.sb-card-vector--golden .sb-card-vector-svg {
+  height: 9px;
+  max-width: 62px;
 }
 
 .sb-card-vector-picker {
@@ -7934,10 +7962,13 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
   padding: 0;
 }
 
-.sb-tm-name-vector {
-  display: inline-flex;
-  align-items: baseline;
+.sb-tm-name-vector,
+.sb-card-vector-badge {
+  display: flex;
+  align-items: center;
   flex: 0 0 auto;
   min-width: 0;
-  margin-left: 2px;
+  max-width: 100%;
+  margin-top: 3px;
+  line-height: 0;
 }

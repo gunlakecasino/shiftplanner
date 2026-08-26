@@ -5,9 +5,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
 import { PortraitPlannerPage } from "@/app/shiftbuilder/print/PortraitPlannerPage";
 import { buildPortraitPlannerPages } from "@/app/shiftbuilder/print/buildPortraitPlannerModel";
+import { OfficialGravesDeploymentPage } from "@/app/shiftbuilder/print/OfficialGravesPrintPages";
+import { PrintPreviewPage } from "@/app/shiftbuilder/print/PrintPreviewPage";
 import {
   buildCardVectorUiMap,
   CARD_VECTOR_IDS,
+  CARD_VECTOR_VIEWBOX,
   isLegacySweeperTaskLabel,
   parseCardVector,
   visibleDeskSlotTasks,
@@ -123,6 +126,101 @@ describe("planner vector mark", () => {
   });
 });
 
+describe("desk standing badge", () => {
+  it("keeps the shipped SVG off the TM name line so the name stays readable", () => {
+    const chrome = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    const shiftCard = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+      "utf8",
+    );
+    const globals = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+
+    expect(chrome).toContain("sb-card-vector-badge");
+    expect(chrome).not.toContain('{vector ? <span className="sb-tm-name-vector">{vector}</span> : null}');
+    expect(shiftCard).toContain("sb-card-vector-badge");
+    expect(shiftCard).not.toContain("sb-tm-name-vector shrink-0");
+    expect(globals).toMatch(/\.sb-card-vector--desk \{\n  height: 12px;\n  max-width: 72px;/);
+    expect(globals).not.toContain("max-width: 118px");
+  });
+});
+
+describe("Golden / floor PDF vector mark", () => {
+  const day: DayDef = {
+    index: 0,
+    name: "Tuesday",
+    short: "Tue",
+    dateNum: 25,
+    monthYear: "August 2026",
+    color: "#c43b18",
+    meta: "11p – 7a",
+    date: new Date(2026, 7, 25, 12),
+    isToday: false,
+  };
+
+  const floorSnapshot: PrintDaySnapshot = {
+    dayIndex: 0,
+    day,
+    assignments: {
+      MRR8: { tmId: "tm-g", tmName: "Grant", breakGroup: 1 },
+    },
+    tasksBySlot: {},
+    auxDefs: [],
+    amOverlapDayName: "Wednesday",
+    amOverlapDateNum: 26,
+    nextDayColor: "#006ec8",
+    breakCounts: { 1: 1, 2: 0, 3: 0, 4: 0 },
+    cardVectors: { MRR8: "sweep_5_8_hl" },
+  };
+
+  it("prints the same shipped SVG on the official Graves zone sheet", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(OfficialGravesDeploymentPage, {
+        snapshot: floorSnapshot,
+        weekDayDefs: [day],
+        includeTimestamp: false,
+      }),
+    );
+    expect(html).toContain("Grant");
+    expect(html).toContain('data-slot-key="MRR8"');
+    expect(html).toContain("/card-vectors/sweep-5-8-hl.svg");
+    expect(html).toContain("sb-approved-card-vector");
+    expect(html).not.toContain("Segoe Script");
+    expect(html).not.toContain("SweepInk");
+  });
+
+  it("prints the same shipped SVG on the planning Golden card", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PrintPreviewPage, {
+        view: "deployment",
+        snapshot: floorSnapshot,
+        weekDayDefs: [day],
+        printVariant: "planning",
+      }),
+    );
+    expect(html).toContain("Grant");
+    expect(html).toContain("/card-vectors/sweep-5-8-hl.svg");
+    expect(html).toContain("sb-golden-card-vector");
+  });
+
+  it("embeds file SVG imgs before html-to-image so Golden rasters keep the mark", () => {
+    const raster = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/print/rasterPrep.ts"),
+      "utf8",
+    );
+    const exportDoc = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/print/goldenExportDocument.ts"),
+      "utf8",
+    );
+    expect(raster).toContain("embedCardVectorImagesForRaster");
+    expect(raster).toContain("img.sb-card-vector-svg");
+    expect(raster).toContain("toDataURL(\"image/png\")");
+    expect(exportDoc).toContain("embedCardVectorImagesForRaster");
+  });
+});
+
 describe("Brian's shipped vector artwork", () => {
   it("ships the three outlined files and never recreates ink as cursive text", () => {
     const sweep910 = readFileSync(join(process.cwd(), "public/card-vectors/sweep-9-10-sr.svg"), "utf8");
@@ -150,6 +248,8 @@ describe("Brian's shipped vector artwork", () => {
     expect(vectors).toContain("/card-vectors/sweep-5-8-hl.svg");
     expect(vectors).toContain("/card-vectors/laundry.svg");
     expect(mark).toContain("CARD_VECTOR_SRC[vector]");
+    expect(mark).toContain("CARD_VECTOR_VIEWBOX");
+    expect(CARD_VECTOR_VIEWBOX.sweep_5_8_hl).toEqual({ width: 99.64, height: 14.63 });
     expect(mark).not.toContain("SweepInk");
     expect(mark).not.toContain("LaundryInk");
     expect(mark).not.toContain("Segoe Script");

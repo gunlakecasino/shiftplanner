@@ -109,9 +109,9 @@ export function TmNameBlock({
 }) {
   return (
     <div className={`flex flex-col min-w-0 w-full ${className}`.trim()}>
-      <div className="flex items-center gap-1 min-w-0">
+      <div className="flex items-center gap-1 min-w-0 w-full">
         <span
-          className={`sb-tm-primary-name font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate min-w-0 ${nameClassName}`.trim()}
+          className={`sb-tm-primary-name font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate min-w-0 flex-1 ${nameClassName}`.trim()}
           style={{
             fontSize,
             lineHeight: 1.05,
@@ -120,7 +120,6 @@ export function TmNameBlock({
         >
           {name}
         </span>
-        {vector ? <span className="sb-tm-name-vector">{vector}</span> : null}
         {trailing}
         {criticalRepeat ? (
           <CriticalRepeatNameMark
@@ -132,6 +131,7 @@ export function TmNameBlock({
           />
         ) : null}
       </div>
+      {vector ? <div className="sb-card-vector-badge">{vector}</div> : null}
       <TmPlacementTrail
         labels={placementTrail}
         matchSlotKey={placementTrailMatchSlotKey}
@@ -908,20 +908,22 @@ export function SlotAssignmentBody({
         ) : (
           <div
             key={placementIdentityKey(state)}
-            className="flex items-center gap-1.5 min-w-0"
+            className="flex flex-col items-start gap-0.5 min-w-0 w-full"
           >
-            {state.isLocked ? <LockIcon size={lockSize} /> : null}
-            <span
-              className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0"
-              style={{
-                fontSize,
-                lineHeight: 1.0,
-                fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-              }}
-            >
-              {state.tmName}
-            </span>
-            {vector}
+            <div className="flex items-center gap-1.5 min-w-0 w-full">
+              {state.isLocked ? <LockIcon size={lockSize} /> : null}
+              <span
+                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0 w-full"
+                style={{
+                  fontSize,
+                  lineHeight: 1.0,
+                  fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+                }}
+              >
+                {state.tmName}
+              </span>
+            </div>
+            {vector ? <div className="sb-card-vector-badge">{vector}</div> : null}
           </div>
         )
       ) : state.kind === "covered" ? (
@@ -946,7 +948,7 @@ export function SlotAssignmentBody({
         )
       ) : showDigitalAssists && emptyPresentation === "invite" && onUnassignedClick ? (
         <div key="unassigned" className="flex flex-col justify-start min-h-0">
-          {vector ? <div className="sb-tm-name-vector mb-1">{vector}</div> : null}
+          {vector ? <div className="sb-card-vector-badge mb-1">{vector}</div> : null}
           <UnassignedInvite
             size={inviteSize}
             onClick={onUnassignedClick}

@@ -1495,6 +1495,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       tasks={toTaskLines(selectedTasks[key])}
                       empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
                       coveredBy={coveredByIndex[key]}
+                      cardVector={cardVectors[key]}
                     />
                   ) : (
                     <>
@@ -1618,6 +1619,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       wTasks={toTaskLines(selectedTasks[wKey])}
                       mTasks={toTaskLines(selectedTasks[mKey])}
                       coveredByIndex={coveredByIndex}
+                      cardVectorW={cardVectors[wKey]}
+                      cardVectorM={cardVectors[mKey]}
                     />
                   ) : (
                     <>
@@ -1821,6 +1824,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           tasks={toTaskLines(selectedTasks[key])}
                           empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
                           coveredBy={coveredByIndex[key]}
+                          cardVector={cardVectors[key]}
                         />
                       ) : (
                         <>
@@ -1898,6 +1902,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         tasks={toTaskLines(selectedTasks[key])}
                         empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
                         coveredBy={coveredByIndex[key]}
+                        cardVector={cardVectors[key]}
                       />
                     ) : (
                       <>

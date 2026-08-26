@@ -44,8 +44,20 @@ import {
 import { AsOfTimestamp } from "./AsOfTimestamp";
 import { buildOfficialTaskRows } from "./officialZoneRowLayout";
 import { trailLabelMatchesSlotKey } from "@/lib/shiftbuilder/rotation/placementPadHelpers";
+import { CardVectorMark } from "../components/CardVectorMark";
+import { parseCardVector, type CardVector } from "@/lib/shiftbuilder/cardVectors";
 
 type CoveredScale = "zone" | "rr" | "aux";
+
+function GoldenCardVector({ vector }: { vector?: CardVector | null }) {
+  const parsed = parseCardVector(vector);
+  if (!parsed) return null;
+  return (
+    <div className="sb-golden-card-vector">
+      <CardVectorMark vector={parsed} size="golden" />
+    </div>
+  );
+}
 
 function GoldenCoveredByBlock({
   coveredBy,
@@ -380,6 +392,7 @@ export function GoldenZoneCard({
   empty,
   coveredBy,
   placementTrail,
+  cardVector,
   suppressBreakPill = false,
   showEmptyLabel = true,
   showTasksWhenEmpty = true,
@@ -395,6 +408,7 @@ export function GoldenZoneCard({
   empty?: boolean;
   coveredBy?: CoveredByEntry[];
   placementTrail?: string[];
+  cardVector?: CardVector | null;
   suppressBreakPill?: boolean;
   showEmptyLabel?: boolean;
   showTasksWhenEmpty?: boolean;
@@ -482,10 +496,12 @@ export function GoldenZoneCard({
             >
               {tmName}
             </span>
+            <GoldenCardVector vector={cardVector} />
             <GoldenPlacementTrail labels={placementTrail} matchSlotKey={slotKey} />
             <GoldenTaskList tasks={regular} hasTM slotKey={slotKey} />
           </>
         )}
+        {isEmpty ? <GoldenCardVector vector={cardVector} /> : null}
         {isEmpty && showTasksWhenEmpty && regular.length > 0 ? (
           <GoldenTaskList tasks={regular} hasTM={isCovered} slotKey={slotKey} />
         ) : null}
@@ -506,6 +522,7 @@ export function GoldenRRSide({
   empty,
   coveredBy,
   placementTrail,
+  cardVector,
   suppressBreakPill = false,
   showEmptyLabel = true,
   showTasksWhenEmpty = true,
@@ -520,6 +537,7 @@ export function GoldenRRSide({
   empty: boolean;
   coveredBy?: CoveredByEntry[];
   placementTrail?: string[];
+  cardVector?: CardVector | null;
   suppressBreakPill?: boolean;
   showEmptyLabel?: boolean;
   showTasksWhenEmpty?: boolean;
@@ -599,9 +617,11 @@ export function GoldenRRSide({
             >
               {tmName}
             </span>
+            <GoldenCardVector vector={cardVector} />
             <GoldenPlacementTrail labels={placementTrail} matchSlotKey={slotKey} />
           </>
         )}
+        {isEmpty ? <GoldenCardVector vector={cardVector} /> : null}
         {!isEmpty || showTasksWhenEmpty ? (
           <GoldenTaskList tasks={regular} hasTM={!isEmpty} dense />
         ) : null}
@@ -618,6 +638,8 @@ export function GoldenRRColumn({
   wTasks,
   mTasks,
   coveredByIndex = {},
+  cardVectorW,
+  cardVectorM,
 }: {
   rrNum: number;
   wAssignment: { tmName?: string | null; breakGroup?: number };
@@ -625,6 +647,8 @@ export function GoldenRRColumn({
   wTasks: PrintTaskLine[];
   mTasks: PrintTaskLine[];
   coveredByIndex?: Record<string, CoveredByEntry[]>;
+  cardVectorW?: CardVector | null;
+  cardVectorM?: CardVector | null;
 }) {
   const def = RR_DEFS.find((r) => r.num === rrNum)!;
   const color = getRRAccent(rrNum);
@@ -650,6 +674,7 @@ export function GoldenRRColumn({
         tasks={wTasks}
         empty={wEmpty}
         coveredBy={coveredByIndex[wKey]}
+        cardVector={cardVectorW}
       />
       <GoldenRRSide
         slotKey={mKey}
@@ -661,6 +686,7 @@ export function GoldenRRColumn({
         tasks={mTasks}
         empty={mEmpty}
         coveredBy={coveredByIndex[mKey]}
+        cardVector={cardVectorM}
       />
     </div>
   );
@@ -675,6 +701,7 @@ export function GoldenRRPrintGrid({
   showEmptyLabels = true,
   showTasksWhenEmpty = true,
   placementTrailsByTmId = {},
+  cardVectors = {},
   omitDefaultTasks = false,
 }: {
   assignments: Record<string, { tmId?: string; tmName?: string | null; breakGroup?: number }>;
@@ -684,6 +711,7 @@ export function GoldenRRPrintGrid({
   showEmptyLabels?: boolean;
   showTasksWhenEmpty?: boolean;
   placementTrailsByTmId?: Record<string, string[]>;
+  cardVectors?: Record<string, CardVector>;
   omitDefaultTasks?: boolean;
 }) {
   const toLines = (key: string): PrintTaskLine[] =>
@@ -711,6 +739,7 @@ export function GoldenRRPrintGrid({
               empty={!a.tmName}
               coveredBy={coveredByIndex[wKey]}
               placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
+              cardVector={cardVectors[wKey]}
               suppressBreakPill={suppressBreakPillKeys?.has(wKey)}
               showEmptyLabel={showEmptyLabels}
               showTasksWhenEmpty={showTasksWhenEmpty}
@@ -736,6 +765,7 @@ export function GoldenRRPrintGrid({
               empty={!a.tmName}
               coveredBy={coveredByIndex[mKey]}
               placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
+              cardVector={cardVectors[mKey]}
               suppressBreakPill={suppressBreakPillKeys?.has(mKey)}
               showEmptyLabel={showEmptyLabels}
               showTasksWhenEmpty={showTasksWhenEmpty}
@@ -755,6 +785,7 @@ export function GoldenAuxCard({
   empty,
   coveredBy,
   placementTrail,
+  cardVector,
   suppressBreakPill = false,
   emptyLabel = "— Unassigned —",
   showTasksWhenEmpty = true,
@@ -766,6 +797,7 @@ export function GoldenAuxCard({
   empty?: boolean;
   coveredBy?: CoveredByEntry[];
   placementTrail?: string[];
+  cardVector?: CardVector | null;
   suppressBreakPill?: boolean;
   /** null leaves an unassigned card visually blank. */
   emptyLabel?: string | null;
@@ -864,10 +896,12 @@ export function GoldenAuxCard({
             >
               {tmName}
             </span>
+            <GoldenCardVector vector={cardVector} />
             <GoldenPlacementTrail labels={placementTrail} matchSlotKey={def.key} />
             <GoldenTaskList tasks={regular} hasTM dense />
           </>
         ) : null}
+        {isEmpty ? <GoldenCardVector vector={cardVector} /> : null}
         {isEmpty && showTasksWhenEmpty && regular.length > 0 ? (
           <GoldenTaskList tasks={regular} hasTM={false} dense />
         ) : null}
@@ -880,10 +914,12 @@ export function GoldenOverlapSlot({
   slotKey,
   tmName,
   tasks,
+  cardVector,
 }: {
   slotKey: string;
   tmName?: string | null;
   tasks: PrintTaskLine[];
+  cardVector?: CardVector | null;
 }) {
   const accent = getOverlapAccent(slotKey);
   const ink = cardAccentInk(accent);
@@ -952,9 +988,11 @@ export function GoldenOverlapSlot({
             >
               {tmName}
             </span>
+            <GoldenCardVector vector={cardVector} />
             <GoldenTaskList tasks={regular} hasTM dense />
           </>
         )}
+        {isEmpty ? <GoldenCardVector vector={cardVector} /> : null}
         {isEmpty && regular.length > 0 ? (
           <GoldenTaskList tasks={regular} hasTM={false} dense />
         ) : null}

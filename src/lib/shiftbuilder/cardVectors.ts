@@ -45,6 +45,13 @@ export const CARD_VECTOR_SRC: Record<CardVector, string> = {
   laundry: "/card-vectors/laundry.svg",
 };
 
+/** Intrinsic viewBoxes of the shipped files — keeps <img> from defaulting huge. */
+export const CARD_VECTOR_VIEWBOX: Record<CardVector, { width: number; height: number }> = {
+  sweep_9_10_sr: { width: 100.96, height: 16.2 },
+  sweep_5_8_hl: { width: 99.64, height: 14.63 },
+  laundry: { width: 40.87, height: 14.34 },
+};
+
 /** Leftover sweeper chips that used to stand in for vectors. Do not show as the mark. */
 export const LEGACY_SWEEPER_TASK_LABELS = [
   "Sweep 9/10/SR",

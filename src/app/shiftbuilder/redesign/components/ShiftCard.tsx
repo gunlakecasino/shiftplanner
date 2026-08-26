@@ -64,7 +64,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
                       <span className="text-[15px] font-bold text-[#334155] truncate">{c.name}</span>
                     </div>
                   ))}
-                  {nameVector}
+                  {nameVector ? <div className="sb-card-vector-badge">{nameVector}</div> : null}
                 </div>
                 {taskBlock}
               </div>
@@ -77,7 +77,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
                     onClick?.();
                   }}
                 />
-                {nameVector ? <div className="sb-tm-name-vector mt-1">{nameVector}</div> : null}
+                {nameVector ? <div className="sb-card-vector-badge mt-1">{nameVector}</div> : null}
                 {taskBlock}
               </div>
             )}
@@ -100,11 +100,9 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
             {slotTitle}
           </div>
           {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
-          <div className="flex flex-col gap-0.5 mb-2 items-start text-left">
-            <div className="flex items-baseline gap-1.5 min-w-0 w-full flex-nowrap">
-              <div className="text-[17px] font-bold text-[#111827] leading-tight truncate min-w-0">{name}</div>
-              {nameVector ? <span className="sb-tm-name-vector shrink-0">{nameVector}</span> : null}
-            </div>
+          <div className="flex flex-col gap-0.5 mb-2 items-start text-left min-w-0 w-full">
+            <div className="text-[17px] font-bold text-[#111827] leading-tight truncate min-w-0 w-full">{name}</div>
+            {nameVector ? <div className="sb-card-vector-badge">{nameVector}</div> : null}
             {nameMeta}
             {secondName && (
               <div className="text-[13px] font-semibold text-[#64748B] leading-tight truncate">{secondName}</div>

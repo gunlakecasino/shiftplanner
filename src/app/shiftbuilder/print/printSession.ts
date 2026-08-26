@@ -656,6 +656,26 @@ export function runBrowserPrint(session: GoldenPrintSession): Promise<void> {
 }
 
 export async function waitForGoldenRenderSettled(): Promise<void> {
+  const images = Array.from(document.querySelectorAll("img"));
+  await Promise.all(
+    images.map((img) =>
+      Promise.race([
+        (async () => {
+          if (img.complete && img.naturalWidth > 0) return;
+          if (typeof img.decode === "function") {
+            try {
+              await img.decode();
+            } catch {
+              /* ignore broken / empty images */
+            }
+          }
+        })(),
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 1500);
+        }),
+      ]),
+    ),
+  );
   if (document.fonts?.ready) {
     await document.fonts.ready;
   }

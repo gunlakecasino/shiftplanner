@@ -50,6 +50,7 @@ function AuxCardsSection({
   auxFilled,
   auxTotal,
   placementTrailsByTmId,
+  cardVectors = {},
   className = "",
   sectionStyle,
 }: {
@@ -60,6 +61,7 @@ function AuxCardsSection({
   auxFilled: number;
   auxTotal: number;
   placementTrailsByTmId: Record<string, string[]>;
+  cardVectors?: NonNullable<PrintPreviewPageProps["snapshot"]["cardVectors"]>;
   className?: string;
   sectionStyle?: React.CSSProperties;
 }) {
@@ -87,6 +89,7 @@ function AuxCardsSection({
                 breakGroup={a.breakGroup ?? 0}
                 tasks={toTaskLines(tasksBySlot[def.key], { omitDefaultTasks: true })}
                 placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
+                cardVector={cardVectors[def.key]}
                 empty={!isBlank && !slotShowsFilled(def.key, assignments)}
                 coveredBy={coveredByIndex[def.key]}
               />
@@ -100,9 +103,11 @@ function AuxCardsSection({
 
 function OverlapRowsSection({
   overlapRows,
+  cardVectors = {},
   className = "",
 }: {
   overlapRows: ReturnType<typeof buildOverlapRows>;
+  cardVectors?: NonNullable<PrintPreviewPageProps["snapshot"]["cardVectors"]>;
   className?: string;
 }) {
   return (
@@ -138,6 +143,7 @@ function OverlapRowsSection({
                     slotKey={slot.key}
                     tmName={slot.tmName}
                     tasks={slot.tasks.filter((task) => task.isCoverage)}
+                    cardVector={cardVectors[slot.key]}
                   />
                 </div>
               ))}
@@ -161,6 +167,7 @@ export function PrintPreviewPage({
   includeTimestamp = true,
 }: PrintPreviewPageProps) {
   const { day, assignments, auxDefs, tasksBySlot, breakCounts } = snapshot;
+  const cardVectors = snapshot.cardVectors ?? {};
   const inRotationCount = breakCounts[1] + breakCounts[2] + breakCounts[3] + breakCounts[4];
   const isPlanning = printVariant === "planning";
   const placementTrailsByTmId = snapshot.placementTrailsByTmId ?? {};
@@ -244,6 +251,7 @@ export function PrintPreviewPage({
             <div className="sb-breaks-planning-upper flex flex-col min-h-0 gap-1">
               <OverlapRowsSection
                 overlapRows={overlapRows}
+                cardVectors={cardVectors}
                 className="sb-planning-overlaps-block flex-shrink-0 pt-1"
               />
               <AuxCardsSection
@@ -254,6 +262,7 @@ export function PrintPreviewPage({
                 auxFilled={auxFilled}
                 auxTotal={auxTotal}
                 placementTrailsByTmId={placementTrailsByTmId}
+                cardVectors={cardVectors}
                 className="sb-planning-aux-block flex-1 min-h-0 mb-0"
               />
             </div>
@@ -382,6 +391,7 @@ export function PrintPreviewPage({
 
           <OverlapRowsSection
             overlapRows={overlapRows}
+            cardVectors={cardVectors}
             className="mt-auto pt-1.5"
           />
         </div>
@@ -464,6 +474,7 @@ export function PrintPreviewPage({
                         empty={!slotShowsFilled(zKey, assignments)}
                         coveredBy={coveredByIndex[zKey]}
                         placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
+                        cardVector={cardVectors[zKey]}
                       />
                     </div>
                   );
@@ -488,6 +499,7 @@ export function PrintPreviewPage({
                           empty={!slotShowsFilled(zKey, assignments)}
                           coveredBy={coveredByIndex[zKey]}
                           placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
+                          cardVector={cardVectors[zKey]}
                         />
                       </div>
                     );
@@ -510,6 +522,7 @@ export function PrintPreviewPage({
                           empty={!slotShowsFilled(zKey, assignments)}
                           coveredBy={coveredByIndex[zKey]}
                           placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
+                          cardVector={cardVectors[zKey]}
                         />
                       </div>
                     );
@@ -543,6 +556,7 @@ export function PrintPreviewPage({
               tasksBySlot={tasksBySlot}
               coveredByIndex={coveredByIndex}
               placementTrailsByTmId={placementTrailsByTmId}
+              cardVectors={cardVectors}
               omitDefaultTasks
             />
           </div>
@@ -557,6 +571,7 @@ export function PrintPreviewPage({
             auxFilled={auxFilled}
             auxTotal={auxTotal}
             placementTrailsByTmId={placementTrailsByTmId}
+            cardVectors={cardVectors}
             className="sb-print-aux-pinned shrink-0 mb-2"
             sectionStyle={{ flexGrow: 0, flexShrink: 0, flexBasis: "auto" }}
           />
