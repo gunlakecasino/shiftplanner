@@ -3340,14 +3340,14 @@ function AuthedShiftBuilder() {
             rrSide: rr_side,
             taskLabel: taskLabel.trim(),
             sortOrder: 50,
-            // K14: free-text / manual OL chips are one-offs (server also defaults this)
-            ...(isOverlap ? { isOneOff: true } : {}),
+            // Typed / pad-added work is custom. Desk cards hide template duties.
+            isOneOff: true,
           });
           logBuilderChange({
             action: "task_add",
             slotKey: uiKey,
             targetNightId: nightId,
-            payload: { taskLabel: taskLabel.trim(), isOneOff: isOverlap || undefined },
+            payload: { taskLabel: taskLabel.trim(), isOneOff: true, overlap: isOverlap || undefined },
           });
         }
         // Best-effort refresh of task list (to pick up server-generated ids/sort etc).

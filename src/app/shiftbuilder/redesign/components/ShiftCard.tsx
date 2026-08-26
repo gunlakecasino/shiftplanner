@@ -49,7 +49,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
         className="sb-desk-card rounded-[20px] border border-transparent min-h-0 h-full flex flex-row overflow-hidden cursor-pointer"
       >
         {rail}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <div className="sb-desk-card-body flex flex-col flex-1 min-w-0 min-h-0">
           <div className="flex flex-col flex-1 p-3 min-w-0 text-left">
             <div className="flex items-center justify-between mb-2">
               {slotTitle}
@@ -94,7 +94,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
       className="sb-desk-card rounded-[20px] border border-transparent min-h-0 h-full flex flex-row overflow-hidden cursor-pointer"
     >
       {rail}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0">
+      <div className="sb-desk-card-body flex flex-col flex-1 min-w-0 min-h-0">
         <div className="flex flex-col flex-1 p-3 min-w-0 text-left">
           <div className={`flex items-center justify-between ${projectPills ? "mb-1" : "mb-2.5"}`}>
             {slotTitle}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
@@ -7,6 +7,8 @@ import { PortraitPlannerPage } from "@/app/shiftbuilder/print/PortraitPlannerPag
 import { buildPortraitPlannerPages } from "@/app/shiftbuilder/print/buildPortraitPlannerModel";
 import { OfficialGravesDeploymentPage } from "@/app/shiftbuilder/print/OfficialGravesPrintPages";
 import { PrintPreviewPage } from "@/app/shiftbuilder/print/PrintPreviewPage";
+import { ShiftCard } from "@/app/shiftbuilder/redesign/components/ShiftCard";
+import { CardVectorMark } from "@/app/shiftbuilder/components/CardVectorMark";
 import {
   buildCardVectorUiMap,
   CARD_VECTOR_IDS,
@@ -67,6 +69,11 @@ describe("card vectors", () => {
       { taskLabel: "Covering Z2", isCoverage: true },
       { taskLabel: "Pit 3: Trash", isOneOff: true },
     ]).map((t) => t.taskLabel)).toEqual(["Need extra towels", "Pit 3: Trash"]);
+    expect(visibleDeskSlotTasks([
+      { taskLabel: "Beverage Station" },
+      { taskLabel: "131 Bar: Bartop Machines" },
+      { taskLabel: "Need extra towels", isOneOff: true },
+    ], { hideNonCustomZoneDuties: true }).map((t) => t.taskLabel)).toEqual(["Need extra towels"]);
   });
 });
 
@@ -177,11 +184,86 @@ describe("desk standing badge", () => {
     expect(chrome).toContain("zone: 17");
     expect(chrome).not.toContain("zone: 24");
     expect(shiftCard).toContain("sb-tm-primary-name");
+    expect(shiftCard).toContain("sb-desk-card-body");
     expect(shiftCard).not.toContain("text-[17px] font-bold text-[#111827] leading-tight truncate min-w-0 w-full");
     expect(globals).toContain("192-wide Golden/zone desk density");
     expect(globals).toContain("-webkit-line-clamp: 2");
     expect(globals).toContain("overflow-wrap: anywhere");
     expect(globals).not.toContain("font-size: clamp(20px, 1.45vw, 26px) !important");
+    expect(globals).toContain("flex: 0 0 auto");
+  });
+
+  it("renders the real 192-wide ShiftCard: name inside, no canned duties, vector under the name", () => {
+    const liveZoneDuties = [
+      "Zone 7 Smoking Room",
+      "Zone 7 Self Serve Station",
+      "Pit 1 + 2: Trash",
+      "Beverage Station",
+      "131 Bar: Bartop Machines",
+    ];
+    const notes = visibleDeskSlotTasks(
+      [
+        ...liveZoneDuties.map((taskLabel) => ({ taskLabel })),
+        { taskLabel: "Need extra towels", isOneOff: true },
+      ],
+      { hideNonCustomZoneDuties: true },
+    ).map((t) => t.taskLabel);
+
+    const html = renderToStaticMarkup(
+      React.createElement("div", { className: "sb-sheetbuilder-redesign sb-canvas-builder", style: { width: 192 * 3 + 32 } },
+        [
+          { name: "Jessica", zone: 7, label: "ZONE 7", vector: "sweep_9_10_sr" as const },
+          { name: "Silvia", zone: 8, label: "MEN'S 8", vector: "sweep_5_8_hl" as const },
+          { name: "Darlene", zone: 5, label: "ZONE 5", vector: "laundry" as const },
+        ].map((card) =>
+          React.createElement(
+            "div",
+            { key: card.name, style: { width: 192, height: 168, display: "inline-block" } },
+            React.createElement(ShiftCard, {
+              zone: card.zone,
+              label: card.label,
+              name: card.name,
+              notes,
+              nameVector: React.createElement(CardVectorMark, { vector: card.vector, size: "desk" }),
+              nameMeta: React.createElement("span", { className: "chip" }, "Repeat"),
+              footer: React.createElement("div", { className: "sb-coverage-footer sb-coverage-footer--chips" }, "+ ZONE 2"),
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(html).toContain("Jessica");
+    expect(html).toContain("Silvia");
+    expect(html).toContain("Darlene");
+    expect(html).toContain("/card-vectors/sweep-5-8-hl.svg");
+    expect(html).toContain("sb-card-vector-badge");
+    expect(html).toContain("Need extra towels");
+    expect(html).not.toContain("Zone 7 Smoking Room");
+    expect(html).not.toContain("Beverage Station");
+    expect(html).not.toContain("131 Bar: Bartop Machines");
+    expect(html).not.toContain("sb-tm-name-vector");
+    if (process.env.WRITE_DESK_HTML) {
+      writeFileSync(
+        "/tmp/desk-golden-verify/real-shiftcard.html",
+        `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;background:#e8edf4;font-family:ui-sans-serif,system-ui,sans-serif}
+body{padding:24px}
+.sb-desk-card{width:192px;height:168px;background:#fff;border-radius:20px;overflow:hidden;display:flex;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.sb-desk-card-rail{width:7px;flex:0 0 7px}
+.sb-tm-name-stack{min-width:0;max-width:100%;overflow:hidden;flex:0 0 auto}
+.sb-tm-primary-name{font-size:17px!important;font-weight:900;letter-spacing:-.03em;line-height:1.12;color:#111827;max-width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word;white-space:normal!important;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.sb-card-vector-badge{margin-top:3px;height:12px;max-width:72px;overflow:hidden}
+.sb-card-vector--desk,.sb-card-vector--desk .sb-card-vector-svg{height:12px;max-width:72px}
+.sb-card-vector-svg{display:block;height:12px;width:auto;max-width:72px}
+.chip{font-size:8px;font-weight:700;padding:2px 6px;border-radius:999px;background:#fee2e2;color:#b91c1c}
+.sb-coverage-footer{margin-top:auto;padding:4px 10px 10px;font-size:9px;font-weight:650;color:#3b6bb5}
+.sb-desk-task-row{font-size:11px;color:#748093}
+div[style*="display: inline-block"]{margin-right:16px;vertical-align:top}
+img{max-width:72px}
+</style></head><body>${html.replace(/src="\/card-vectors\//g, 'src="file:///workspace/public/card-vectors/')}</body></html>`,
+      );
+    }
   });
 });
 

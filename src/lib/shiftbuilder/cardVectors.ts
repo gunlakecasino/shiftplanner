@@ -88,6 +88,8 @@ export const CANNED_DEFAULT_DESK_TASK_LABELS = [
   "Pit 3: Trash",
   "Pit 3: Vacuum",
   "Social Bar Tables",
+  "Beverage Station",
+  "131 Bar: Bartop Machines",
   "High Limit Slots Restroom",
   "Pit 4: Trash",
   "Pit 4: Vacuum",
@@ -181,13 +183,18 @@ export function visibleDeskSlotTasks<T extends {
   taskLabel?: string;
 }>(
   tasks: T[] | undefined | null,
+  options?: { hideNonCustomZoneDuties?: boolean },
 ): T[] {
-  return (tasks ?? []).filter(
-    (task) =>
-      !task.isCoverage &&
-      !isLegacySweeperTaskLabel(task.taskLabel) &&
-      !isCannedDefaultDeskTask(task),
-  );
+  return (tasks ?? []).filter((task) => {
+    if (task.isCoverage) return false;
+    if (isLegacySweeperTaskLabel(task.taskLabel)) return false;
+    if (task.isOneOff) return true;
+    if (isCannedDefaultDeskTask(task)) return false;
+    // Zone cards: the canned list lags Card Defaults (Beverage Station, 131 Bar…).
+    // Anything not explicitly one-off is a template duty — off the card.
+    if (options?.hideNonCustomZoneDuties) return false;
+    return true;
+  });
 }
 
 export type CardVectorDefaultRow = {

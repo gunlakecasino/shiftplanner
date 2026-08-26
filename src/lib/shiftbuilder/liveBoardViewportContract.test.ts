@@ -378,6 +378,7 @@ describe("SheetBuilder sit 2026-08-25 desk cleanliness", () => {
     );
     expect(zoneCard).toContain("CardVectorMark");
     expect(zoneCard).toContain("visibleDeskSlotTasks");
+    expect(zoneCard).toContain("hideNonCustomZoneDuties");
   });
 });
 

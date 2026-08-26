@@ -7205,7 +7205,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-primary-name,
@@ -7811,6 +7811,15 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card > .w-\[7px\] {
   height: auto !important;
   min-height: 100% !important;
   align-self: stretch !important;
+}
+
+.sb-desk-card-body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sb-desk-card .sb-tm-primary-name {
+  padding-left: 0;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-list-row::before,

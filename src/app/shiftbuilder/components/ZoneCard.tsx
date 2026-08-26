@@ -204,7 +204,9 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   );
 
   const zoneCoverageTasks = (selectedTasks[def.key] || []).filter((t) => t.isCoverage);
-  const regularTasks = visibleDeskSlotTasks(selectedTasks[def.key]);
+  const regularTasks = visibleDeskSlotTasks(selectedTasks[def.key], {
+    hideNonCustomZoneDuties: true,
+  });
 
   let assignmentState: SlotAssignmentState;
   if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
