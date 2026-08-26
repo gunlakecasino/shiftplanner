@@ -1,5 +1,6 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
+import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { defaultAuxDefsForNewNight } from "@/lib/shiftbuilder/auxLayout";
 import {
@@ -24,6 +25,7 @@ type NightCoreApiPayload = {
   rawDbAssignments: any[];
   rawBreakRows?: any[];
   slotDefaultBreaks: Record<string, number>;
+  cardVectors?: Record<string, CardVector>;
 };
 
 function toSet(values: string[] | Set<string> | undefined | null): Set<string> {
@@ -50,6 +52,7 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
     rawDbAssignments: raw.rawDbAssignments,
     rawBreakRows: raw.rawBreakRows ?? [],
     slotDefaultBreaks: raw.slotDefaultBreaks,
+    cardVectors: raw.cardVectors ?? {},
   };
 }
 
@@ -71,6 +74,7 @@ function emptyNightCoreResult(accessBlocked = false) {
     rawDbAssignments: [] as unknown[],
     rawBreakRows: [] as unknown[],
     slotDefaultBreaks: {} as Record<string, number>,
+    cardVectors: {} as Record<string, CardVector>,
     accessBlocked,
   };
 }

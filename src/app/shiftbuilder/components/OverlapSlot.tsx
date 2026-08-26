@@ -8,9 +8,12 @@ import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/l
 
 import { isCriticalRepeatFit } from "./PlacementFitChip";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
+import { CardVectorMark } from "./CardVectorMark";
+import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { cardAccentInk, overlapSlotLabel } from "@/lib/shiftbuilder/constants";
 import {
+  assignmentShowsSkeleton,
   CardAccentStripe,
   SlotAssignmentBody,
   TaskListDivider,
@@ -52,6 +55,7 @@ export interface OverlapSlotProps {
   focusedTmId?: string | null;
   conflictingTms?: Set<string>;
   tmConflictSlots?: Record<string, string[]>;
+  cardVector?: import("@/lib/shiftbuilder/cardVectors").CardVector | null;
 }
 
 function getOverlapAccent(slotKey: string): string {
@@ -79,6 +83,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   focusedTmId,
   conflictingTms,
   tmConflictSlots,
+  cardVector,
 }) => {
   const a = assignments[slotKey] || {};
   const draftActive =
@@ -96,11 +101,11 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   );
 
   const tasks = selectedTasks[slotKey] ?? [];
-  const regularTasks = tasks.filter((t) => !t.isCoverage);
+  const regularTasks = visibleDeskSlotTasks(tasks);
   const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
-  const isEmpty = !hasTM && !loading;
+  const isEmpty = !hasTM && !assignmentShowsSkeleton(loading, hasTM, assignments);
   const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
   const otherSlotsForTm =
     currentTmId && tmConflictSlots?.[currentTmId]
@@ -108,7 +113,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       : [];
 
   let assignmentState: SlotAssignmentState;
-  if (loading && !hasTM) {
+  if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
     assignmentState = { kind: "loading" };
   } else if (draftActive) {
     assignmentState = {
@@ -166,6 +171,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
               handleAssignZoneClick(e, slotKey, onCardClick, isLocked);
             }
           }}
+          vector={cardVector ? <CardVectorMark vector={cardVector} size="desk" /> : undefined}
         />
       </div>
 

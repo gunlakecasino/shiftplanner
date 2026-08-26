@@ -128,6 +128,11 @@ export interface ShiftBuilderBoardProps {
   tasks?: any[];
   breakAssignments?: any;
   cardBorders?: Record<string, string>;
+  cardVectors?: Record<string, import("@/lib/shiftbuilder/cardVectors").CardVector>;
+  onSetCardVector?: (
+    slotKey: string,
+    vector: import("@/lib/shiftbuilder/cardVectors").CardVector | null,
+  ) => void | Promise<void>;
   notes?: string;
   recentZoneHistory?: any;
   /** 7-night / this-week history map (tmId -> [{nightDate, slotKey}]) for week-repeat tells in pads + health. */
@@ -313,6 +318,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   nightId,
   selectedTasks = [],
   cardBorders = {},
+  cardVectors = {},
+  onSetCardVector,
   breakAssignments = [],
   selectedDay,
   selectedDayIndex,
@@ -1038,6 +1045,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     loadingAssignments,
     isDraftMode,
     cardBorders,
+    cardVectors,
     selectedSlotKey,
     isAnyDragActive,
     equalizeEpoch,
@@ -1095,6 +1103,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
     onClearSlotTasks,
     onCopyRestroomPairingTasks,
     onAssignSweeper,
+    onSetCardVector,
+    cardVector: cardVectors[slotKey] ?? null,
     onRequestEngineInsight,
     scheduledUnassigned,
     allEligibleTms,
@@ -1179,6 +1189,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
         selectedTasks={selectedTasks}
         onCardClick={handleCardClickForPad}
         loading={loadingAssignments}
+        cardVector={cardVectors[slotKey]}
         isDraftMode={isDraftMode}
         draftInfo={draftAssignments[slotKey]}
         onRemoveTask={onRemoveTask}
@@ -1495,6 +1506,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         showTaskBadge={!isPrintPreview}
                         loading={loadingAssignments}
                         borderColor={cardBorders[key]}
+                        cardVector={cardVectors[key]}
                         isDraftMode={isDraftMode}
                         draftInfo={draftAssignments[key]}
                         onRemoveTask={onRemoveTask}
@@ -1617,6 +1629,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         showTaskBadge={!isPrintPreview}
                         loading={loadingAssignments}
                         borderColor={cardBorders[`RR${def.num}`] || cardBorders[mKey] || cardBorders[wKey]}
+                        cardVectorW={cardVectors[wKey]}
+                        cardVectorM={cardVectors[mKey]}
                         isDraftMode={isDraftMode}
                         draftInfoW={draftAssignments[wKey]}
                         draftInfoM={draftAssignments[mKey]}
@@ -1818,6 +1832,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                             showTaskBadge={!isPrintPreview}
                             loading={loadingAssignments}
                             borderColor={cardBorders[key]}
+                            cardVector={cardVectors[key]}
                             isDraftMode={isDraftMode}
                             draftInfo={draftAssignments[key]}
                             onRemoveTask={onRemoveTask}
@@ -1893,6 +1908,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           onCardClick={handleCardClickForPad}
                           loading={loadingAssignments}
                           borderColor={cardBorders[key]}
+                          cardVector={cardVectors[key]}
                           isDraftMode={isDraftMode}
                           draftInfo={draftAssignments[key]}
                           onRemoveTask={onRemoveTask}
@@ -2014,6 +2030,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                       selectedTasks={selectedTasks}
                                       onCardClick={handleCardClickForPad}
                                       loading={loadingAssignments}
+                                      cardVector={cardVectors[slotKey]}
                                       isDraftMode={isDraftMode}
                                       draftInfo={draftAssignments[slotKey]}
                                       onRemoveTask={onRemoveTask}

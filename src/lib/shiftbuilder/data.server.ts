@@ -139,6 +139,7 @@ export interface CachedSlotDefault {
   slotType: string;
   rrSide: string;
   defaultBreakGroup: number;
+  cardVector?: string | null;
 }
 
 const cachedSlotDefaults = unstable_cache(
@@ -146,7 +147,7 @@ const cachedSlotDefaults = unstable_cache(
     const supabase = getServerSupabase();
     const { data, error } = await supabase
       .from('slot_defaults')
-      .select('slot_key, slot_type, rr_side, default_break_group')
+      .select('slot_key, slot_type, rr_side, default_break_group, card_vector')
       .order('slot_key', { ascending: true });
 
     if (error) {
@@ -159,6 +160,7 @@ const cachedSlotDefaults = unstable_cache(
       slotType: r.slot_type,
       rrSide: r.rr_side ?? '',
       defaultBreakGroup: r.default_break_group ?? 0,
+      cardVector: r.card_vector ?? null,
     }));
   },
   ['shiftbuilder-slot-defaults'],

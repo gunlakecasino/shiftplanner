@@ -91,6 +91,7 @@ export function TmNameBlock({
   placementTrailMatchSlotKey,
   criticalRepeat = false,
   trailing,
+  vector,
   className = "",
   nameClassName = "",
 }: {
@@ -101,6 +102,8 @@ export function TmNameBlock({
   criticalRepeat?: boolean;
   /** Extra end-of-name-row content (draft "D" badge, etc.). */
   trailing?: React.ReactNode;
+  /** Card-level vector ink — stays when the TM moves. */
+  vector?: React.ReactNode;
   className?: string;
   nameClassName?: string;
 }) {
@@ -117,6 +120,7 @@ export function TmNameBlock({
         >
           {name}
         </span>
+        {vector ? <span className="sb-tm-name-vector">{vector}</span> : null}
         {trailing}
         {criticalRepeat ? (
           <CriticalRepeatNameMark
@@ -208,12 +212,13 @@ export function coverageBodyPadding(
   return showDigitalAssists ? 10 : 12;
 }
 
-/** Accent stripe — the live SheetBuilder redesign promotes this into a full-width top bar. */
+/** Accent rail — full card height on the live desk. Color stays on the uniform code. */
 export function CardAccentStripe({ color }: { color: string }) {
   return (
     <div
-      className={`sb-card-accent-stripe h-[3px] w-full shrink-0 ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
+      className={`sb-card-accent-stripe ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
       style={{ backgroundColor: color }}
+      aria-hidden="true"
     />
   );
 }
@@ -719,6 +724,17 @@ export function UnassignedPrintLabel({ showDigitalAssists: _showDigitalAssists }
   );
 }
 
+/** Empty seats on a known night are empty — never leftover skeleton bars. */
+export function assignmentShowsSkeleton(
+  loading: boolean,
+  hasTM: boolean,
+  boardAssignments?: Record<string, unknown> | null,
+): boolean {
+  if (!loading || hasTM) return false;
+  if (boardAssignments && Object.keys(boardAssignments).length > 0) return false;
+  return true;
+}
+
 export type SlotAssignmentState =
   | { kind: "loading" }
   | { kind: "draft"; proposedName: string; proposedTmId?: string; previousName?: string }
@@ -742,6 +758,7 @@ export function SlotAssignmentBody({
   placementTrailMatchSlotKey,
   onSwapCoverageSides,
   projectPills,
+  vector,
 }: {
   state: SlotAssignmentState;
   scale: CardNameScale;
@@ -764,6 +781,8 @@ export function SlotAssignmentBody({
   onSwapCoverageSides?: () => void;
   /** Builder-only dated project pills, placed above the TM name. */
   projectPills?: React.ReactNode;
+  /** Card-level vector ink — stays on the slot when the TM moves. */
+  vector?: React.ReactNode;
 }) {
   const reducedMotion = useReducedMotion();
   const fontSize =
@@ -793,6 +812,7 @@ export function SlotAssignmentBody({
               placementTrail={placementTrail}
               placementTrailMatchSlotKey={placementTrailMatchSlotKey}
               criticalRepeat={criticalRepeat}
+              vector={vector}
               trailing={
                 <span
                   className="text-[8px] font-semibold px-1 rounded leading-none shrink-0"
@@ -826,6 +846,7 @@ export function SlotAssignmentBody({
               name={state.proposedName}
               fontSize={fontSize}
               criticalRepeat={false}
+              vector={vector}
               trailing={
                 <span
                   className="text-[8px] font-semibold px-1 rounded leading-none shrink-0"
@@ -877,6 +898,7 @@ export function SlotAssignmentBody({
                 placementTrail={placementTrail}
                 placementTrailMatchSlotKey={placementTrailMatchSlotKey}
                 criticalRepeat={criticalRepeat}
+                vector={vector}
               />
             </div>
             {isDuplicate ? (
@@ -899,6 +921,7 @@ export function SlotAssignmentBody({
             >
               {state.tmName}
             </span>
+            {vector}
           </div>
         )
       ) : state.kind === "covered" ? (
@@ -923,6 +946,7 @@ export function SlotAssignmentBody({
         )
       ) : showDigitalAssists && emptyPresentation === "invite" && onUnassignedClick ? (
         <div key="unassigned" className="flex flex-col justify-start min-h-0">
+          {vector ? <div className="sb-tm-name-vector mb-1">{vector}</div> : null}
           <UnassignedInvite
             size={inviteSize}
             onClick={onUnassignedClick}

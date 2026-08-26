@@ -60,8 +60,10 @@ import {
   addSlotDefaultTaskServer,
   bulkUpsertSlotDefaultsServer,
   removeSlotDefaultTaskServer,
+  setSlotCardVectorServer,
   upsertSlotDefaultServer,
 } from "@/lib/shiftbuilder/slotDefaultsMutations.server";
+import { parseCardVector } from "@/lib/shiftbuilder/cardVectors";
 import type { SlotDefault } from "@/lib/shiftbuilder/data";
 import {
   loadOpsKnowledgeServer,
@@ -106,6 +108,7 @@ const ACTION_PERMISSIONS: Record<string, ActionPerm> = {
   remove_slot_default_task: "canAccessSudo",
   upsert_slot_default: "canAccessSudo",
   bulk_upsert_slot_defaults: "canAccessSudo",
+  set_slot_card_vector: "canEditAssignments",
   // Team / sudo identity
   set_tm_grave_pool: ["canAccessSudo", "canManageTeam"],
   set_tm_display_name: ["canAccessSudo", "canManageTeam"],
@@ -458,6 +461,21 @@ export async function POST(request: NextRequest) {
         } catch {
           /* non-fatal */
         }
+        return NextResponse.json({ ok: true });
+      }
+      case "set_slot_card_vector": {
+        await setSlotCardVectorServer({
+          slotKey: String(body.slotKey),
+          slotType: body.slotType as "zone" | "rr" | "aux" | "overlap",
+          rrSide: (body.rrSide as string | undefined) ?? "",
+          cardVector: parseCardVector(body.cardVector),
+        });
+        try {
+          await revalidateSlotDefaultsCache();
+        } catch {
+          /* non-fatal */
+        }
+        await bustCache(body);
         return NextResponse.json({ ok: true });
       }
 

@@ -89,7 +89,7 @@ afterEach(() => {
 });
 
 describe("planning worksheet print", () => {
-  it("removes the alert, prints the TM trail, and packs all Zone 5 subtasks", () => {
+  it("removes the alert, prints the TM trail, and omits default task lists", () => {
     const html = renderToStaticMarkup(
       React.createElement(PrintPreviewPage, {
         view: "deployment",
@@ -130,10 +130,12 @@ describe("planning worksheet print", () => {
     expect(html).toContain(
       'class="sb-golden-placement-trail-item is-repeat" data-placement-repeat="true">RR8M</span>',
     );
-    expect(html.match(/sb-golden-subtask-row/g)).toHaveLength(2);
-    expect(html).toContain("Red Tray Carts");
-    expect(html).toContain("Vacuum");
-    expect(html).toContain("Trash");
+    expect(html).not.toContain("sb-golden-subtask-row");
+    expect(html).not.toContain("Red Tray Carts");
+    expect(html).not.toContain("Vacuum");
+    expect(html).not.toContain("Chill Bar: Bartop Machines");
+    expect(html).toContain("Jack");
+    expect(html).toContain("Morgan");
   });
 
   it("replaces the official page-two projects register with the writing grid", () => {

@@ -3148,6 +3148,8 @@ export interface SlotDefault {
   slotType: 'zone' | 'rr' | 'aux' | 'overlap';
   rrSide: string;            // '' for non-RR; 'mens'|'womens' for RR
   defaultBreakGroup: BreakGroupValue;
+  /** Standing card vector — slot identity, not a TM attribute. */
+  cardVector?: import("./cardVectors").CardVector | null;
 }
 
 export interface SlotDefaultTask {
@@ -3180,7 +3182,7 @@ export async function getSlotDefaults(): Promise<SlotDefault[]> {
 
   const { data, error } = await supabase
     .from('slot_defaults')
-    .select('slot_key, slot_type, rr_side, default_break_group')
+    .select('slot_key, slot_type, rr_side, default_break_group, card_vector')
     .order('slot_key', { ascending: true });
 
   if (error) {
@@ -3188,11 +3190,13 @@ export async function getSlotDefaults(): Promise<SlotDefault[]> {
     return [];
   }
 
+  const { parseCardVector } = await import("./cardVectors");
   const rows = (data || []).map((r: any) => ({
     slotKey: r.slot_key,
     slotType: r.slot_type,
     rrSide: r.rr_side ?? '',
     defaultBreakGroup: r.default_break_group ?? 0,
+    cardVector: parseCardVector(r.card_vector),
   }));
   writeSlotDefaultsCache(rows);
   return rows;
@@ -3250,8 +3254,36 @@ export async function upsertSlotDefault(params: {
   );
 }
 
+/** Standing card vector on a slot. Survives TM reassignment. Not a TM attribute. */
+export async function setSlotCardVector(params: {
+  nightId?: string | null;
+  date?: string | null;
+  slotKey: string;
+  slotType: "zone" | "rr" | "aux" | "overlap";
+  rrSide?: string;
+  cardVector: import("./cardVectors").CardVector | null;
+}): Promise<void> {
+  await runBoardMutation(
+    "set_slot_card_vector",
+    params as unknown as Record<string, unknown>,
+    async () => {
+      const { setSlotCardVectorServer } = await import("./slotDefaultsMutations.server");
+      await setSlotCardVectorServer(params);
+      return { ok: true };
+    },
+  );
+  try {
+    const { revalidateSlotDefaultsCache } = await import("./revalidateOpsCache");
+    await revalidateSlotDefaultsCache();
+  } catch {
+    /* server revalidate optional from browser */
+  }
+  invalidateSlotDefaultsCache();
+  invalidateSlotDefaultsBundleCache();
+}
+
 const SLOT_DEFAULT_TASKS_RETIRED =
-  "Default task chips were retired by the cutover — manage them in Settings → Card Defaults (ops_work_items).";
+  "Default task chips were retired by the defaults cutover — manage them in Settings → Card Defaults (ops_work_items).";
 
 /** @deprecated Retired by the defaults cutover. Slot-default task chips are now managed in Settings → Card Defaults. */
 export async function addSlotDefaultTask(_params: {

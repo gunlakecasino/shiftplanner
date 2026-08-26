@@ -73,6 +73,7 @@ export interface UseShiftDataReturn {
   effectiveGravesScheduleRoster: any[];
   effectiveRecentZoneHistory: any;
   effectiveCardBorders: Record<string, string>;
+  effectiveCardVectors: Record<string, import("@/lib/shiftbuilder/cardVectors").CardVector>;
 
   // Loading / UI state derived from query + local payload check
   hasBoardPayload: boolean;
@@ -146,6 +147,7 @@ export function useShiftData(
     scheduledTm: new Set<string>(),
     recentZoneHistory: null as any,
     cardBorders: {} as Record<string, string>,
+    cardVectors: {} as Record<string, import("@/lib/shiftbuilder/cardVectors").CardVector>,
     assignments: {} as Record<string, any>,
   });
 
@@ -163,6 +165,7 @@ export function useShiftData(
     stableRefs.current.scheduledTm = new Set<string>();
     stableRefs.current.recentZoneHistory = null;
     stableRefs.current.cardBorders = {};
+    stableRefs.current.cardVectors = {};
     stableRefs.current.assignments = {};
     hydratedAssignmentsDayRef.current = null;
 
@@ -295,6 +298,16 @@ export function useShiftData(
     }
     return stableRefs.current.cardBorders;
   }, [currentNight.cardBorders]);
+
+  const effectiveCardVectors = React.useMemo(() => {
+    const src = (currentNight as { cardVectors?: Record<string, import("@/lib/shiftbuilder/cardVectors").CardVector> }).cardVectors;
+    if (!src || typeof src !== "object") return stableRefs.current.cardVectors;
+    const s = sigOf(src);
+    if (s !== sigOf(stableRefs.current.cardVectors)) {
+      stableRefs.current.cardVectors = { ...src };
+    }
+    return stableRefs.current.cardVectors;
+  }, [(currentNight as { cardVectors?: Record<string, unknown> }).cardVectors]);
 
   // Assignments: the hottest state. Prefer query (server/committed), but during transition
   // we still support a thin legacy fallback (will be removed in later cleanup).
@@ -469,6 +482,7 @@ export function useShiftData(
     effectiveGravesScheduleRoster,
     effectiveRecentZoneHistory,
     effectiveCardBorders,
+    effectiveCardVectors,
     hasBoardPayload,
     nightAccessBlocked,
     boardColdLoading,

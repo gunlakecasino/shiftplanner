@@ -11,7 +11,10 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
-import { TmPlacementTrail, type SlotAssignmentState } from "./assignmentCardChrome";
+import { assignmentShowsSkeleton, TmPlacementTrail, type SlotAssignmentState } from "./assignmentCardChrome";
+import { CardVectorMark } from "./CardVectorMark";
+import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
+import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
 import {
   formatCoveragePositionLabel,
   type CoveredByEntry,
@@ -70,6 +73,7 @@ export interface ZoneCardProps {
   isAssignPulse?: boolean;
   isViewOnly?: boolean;
   onKioskLongPress?: (anchor: { x: number; y: number }) => void;
+  cardVector?: CardVector | null;
 }
 
 // ShiftBuilderBoard passes several props (assignments, selectedTasks, conflictingTms,
@@ -170,6 +174,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   isAssignPulse = false,
   isViewOnly = false,
   onKioskLongPress,
+  cardVector,
 }) => {
   const a = assignments[def.key] || {};
   const draftActive =
@@ -184,7 +189,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   );
 
   const isCovered = coveredBy.length > 0;
-  const isEmpty = !hasTM && !loading && !isCovered;
+  const isEmpty = !hasTM && !assignmentShowsSkeleton(loading, hasTM, assignments) && !isCovered;
   const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
@@ -199,10 +204,10 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   );
 
   const zoneCoverageTasks = (selectedTasks[def.key] || []).filter((t) => t.isCoverage);
-  const regularTasks = (selectedTasks[def.key] || []).filter((t) => !t.isCoverage);
+  const regularTasks = visibleDeskSlotTasks(selectedTasks[def.key]);
 
   let assignmentState: SlotAssignmentState;
-  if (loading && !hasTM) {
+  if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
     assignmentState = { kind: "loading" };
   } else if (draftActive) {
     assignmentState = {
@@ -310,6 +315,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         label={def.label}
         name={assignmentState.kind === "covered" ? "" : displayName || "Unassigned"}
         notes={packageNotes}
+        nameVector={cardVector ? <CardVectorMark vector={cardVector} size="desk" /> : undefined}
         nameMeta={
           hasTM ? (
             <TmPlacementTrail labels={placementTrail} matchSlotKey={def.key} />

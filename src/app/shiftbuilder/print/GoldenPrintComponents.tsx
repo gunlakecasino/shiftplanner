@@ -354,8 +354,11 @@ function GoldenCoverageStack({
   );
 }
 
-function toTaskLines(tasks: NightSlotTask[] | PrintTaskLine[] | undefined): PrintTaskLine[] {
-  return (tasks ?? []).map((t) => ({
+export function toTaskLines(
+  tasks: NightSlotTask[] | PrintTaskLine[] | undefined,
+  options?: { omitDefaultTasks?: boolean },
+): PrintTaskLine[] {
+  const lines = (tasks ?? []).map((t) => ({
     id: t.id,
     label: "taskLabel" in t ? t.taskLabel : t.label,
     color: t.color ?? null,
@@ -363,6 +366,10 @@ function toTaskLines(tasks: NightSlotTask[] | PrintTaskLine[] | undefined): Prin
     textStyle: "textStyle" in t ? t.textStyle ?? null : null,
     isCoverage: Boolean(t.isCoverage),
   }));
+  if (options?.omitDefaultTasks) {
+    return lines.filter((line) => line.isCoverage);
+  }
+  return lines;
 }
 
 export function GoldenZoneCard({
@@ -668,6 +675,7 @@ export function GoldenRRPrintGrid({
   showEmptyLabels = true,
   showTasksWhenEmpty = true,
   placementTrailsByTmId = {},
+  omitDefaultTasks = false,
 }: {
   assignments: Record<string, { tmId?: string; tmName?: string | null; breakGroup?: number }>;
   tasksBySlot: Record<string, NightSlotTask[] | PrintTaskLine[] | undefined>;
@@ -676,9 +684,12 @@ export function GoldenRRPrintGrid({
   showEmptyLabels?: boolean;
   showTasksWhenEmpty?: boolean;
   placementTrailsByTmId?: Record<string, string[]>;
+  omitDefaultTasks?: boolean;
 }) {
   const toLines = (key: string): PrintTaskLine[] =>
-    toTaskLines(tasksBySlot[key] as NightSlotTask[] | PrintTaskLine[] | undefined);
+    toTaskLines(tasksBySlot[key] as NightSlotTask[] | PrintTaskLine[] | undefined, {
+      omitDefaultTasks,
+    });
 
   return (
     <>
@@ -1303,4 +1314,4 @@ export function GoldenSectionHeader({
   );
 }
 
-export { toTaskLines, ZONE_VISUAL_ORDER };
+export { ZONE_VISUAL_ORDER };

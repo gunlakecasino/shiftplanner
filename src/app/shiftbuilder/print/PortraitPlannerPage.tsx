@@ -6,7 +6,13 @@ import type {
   PortraitPlannerPageModel,
 } from "./buildPortraitPlannerModel";
 import { formatPlannerTrailLine } from "./buildPortraitPlannerModel";
-import { PLANNER_NOTES_MIN_PX } from "./portraitConstants";
+import {
+  plannerNotesBandPx,
+  plannerRosterDensity,
+  plannerRosterNameCount,
+  plannerRosterWriteinLines,
+} from "./printPageGeometry";
+import { CardVectorMark } from "../components/CardVectorMark";
 import "./printPreview.css";
 
 export type PortraitPlannerPageProps = {
@@ -39,12 +45,18 @@ function PlannerSlotBox({ card }: { card: PlannerSlotCard }) {
       <div className="sb-planner-slot-writein">
         {card.empty ? (
           <div className="sb-planner-slot-open" aria-label={isCovered ? `Covered ${viaCue}` : "Open"}>
-            <span className="sb-planner-slot-name sb-planner-slot-line" />
+            <div className="sb-planner-slot-name-line">
+              <span className="sb-planner-slot-name sb-planner-slot-line" />
+              {card.vector ? <CardVectorMark vector={card.vector} size="planner" /> : null}
+            </div>
             {viaCue ? <span className="sb-planner-slot-via">{viaCue}</span> : <PlannerTrail labels={[]} />}
           </div>
         ) : (
           <div className="sb-planner-slot-name-row">
-            <div className="sb-planner-slot-name sb-planner-slot-line">{card.tmName}</div>
+            <div className="sb-planner-slot-name-line">
+              <div className="sb-planner-slot-name sb-planner-slot-line">{card.tmName}</div>
+              {card.vector ? <CardVectorMark vector={card.vector} size="planner" /> : null}
+            </div>
             <PlannerTrail labels={card.trail} />
             {coverCue ? <div className="sb-planner-slot-covers">{coverCue}</div> : null}
           </div>
@@ -86,6 +98,7 @@ function rosterRowClass(row: PlannerRosterEntry): string {
 }
 
 function RosterWriteins({ lines = 2 }: { lines?: number }) {
+  if (lines <= 0) return null;
   return (
     <ul className="sb-planner-roster-writeins" aria-hidden="true">
       {Array.from({ length: lines }, (_, index) => (
@@ -98,7 +111,13 @@ function RosterWriteins({ lines = 2 }: { lines?: number }) {
   );
 }
 
-function RosterGroup({ group }: { group: PlannerRosterGroup }) {
+function RosterGroup({
+  group,
+  writeinLines,
+}: {
+  group: PlannerRosterGroup;
+  writeinLines: number;
+}) {
   const head = group.continued ? `${group.label} · cont.` : group.label;
   return (
     <li className="sb-planner-roster-group">
@@ -114,12 +133,16 @@ function RosterGroup({ group }: { group: PlannerRosterGroup }) {
           </li>
         ))}
       </ol>
-      <RosterWriteins lines={2} />
+      <RosterWriteins lines={writeinLines} />
     </li>
   );
 }
 
 export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
+  const nameCount = plannerRosterNameCount(model.rosterGroups);
+  const density = plannerRosterDensity(nameCount);
+  const notesPx = plannerNotesBandPx(nameCount);
+  const writeinLines = plannerRosterWriteinLines(nameCount);
   const pageNote =
     model.pageCount > 1 ? ` · ${model.pageIndex} of ${model.pageCount}` : "";
   const rosterLabel = model.rosterContinued ? "Scheduled · cont." : "Scheduled";
@@ -129,6 +152,8 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
       className="print-artboard sb-planner-sheet"
       data-print-view="planner"
       data-print-orientation="portrait"
+      data-roster-density={density}
+      style={{ ["--sb-planner-notes-h" as string]: `${notesPx}px` }}
     >
       <header className="sb-planner-header">
         <div className="sb-planner-header-row">
@@ -155,7 +180,11 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
           <div className="sb-planner-roster-head">{rosterLabel}</div>
           <ol className="sb-planner-roster-list">
             {model.rosterGroups.map((group) => (
-              <RosterGroup key={`${group.band}-${group.continued ? "cont" : "start"}`} group={group} />
+              <RosterGroup
+                key={`${group.band}-${group.continued ? "cont" : "start"}`}
+                group={group}
+                writeinLines={writeinLines}
+              />
             ))}
           </ol>
           <div className="sb-planner-roster-writein" aria-hidden="true" />
@@ -227,7 +256,6 @@ export function PortraitPlannerPage({ model }: PortraitPlannerPageProps) {
       <section
         className="sb-planner-notes"
         aria-label="Huddle notes"
-        style={{ minHeight: PLANNER_NOTES_MIN_PX }}
       >
         <div className="sb-planner-notes-head">Huddle notes</div>
         <div className="sb-planner-notes-rules" aria-hidden="true" />
