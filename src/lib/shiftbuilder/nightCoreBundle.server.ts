@@ -15,6 +15,7 @@ import {
   enrichAssignmentsWithBreakGroups,
   slotDefaultBreakMapToRecord,
 } from "./breakGroupResolve";
+import { buildCardVectorUiMap, type CardVector } from "./cardVectors";
 import {
   buildGravesScheduleRosterRows,
   getScheduledTmsFromGravesDefault,
@@ -282,6 +283,7 @@ export type NightCoreBundlePayload = {
   rawDbAssignments: any[];
   rawBreakRows: any[];
   slotDefaultBreaks: Record<string, number>;
+  cardVectors: Record<string, CardVector>;
 };
 
 async function fetchAuxLayoutForNight(nightId: string): Promise<unknown | null> {
@@ -419,6 +421,7 @@ async function buildNightCoreBundleUncached(
     rawDbAssignments: dbAssignments,
     rawBreakRows: [],
     slotDefaultBreaks: slotDefaultBreakMapToRecord(defaultBreakMap),
+    cardVectors: buildCardVectorUiMap(slotDefaults as any),
   };
 }
 

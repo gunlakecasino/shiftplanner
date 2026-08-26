@@ -68,6 +68,8 @@ export type PlannerSlotCard = {
   covers: string[];
   /** Short code of the primary slot when this card is covered, not owned. */
   coveredVia: string | null;
+  /** Standing card vector — stays on the slot when the TM moves. */
+  vector: import("@/lib/shiftbuilder/cardVectors").CardVector | null;
 };
 
 export type PlannerOverlapRow = {
@@ -444,6 +446,7 @@ function slotCard(
     trail: tmId ? plannerTrailLabels(snapshot.placementTrailsByTmId, tmId) : [],
     covers,
     coveredVia,
+    vector: snapshot.cardVectors?.[args.key] ?? null,
   };
 }
 

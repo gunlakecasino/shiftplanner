@@ -31,6 +31,7 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { getSlotMeta, TmPicker, type TmEntry } from "./MarkerPad";
+import { CardVectorPicker } from "./CardVectorMark";
 import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { tabletHaptic } from "@/lib/shiftbuilder/tabletHaptic";
@@ -448,6 +449,11 @@ export interface PlacementPadProps {
   onClearSlotTasks?: (slotKey: string) => void | Promise<void>;
   onCopyRestroomPairingTasks?: (slotKey: string) => void | Promise<void>;
   onAssignSweeper?: (slotKey: string, sweeperLabel: string) => void | Promise<void>;
+  cardVector?: import("@/lib/shiftbuilder/cardVectors").CardVector | null;
+  onSetCardVector?: (
+    slotKey: string,
+    vector: import("@/lib/shiftbuilder/cardVectors").CardVector | null,
+  ) => void | Promise<void>;
   onRequestEngineInsight?: (slotKey: string, context?: string | Record<string, unknown>) => Promise<string>;
   scheduledUnassigned?: TmEntry[];
   allEligibleTms?: TmEntry[];
@@ -602,7 +608,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     slotKey, anchor, hostId, presentation = "flyout", dockTab = "assign", onDockTabChange, onClose,
     assignments, selectedTasks, selectedDay, members = [], auxDefs, isCurrentNightLocked,
     onAddCoverage, onLiveUnassign, onToggleLock, onAssign, onAddTask, onOpenTasksPad, onRemoveTask,
-    onClearSlotTasks, onCopyRestroomPairingTasks, onAssignSweeper, onMarkUnavailable,
+    onClearSlotTasks, onCopyRestroomPairingTasks, onAssignSweeper, onSetCardVector, cardVector, onMarkUnavailable,
     scheduledUnassigned = [], allEligibleTms, pickerFitByTmId, onAddOnCall, boardPrerenderedFit,
     isDraftMode = false, draftAssignments = {}, weeklyRecentHistory, insightsEnabled = true, enableTmDragAssign = false,
   } = props;
@@ -685,7 +691,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
   const [coverageMode, setCoverageMode] = useState(false);
   const [assignMode, setAssignMode] = useState(false);
   const [assignConfirmed, setAssignConfirmed] = useState(false);
-  const [sweeperOpen, setSweeperOpen] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
   const [taskInput, setTaskInput] = useState("");
   const taskInputRef = useRef<HTMLInputElement>(null);
@@ -1211,11 +1216,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     padHistorySig,
   ]);
 
-  const sweeperOptions = [
-    { label: "Sweep 5/8/HL", full: "Sweep 5/8/HL" },
-    { label: "Sweep 9/10/SR", full: "Sweep 9/10/SR" },
-  ];
-
   const rrWorkedCount = new Set(
     spreadKeys
       .filter((k) => /^(?:[MW]RR\d+|RR\d+[MW])$/i.test(k))
@@ -1377,6 +1377,16 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
             : "space-y-3 flex-1 overflow-y-auto"
         }`}
       >
+        {!showTmPicker && onSetCardVector ? (
+          <CardVectorPicker
+            value={cardVector ?? null}
+            disabled={isCurrentNightLocked}
+            onChange={(next) => {
+              void onSetCardVector(slotKey, next);
+            }}
+          />
+        ) : null}
+
         {showDockAssignedSummary && (
           <div className="sb-placement-pad-section">
             <p className="sb-placement-pad-section-title mb-2">Current placement</p>
@@ -1495,27 +1505,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                       <Plus className="w-3 h-3" />
                       {tasks.length ? "Add another task" : "Add task"}
                     </button>
-                    {!isOverlapSlot && onAssignSweeper ? (
-                      <button
-                        type="button"
-                        title="Assign Sweeper"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSweeperOpen(!sweeperOpen);
-                        }}
-                        disabled={isCurrentNightLocked}
-                        className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-amber-400 border border-amber-500 hover:bg-amber-500 transition-colors shadow-sm disabled:opacity-50"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                          <line x1="3" y1="2" x2="10" y2="9" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                          <rect x="8.5" y="7.5" width="4" height="2" rx="0.5" transform="rotate(45 8.5 7.5)" fill="white" opacity="0.7" />
-                          <path d="M8 10 Q9.5 9 12 10.5 L13.5 14 Q11 13 9.5 13.5 Q8.5 14 7.5 13.5 Z" fill="white" />
-                          <line x1="9.5" y1="10.2" x2="9" y2="13.2" stroke="rgba(180,100,0,0.4)" strokeWidth="0.6" strokeLinecap="round" />
-                          <line x1="11" y1="10.5" x2="10.8" y2="13.5" stroke="rgba(180,100,0,0.4)" strokeWidth="0.6" strokeLinecap="round" />
-                          <line x1="12.3" y1="11.2" x2="12.5" y2="13.8" stroke="rgba(180,100,0,0.4)" strokeWidth="0.6" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    ) : null}
                   </div>
                 ) : onOpenTasksPad ? (
                   <button
@@ -1528,52 +1517,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                   </button>
                 ) : null}
 
-                {!isOverlapSlot && onAssignSweeper && (() => {
-                  const hasSweeper = tasks.some((t: any) => t.taskLabel?.toLowerCase().includes('sweep'));
-                  return (
-                    <div style={{ position: 'relative' }}>
-                      {!onAddTask && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setSweeperOpen(!sweeperOpen); }}
-                          disabled={hasSweeper || isCurrentNightLocked}
-                          className="sb-placement-pad-sweeper w-full text-[11px] py-[5px] rounded-xl flex items-center justify-center gap-1.5 font-semibold"
-                          style={{
-                            background: hasSweeper ? '#F4F6FA' : '#EEF4FF',
-                            color: hasSweeper ? '#94A3B8' : '#007AFF',
-                            border: hasSweeper ? '1px solid #E6EAF0' : '1px solid rgba(0,122,255,0.22)',
-                            cursor: hasSweeper ? 'default' : 'pointer',
-                          }}
-                        >
-                          <span style={{ fontSize: 13 }}>🧹</span>
-                          <span>Assign Sweeper</span>
-                          {hasSweeper && <span style={{ fontSize: 9, opacity: 0.55, marginLeft: 2 }}>(assigned)</span>}
-                        </button>
-                      )}
-
-                      {sweeperOpen && !hasSweeper && (
-                        <div
-                          className={`${onAddTask ? "relative" : "absolute"} left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow text-[12px] z-10 py-1`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {sweeperOptions.map((opt) => (
-                            <button
-                              key={opt.label}
-                              type="button"
-                              onClick={() => {
-                                void onAssignSweeper(slotKey, opt.full);
-                                setSweeperOpen(false);
-                              }}
-                              className="w-full text-left px-3 py-1.5 hover:bg-amber-50 text-amber-700"
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
               </div>
             )}
 

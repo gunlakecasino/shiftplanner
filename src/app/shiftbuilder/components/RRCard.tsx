@@ -24,6 +24,9 @@ import {
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
 import { formatCanvasRrSideLabel } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { CardVectorMark } from "./CardVectorMark";
+import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
+import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
 
 export interface RRCardProps {
   def: any;
@@ -72,6 +75,8 @@ export interface RRCardProps {
   isAssignPulse?: boolean;
   isViewOnly?: boolean;
   onKioskLongPress?: (anchor: { x: number; y: number }) => void;
+  cardVectorW?: CardVector | null;
+  cardVectorM?: CardVector | null;
 }
 
 const RRSide: React.FC<{
@@ -108,6 +113,7 @@ const RRSide: React.FC<{
   ) => void;
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
+  cardVector?: CardVector | null;
 }> = ({
   slotKey,
   assignment,
@@ -131,6 +137,7 @@ const RRSide: React.FC<{
   onSwapCoverageSides,
   fitChip,
   placementTrail,
+  cardVector,
 }) => {
   const a = assignment || {};
   // Draft-aware TM identity, mirroring ZoneCard/OverlapSlot: in draft mode a
@@ -213,6 +220,7 @@ const RRSide: React.FC<{
               : undefined
           }
           onUnassignedClick={(e) => handleAssignZoneClick(e, slotKey, onClick, isLocked)}
+          vector={cardVector ? <CardVectorMark vector={cardVector} size="desk" /> : undefined}
         />
       </div>
 
@@ -383,6 +391,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   isAssignPulse = false,
   isViewOnly = false,
   onKioskLongPress,
+  cardVectorW,
+  cardVectorM,
 }) => {
   const mKey = `MRR${def.num}`;
   const wKey = `WRR${def.num}`;
@@ -409,8 +419,8 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
 
   const mTasks = selectedTasks[mKey] || [];
   const wTasks = selectedTasks[wKey] || [];
-  const mRegular = mTasks.filter((t) => !t.isCoverage);
-  const wRegular = wTasks.filter((t) => !t.isCoverage);
+  const mRegular = visibleDeskSlotTasks(mTasks);
+  const wRegular = visibleDeskSlotTasks(wTasks);
   const wCoverageTasks = wTasks.filter((t) => t.isCoverage);
   const mCoverageTasks = mTasks.filter((t) => t.isCoverage);
 
@@ -480,6 +490,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             coveredBy={wCoveredBy}
             fitChip={fitChipW}
             placementTrail={placementTrailW}
+            cardVector={cardVectorW}
             {...sideProps}
           />
         )}
@@ -508,6 +519,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             coveredBy={mCoveredBy}
             fitChip={fitChipM}
             placementTrail={placementTrailM}
+            cardVector={cardVectorM}
             {...sideProps}
           />
         )}

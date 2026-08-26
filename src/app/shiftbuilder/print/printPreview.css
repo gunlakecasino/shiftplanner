@@ -2706,6 +2706,22 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   justify-content: flex-end;
 }
 
+.sb-planner-slot-name-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sb-planner-slot-name-line .sb-planner-slot-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.sb-planner-slot-name-line .sb-card-vector {
+  flex: 0 0 auto;
+}
+
 .sb-planner-slot-name {
   font-size: 10.5px;
   font-weight: 700;
@@ -2721,6 +2737,21 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 
 .sb-planner-slot .sb-planner-trail {
   margin-top: 1px;
+}
+
+.sb-planner-slot .sb-card-vector {
+  display: inline-flex;
+  align-items: baseline;
+  height: 11px;
+  max-width: 76px;
+  transform: rotate(-2deg);
+  pointer-events: none;
+}
+
+.sb-planner-slot .sb-card-vector-svg {
+  display: block;
+  height: 11px;
+  width: auto;
 }
 
 .sb-planner-slot-covers,

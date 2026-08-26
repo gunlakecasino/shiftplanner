@@ -183,6 +183,7 @@ export async function buildPrintDaySnapshot(
     notes: secondary.notes ?? "",
     sideTasks: secondary.sideTasks ?? [],
     nightStatus,
+    cardVectors: (core as { cardVectors?: PrintDaySnapshot["cardVectors"] }).cardVectors ?? {},
     scheduledRoster: (core.gravesScheduleRoster ?? []).map((row: {
       id?: string;
       name?: string;

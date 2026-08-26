@@ -12,6 +12,7 @@ import {
   plannerRosterNameCount,
   plannerRosterWriteinLines,
 } from "./printPageGeometry";
+import { CardVectorMark } from "../components/CardVectorMark";
 import "./printPreview.css";
 
 export type PortraitPlannerPageProps = {
@@ -44,12 +45,18 @@ function PlannerSlotBox({ card }: { card: PlannerSlotCard }) {
       <div className="sb-planner-slot-writein">
         {card.empty ? (
           <div className="sb-planner-slot-open" aria-label={isCovered ? `Covered ${viaCue}` : "Open"}>
-            <span className="sb-planner-slot-name sb-planner-slot-line" />
+            <div className="sb-planner-slot-name-line">
+              <span className="sb-planner-slot-name sb-planner-slot-line" />
+              {card.vector ? <CardVectorMark vector={card.vector} size="planner" /> : null}
+            </div>
             {viaCue ? <span className="sb-planner-slot-via">{viaCue}</span> : <PlannerTrail labels={[]} />}
           </div>
         ) : (
           <div className="sb-planner-slot-name-row">
-            <div className="sb-planner-slot-name sb-planner-slot-line">{card.tmName}</div>
+            <div className="sb-planner-slot-name-line">
+              <div className="sb-planner-slot-name sb-planner-slot-line">{card.tmName}</div>
+              {card.vector ? <CardVectorMark vector={card.vector} size="planner" /> : null}
+            </div>
             <PlannerTrail labels={card.trail} />
             {coverCue ? <div className="sb-planner-slot-covers">{coverCue}</div> : null}
           </div>

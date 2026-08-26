@@ -31,6 +31,8 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
+import { CardVectorMark } from "./CardVectorMark";
+import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
 import {
   placeFixedPopover,
   readViewportHeight,
@@ -82,6 +84,7 @@ export interface AuxCardProps {
   isAssignPulse?: boolean;
   isViewOnly?: boolean;
   onKioskLongPress?: (anchor: { x: number; y: number }) => void;
+  cardVector?: import("@/lib/shiftbuilder/cardVectors").CardVector | null;
 }
 
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
@@ -117,6 +120,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   isAssignPulse = false,
   isViewOnly = false,
   onKioskLongPress,
+  cardVector,
 }) => {
   const role = def.role ?? "blank";
   const isBlank = role === "blank";
@@ -355,7 +359,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     </button>
   );
 
-  const regularTasks = (selectedTasks[def.key] || []).filter((t) => !t.isCoverage);
+  const regularTasks = visibleDeskSlotTasks(selectedTasks[def.key]);
 
   let assignmentState: SlotAssignmentState;
   if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
@@ -513,6 +517,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 : undefined
             }
             onUnassignedClick={(e) => handleAssignZoneClick(e, def.key, onCardClick, isLocked)}
+            vector={cardVector ? <CardVectorMark vector={cardVector} size="desk" /> : undefined}
           />
         </div>
         )}

@@ -7839,3 +7839,102 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card > .w-\[7px\] {
 body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
   transform: none;
 }
+
+/* Card-level VECTORS — Brian ink on the slot, not a TM chip list. */
+@font-face {
+  font-family: "BrianKillianInk-Regular";
+  src: url("/fonts/BrianKillianInk-Regular.woff2") format("woff2"),
+       url("/fonts/BrianKillianInk-Regular.otf") format("opentype"),
+       url("/fonts/BrianKillianInk-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.sb-card-vector {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 0 auto;
+  min-width: 0;
+  line-height: 1;
+  transform: rotate(-2deg);
+  pointer-events: none;
+}
+
+.sb-card-vector-svg {
+  display: block;
+  width: auto;
+}
+
+.sb-card-vector--desk .sb-card-vector-svg {
+  height: 18px;
+  max-width: 118px;
+}
+
+.sb-card-vector--pad .sb-card-vector-svg {
+  height: 16px;
+  max-width: 108px;
+}
+
+.sb-card-vector--planner .sb-card-vector-svg {
+  height: 11px;
+  max-width: 76px;
+}
+
+.sb-card-vector-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sb-card-vector-picker-title {
+  margin: 0;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #94A3B8;
+}
+
+.sb-card-vector-picker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sb-card-vector-picker-btn {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 1px solid #E6EAF0;
+  background: #fff;
+  text-align: left;
+}
+
+.sb-card-vector-picker-btn.is-selected {
+  border-color: color-mix(in srgb, currentColor 28%, #E6EAF0);
+  background: #FFF8F5;
+}
+
+.sb-card-vector-picker-btn:disabled {
+  opacity: 0.5;
+}
+
+.sb-card-vector-picker-clear {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.sb-tm-name-vector {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  margin-left: 6px;
+}

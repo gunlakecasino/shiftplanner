@@ -344,6 +344,29 @@ describe("SheetBuilder sit 2026-08-25 desk cleanliness", () => {
     expect(shiftBuilderClient).toContain("loadingAssignments={boardColdLoading && !hasBoardPayload}");
     expect(shiftBuilderClient).not.toMatch(/loadingAssignments=\{boardColdLoading\}/);
   });
+
+  it("assigns card vectors on the slot, not the TM, and shows ink instead of leftover chips", () => {
+    expect(shiftBuilderClient).toContain("onSetCardVector={stableSetCardVector}");
+    expect(shiftBuilderClient).toContain("cardVectors={effectiveCardVectors}");
+    expect(shiftBuilderClient).not.toContain("Failed to assign sweeper task");
+    expect(globalsCss).toContain("Card-level VECTORS");
+    expect(globalsCss).toContain("BrianKillianInk-Regular");
+    expect(globalsCss).not.toContain("#F4EFE6");
+
+    const pad = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/PlacementPad.tsx"),
+      "utf8",
+    );
+    expect(pad).toContain("CardVectorPicker");
+    expect(pad).not.toContain("Assign Sweeper");
+
+    const zoneCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/ZoneCard.tsx"),
+      "utf8",
+    );
+    expect(zoneCard).toContain("CardVectorMark");
+    expect(zoneCard).toContain("visibleDeskSlotTasks");
+  });
 });
 
 describe("SheetBuilder modern lightweight desk measured sit", () => {

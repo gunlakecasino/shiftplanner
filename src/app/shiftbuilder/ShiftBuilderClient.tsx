@@ -1006,6 +1006,7 @@ function AuthedShiftBuilder() {
 
   // Card borders for attention / marking (visual only) — small local for optimistic UI
   const [cardBorders, setCardBorders] = useState<Record<string, string>>({});
+  const [cardVectors, setCardVectors] = useState<Record<string, import("@/lib/shiftbuilder/cardVectors").CardVector>>({});
 
   // === Draft Mode (Engine Preview) ===
   // Draft mode state from store for narrow subscription (ultra consistent + responsive)
@@ -1961,6 +1962,10 @@ function AuthedShiftBuilder() {
 
   const effectiveRecentZoneHistory = shiftData.effectiveRecentZoneHistory ?? recentZoneHistory;
   const effectiveCardBorders = shiftData.effectiveCardBorders ?? cardBorders;
+  const effectiveCardVectors = {
+    ...(shiftData.effectiveCardVectors ?? {}),
+    ...cardVectors,
+  };
 
   const fullGraveScheduledTonight: Set<string> = shiftData.fullGraveScheduledTonight;
   const pmOverlapScheduledTonight: Set<string> = shiftData.pmOverlapScheduledTonight;
@@ -3365,50 +3370,42 @@ function AuthedShiftBuilder() {
 
   // Dedicated handler for the new "Assign Sweeper" quick action from MarkerPad.
   // Forces the classic orange sweeper color and prevents duplicates.
-  const handleAssignSweeperTask = React.useCallback(
-    async (uiKey: string, sweeperLabel: string) => {
-      if (!nightId) {
-        showToast("No active night selected", "error");
-        return;
+  const handleSetCardVector = React.useCallback(
+    async (uiKey: string, vector: import("@/lib/shiftbuilder/cardVectors").CardVector | null) => {
+      setCardVectors((prev) => {
+        const next = { ...prev };
+        if (vector) next[uiKey] = vector;
+        else delete next[uiKey];
+        return next;
+      });
+      const dateKey = formatLocalDateISO(selectedDay.date);
+      if (currentNight.queryClient) {
+        currentNight.queryClient.setQueryData(["nightCore", dateKey], (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const prior = old as { cardVectors?: Record<string, string> };
+          const nextVectors = { ...(prior.cardVectors ?? {}) };
+          if (vector) nextVectors[uiKey] = vector;
+          else delete nextVectors[uiKey];
+          return { ...prior, cardVectors: nextVectors };
+        });
       }
       try {
-        const { addNightSlotTask, getNightSlotTasks } = await import("@/lib/shiftbuilder/data");
-        const { slot_key, slot_type, rr_side } = uiToDb(uiKey);
-        await addNightSlotTask({
+        const { setSlotCardVector } = await import("@/lib/shiftbuilder/data");
+        const { slot_key, slot_type, rr_side } = uiToDb(uiKey, auxDefs);
+        await setSlotCardVector({
           nightId,
+          date: dateKey,
           slotKey: slot_key,
           slotType: slot_type,
-          rrSide: rr_side,
-          taskLabel: sweeperLabel,
-          sortOrder: 60,
-          color: "#FF9F0A", // classic sweeper orange
+          rrSide: rr_side ?? "",
+          cardVector: vector,
         });
-        logBuilderChange({
-          action: "task_add",
-          slotKey: uiKey,
-          targetNightId: nightId,
-          payload: { taskLabel: sweeperLabel, sweeper: true },
-        });
-
-        // Refresh tasks for the slot + keep TanStack cache in sync for reloads.
-        // Best effort — write already succeeded.
-        try {
-          const fresh = await getNightSlotTasks(nightId);
-          const byKey = mapNightTasksToUiKeys(fresh, auxDefs);
-          setSelectedTasks(byKey);
-          const captureDateKeyForSweeper: string = formatLocalDateISO(selectedDay.date);
-          if (currentNight.queryClient) {
-            patchNightSecondaryTasksCache(currentNight.queryClient, captureDateKeyForSweeper, fresh);
-          }
-        } catch (refreshErr) {
-          console.warn('[ShiftBuilder] task refresh after sweeper failed (write succeeded)', refreshErr);
-        }
       } catch (e) {
-        console.error("Failed to assign sweeper task", e);
-        showToast("Failed to assign sweeper task", "error");
+        console.error("Failed to save card vector", e);
+        showToast("Couldn't save vector", "error");
       }
     },
-    [nightId, showToast, logBuilderChange, selectedDay.date, currentNight.queryClient, auxDefs]
+    [nightId, selectedDay.date, auxDefs, showToast, currentNight.queryClient],
   );
 
   const handleCmdkSetGravePool = React.useCallback(
@@ -6005,6 +6002,14 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   }, [effectiveCardBorders]);
 
   React.useEffect(() => {
+    const next = shiftData.effectiveCardVectors ?? {};
+    setCardVectors((prev) => {
+      if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+      return next;
+    });
+  }, [shiftData.effectiveCardVectors]);
+
+  React.useEffect(() => {
     if (shiftData.isCorePlaceholder) return;
     setScheduledTmIdsTonight(effectiveScheduledTmIdsTonight);
   }, [effectiveScheduledTmIdsTonight, shiftData.isCorePlaceholder]);
@@ -7263,8 +7268,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     handleOpenSettings();
   });
 
-  const stableAssignSweeper = useStableCallback((slotKey: string, sweeperLabel: string) => {
-    handleAssignSweeperTask(slotKey, sweeperLabel);
+  const stableSetCardVector = useStableCallback((
+    slotKey: string,
+    vector: import("@/lib/shiftbuilder/cardVectors").CardVector | null,
+  ) => {
+    void handleSetCardVector(slotKey, vector);
   });
 
   const stableAddTask = useStableCallback((slotKey: string, label: string) => {
@@ -8447,6 +8455,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}
                 cardBorders={effectiveCardBorders}
+                cardVectors={effectiveCardVectors}
+                onSetCardVector={stableSetCardVector}
                 focusedTmId={focusedWeeklyTmId}
                 processedWaves={processedDayData?.waves}
                 processedBreakCounts={processedDayData?.breakCounts}
@@ -8509,7 +8519,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onClearSlot={handlePadClearSlot}
                 onToggleLock={handlePadToggleLock}
                 onAssign={handlePadAssign}
-                onAssignSweeper={stableAssignSweeper}
+                onSetCardVector={stableSetCardVector}
                 onAddTask={stableAddTask}
                 onClearSlotTasks={handleClearSlotTasks}
                 onCopyRestroomPairingTasks={handleCopyRestroomPairingTasks}
@@ -8886,7 +8896,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                     onRemoveTask: handleBoardRemoveTask,
                     onClearSlotTasks: handleClearSlotTasks,
                     onCopyRestroomPairingTasks: handleCopyRestroomPairingTasks,
-                    onAssignSweeper: (sk: string, label: string) => handleAssignSweeperTask(sk, label),
+                    onSetCardVector: (sk: string, vector) => void handleSetCardVector(sk, vector),
+                    cardVector: effectiveCardVectors[selectedSlotKey] ?? null,
                     onRequestEngineInsight: handleBoardRequestEngineInsight,
                     scheduledUnassigned: activePickerScheduledUnassigned,
                     allEligibleTms: selectedSlotKey ? markerSlotAllEligibleTms : markerAllEligibleTms,
@@ -9080,6 +9091,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 nightId={queryNightId || nightId}
                 selectedTasks={selectedTasks}  // still legacy during 3.1 transition
                 cardBorders={effectiveCardBorders}
+                cardVectors={effectiveCardVectors}
+                onSetCardVector={stableSetCardVector}
                 focusedTmId={focusedWeeklyTmId}
                 hideDateHeader={isBuilderLiveCanvas}
                 processedWaves={processedDayData?.waves}
@@ -9130,7 +9143,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onClearSlot={handlePadClearSlot}
                 onToggleLock={handlePadToggleLock}
                 onAssign={handlePadAssign}
-                onAssignSweeper={stableAssignSweeper}
+                onSetCardVector={stableSetCardVector}
                 onAddTask={stableAddTask}
                 onClearSlotTasks={handleClearSlotTasks}
                 onCopyRestroomPairingTasks={handleCopyRestroomPairingTasks}

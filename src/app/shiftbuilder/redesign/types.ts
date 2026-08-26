@@ -19,6 +19,8 @@ export interface ShiftCardProps {
   projectPills?: ReactNode;
   /** Quiet metadata rendered directly below the assigned TM name. */
   nameMeta?: ReactNode;
+  /** Card-level vector ink, rendered on the name line. */
+  nameVector?: ReactNode;
   taskContent?: ReactNode;
   /** Optional in-flow footer used by live coverage banners. */
   footer?: ReactNode;

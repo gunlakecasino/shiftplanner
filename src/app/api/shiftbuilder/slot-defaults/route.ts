@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isSameOriginOpsRequest } from "@/app/api/_lib/sameOrigin";
 import { createAdminClientSafe } from "@/app/api/admin/_lib/createAdminClient";
 import { requireOpsSession } from "@/lib/auth/requireOpsSession.server";
+import { parseCardVector } from "@/lib/shiftbuilder/cardVectors";
 import type { SlotDefault, SlotDefaultTask } from "@/lib/shiftbuilder/data";
 
 /** Session-gated read — prod anon client cannot SELECT slot_defaults tables (RLS). */
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   // the response shape (always empty) so any lingering caller stays safe.
   const defaultsRes = await admin
     .from("slot_defaults")
-    .select("slot_key, slot_type, rr_side, default_break_group")
+    .select("slot_key, slot_type, rr_side, default_break_group, card_vector")
     .order("slot_key", { ascending: true });
 
   if (defaultsRes.error) {
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
     slotType: r.slot_type,
     rrSide: r.rr_side ?? "",
     defaultBreakGroup: r.default_break_group ?? 0,
+    cardVector: parseCardVector((r as { card_vector?: string | null }).card_vector),
   }));
 
   const tasks: SlotDefaultTask[] = [];

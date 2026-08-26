@@ -3,7 +3,7 @@ import { ZONE_COLORS } from "../tokens";
 import type { ShiftCardProps } from "../types";
 import { UnassignedInvite } from "../../components/assignmentCardChrome";
 
-export function ShiftCard({ zone, label, name, secondName, notes, unassigned, coverage, projectPills, nameMeta, taskContent, footer, noChip, onClick }: ShiftCardProps) {
+export function ShiftCard({ zone, label, name, secondName, notes, unassigned, coverage, projectPills, nameMeta, nameVector, taskContent, footer, noChip, onClick }: ShiftCardProps) {
   const colors = ZONE_COLORS[zone] || ZONE_COLORS[1];
   const accentColor = colors.label;
   const cardLabel = label ?? `ZONE ${zone}`;
@@ -64,6 +64,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
                       <span className="text-[15px] font-bold text-[#334155] truncate">{c.name}</span>
                     </div>
                   ))}
+                  {nameVector}
                 </div>
                 {taskBlock}
               </div>
@@ -76,6 +77,7 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
                     onClick?.();
                   }}
                 />
+                {nameVector ? <div className="sb-tm-name-vector mt-1">{nameVector}</div> : null}
                 {taskBlock}
               </div>
             )}
@@ -99,7 +101,10 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
           </div>
           {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
           <div className="flex flex-col gap-0.5 mb-2 items-start text-left">
-            <div className="text-[17px] font-bold text-[#111827] leading-tight truncate w-full">{name}</div>
+            <div className="flex items-baseline gap-1.5 min-w-0 w-full">
+              <div className="text-[17px] font-bold text-[#111827] leading-tight truncate min-w-0">{name}</div>
+              {nameVector}
+            </div>
             {nameMeta}
             {secondName && (
               <div className="text-[13px] font-semibold text-[#64748B] leading-tight truncate">{secondName}</div>
