@@ -91,6 +91,9 @@ export type PrintDaySnapshot = {
   placementTrailsByTmId?: Record<string, string[]>;
   /** Standing card vectors keyed by UI slot (MRR8, Z3, ADM…). Not a TM attribute. */
   cardVectors?: Record<string, import("@/lib/shiftbuilder/cardVectors").CardVector>;
+  /** Night-level DROP ZONES rotation. Survives TM moves. */
+  dropZones?: import("@/lib/shiftbuilder/dropZones").DropZonesResolution;
+  dropZoneGroup?: import("@/lib/shiftbuilder/dropZones").DropZoneGroup | null;
   /**
    * Graves Default Schedule + on-call for the left-hand portrait planner column.
    * Names come from GDS; placement fill on the right uses `assignments`.

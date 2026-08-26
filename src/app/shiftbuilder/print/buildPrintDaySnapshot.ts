@@ -54,6 +54,7 @@ export function slotShowsFilled(
 }
 
 import { computeBreakCounts } from "@/lib/shiftbuilder/processNightData";
+import { resolveDropZones } from "@/lib/shiftbuilder/dropZones";
 export { computeBreakCounts };
 
 const PRINT_HISTORY_CHUNK_SIZE = 48;
@@ -184,6 +185,11 @@ export async function buildPrintDaySnapshot(
     sideTasks: secondary.sideTasks ?? [],
     nightStatus,
     cardVectors: (core as { cardVectors?: PrintDaySnapshot["cardVectors"] }).cardVectors ?? {},
+    dropZoneGroup: (core as { dropZoneGroup?: PrintDaySnapshot["dropZoneGroup"] }).dropZoneGroup ?? null,
+    dropZones: resolveDropZones(
+      (core as { dropZoneGroup?: PrintDaySnapshot["dropZoneGroup"] }).dropZoneGroup ?? null,
+      formatLocalDateISO(day.date),
+    ),
     scheduledRoster: (core.gravesScheduleRoster ?? []).map((row: {
       id?: string;
       name?: string;

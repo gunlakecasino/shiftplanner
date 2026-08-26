@@ -208,6 +208,7 @@ describe("live board cache + nav contracts", () => {
     expect(nextConfig).toContain('source: "/shiftbuilder-print-preview.css"');
     expect(nextConfig).toContain("public, max-age=31536000, immutable");
     expect(middleware).toContain("card-vectors");
+    expect(middleware).toContain("drop-zones");
     expect(middleware).toContain("shiftbuilder-print-preview");
     expect(middleware).toContain('pathname.startsWith("/sheetbuilder")');
     expect(middleware).toContain('pathname.startsWith("/shiftbuilder")');

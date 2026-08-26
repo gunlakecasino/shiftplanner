@@ -2140,6 +2140,24 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   background-position: 1px 1px !important;
 }
 
+.golden-planning-notes-panel-grid {
+  grid-template-columns: minmax(0, 1.4fr) 192px minmax(0, 1fr);
+}
+
+.golden-drop-zones-slot {
+  background: #fafafb;
+  border-right: 1px solid #e5e5e7;
+}
+
+.golden-drop-zones-slot .sb-drop-zones-card {
+  width: 192px;
+  height: 74.84px;
+}
+
+.print-artboard .sb-drop-zones-picker {
+  display: none;
+}
+
 .print-artboard.sb-graves-sheet[data-print-view="breaks"][data-overlap-density="tall"] .sb-side-task-register {
   height: 293px;
 }

@@ -147,6 +147,8 @@ import { useEngineRunner } from "./hooks/useEngineRunner";
 import { useConfirm } from "./components/ConfirmDialog";
 import { WeekEngineResultsSheet } from "./components/WeekEngineResultsSheet";
 import { EngineRunningOverlay } from "./components/EngineRunningOverlay";
+import { DropZonesCard } from "./components/DropZonesCard";
+import { resolveDropZones, type DropZoneGroup } from "@/lib/shiftbuilder/dropZones";
 import { useNotes } from "./hooks/useNotes";
 import { usePrintManager } from "./hooks/usePrintManager";
 import { deepRefreshShiftBuilderDay } from "@/lib/shiftbuilder/shiftBuilderResume";
@@ -3371,6 +3373,40 @@ function AuthedShiftBuilder() {
 
   // Dedicated handler for the new "Assign Sweeper" quick action from MarkerPad.
   // Forces the classic orange sweeper color and prevents duplicates.
+  const dropZones = React.useMemo(
+    () =>
+      resolveDropZones(
+        (currentNight as { dropZoneGroup?: DropZoneGroup | null }).dropZoneGroup,
+        formatLocalDateISO(selectedDay.date),
+      ),
+    [(currentNight as { dropZoneGroup?: DropZoneGroup | null }).dropZoneGroup, selectedDay.date],
+  );
+
+  const handleSetDropZoneGroup = React.useCallback(
+    async (group: DropZoneGroup) => {
+      const dateKey = formatLocalDateISO(selectedDay.date);
+      if (currentNight.queryClient) {
+        currentNight.queryClient.setQueryData(["nightCore", dateKey], (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          return { ...(old as object), dropZoneGroup: group };
+        });
+      }
+      try {
+        const { getOrCreateNightForDate, saveNightDropZoneGroup } = await import(
+          "@/lib/shiftbuilder/data"
+        );
+        const nid =
+          nightId ?? (await getOrCreateNightForDate(selectedDay.date, selectedDay.name));
+        if (!nightId) setNightId(nid);
+        await saveNightDropZoneGroup(nid, group, dateKey);
+      } catch (e) {
+        console.error("Failed to save drop zone group", e);
+        showToast("Couldn't save drop zone group", "error");
+      }
+    },
+    [currentNight.queryClient, nightId, selectedDay.date, selectedDay.name, setNightId, showToast],
+  );
+
   const handleSetCardVector = React.useCallback(
     async (uiKey: string, vector: import("@/lib/shiftbuilder/cardVectors").CardVector | null) => {
       setCardVectors((prev) => {
@@ -8227,41 +8263,50 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         </aside>
       )}
 
-      {/* Shift notes — operator pad (hydrated from server; saves via session mutation) */}
+      {/* Shift notes + DROP ZONES — same night group as Golden print */}
       {canEditAssignments && (
         <div
           className="no-print mx-auto w-full max-w-[var(--sb-builder-canvas-max,1056px)] px-3 pb-1"
           style={{ marginTop: -2 }}
         >
-          <details className="sb-shift-notes group rounded-xl border border-black/8 bg-white/55 dark:bg-white/5 dark:border-white/10 backdrop-blur-md">
-            <summary className="cursor-pointer select-none list-none px-3 py-1.5 text-[11px] font-semibold tracking-wide text-[var(--ios-secondary-label)] flex items-center gap-2">
-              <span className="opacity-70">Shift notes</span>
-              <span className="ml-auto text-[10px] font-normal opacity-50 group-open:hidden">
-                tap to edit
-              </span>
-            </summary>
-            <div className="px-3 pb-2.5 pt-0.5">
-              <div
-                ref={notesRef}
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                aria-label="Shift notes for this night"
-                onInput={handleNotesInput}
-                className="min-h-[52px] max-h-[140px] overflow-y-auto rounded-lg border border-black/6 dark:border-white/10 bg-white/80 dark:bg-black/20 px-2.5 py-2 text-[12.5px] leading-snug text-[var(--ios-label)] outline-none focus:ring-2 focus:ring-[var(--sb-gold-border)]"
-                data-placeholder="Notes for this night (unavailable TMs, BEOs, floor context)…"
-              />
-              {notesCompletion?.ghostText ? (
-                <button
-                  type="button"
-                  className="mt-1 text-[10px] font-medium text-[var(--sb-gold-ink)] opacity-80 hover:opacity-100"
-                  onClick={() => acceptNotesSuggestion?.()}
-                >
-                  Accept suggestion
-                </button>
-              ) : null}
-            </div>
-          </details>
+          <div className="sb-drop-zones-desk-row">
+            <DropZonesCard
+              resolution={dropZones}
+              showPicker
+              onSelectGroup={(group) => {
+                void handleSetDropZoneGroup(group);
+              }}
+            />
+            <details className="sb-shift-notes group min-w-0 flex-1 rounded-xl border border-black/8 bg-white/55 dark:bg-white/5 dark:border-white/10 backdrop-blur-md">
+              <summary className="cursor-pointer select-none list-none px-3 py-1.5 text-[11px] font-semibold tracking-wide text-[var(--ios-secondary-label)] flex items-center gap-2">
+                <span className="opacity-70">Shift notes</span>
+                <span className="ml-auto text-[10px] font-normal opacity-50 group-open:hidden">
+                  tap to edit
+                </span>
+              </summary>
+              <div className="px-3 pb-2.5 pt-0.5">
+                <div
+                  ref={notesRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  aria-label="Shift notes for this night"
+                  onInput={handleNotesInput}
+                  className="min-h-[52px] max-h-[140px] overflow-y-auto rounded-lg border border-black/6 dark:border-white/10 bg-white/80 dark:bg-black/20 px-2.5 py-2 text-[12.5px] leading-snug text-[var(--ios-label)] outline-none focus:ring-2 focus:ring-[var(--sb-gold-border)]"
+                  data-placeholder="Notes for this night (unavailable TMs, BEOs, floor context)…"
+                />
+                {notesCompletion?.ghostText ? (
+                  <button
+                    type="button"
+                    className="mt-1 text-[10px] font-medium text-[var(--sb-gold-ink)] opacity-80 hover:opacity-100"
+                    onClick={() => acceptNotesSuggestion?.()}
+                  >
+                    Accept suggestion
+                  </button>
+                ) : null}
+              </div>
+            </details>
+          </div>
         </div>
       )}
 

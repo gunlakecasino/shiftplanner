@@ -37,6 +37,11 @@ import {
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
 import { CoveredByPrintLabel } from "@/app/shiftbuilder/components/assignmentCardChrome";
+import { DropZonesCard } from "@/app/shiftbuilder/components/DropZonesCard";
+import {
+  resolveDropZones,
+  type DropZonesResolution,
+} from "@/lib/shiftbuilder/dropZones";
 import {
   EDITABLE_PDF_TM_SOURCE_ATTR,
   EditablePdfTmFieldAnchor,
@@ -1252,12 +1257,20 @@ function GoldenPlanningNotesColumn({
   );
 }
 
-export function GoldenPlanningNotesPanel() {
+export function GoldenPlanningNotesPanel({
+  dropZones,
+}: {
+  dropZones?: DropZonesResolution;
+}) {
+  const resolved = dropZones ?? resolveDropZones(null, null);
+
   return (
     <div className="golden-planning-notes-panel flex flex-col flex-1 min-h-0 border border-[#E5E5E7] rounded-[3px] bg-[#FAFAFB] overflow-hidden">
-      <div className="golden-planning-notes-panel-grid grid flex-1 min-h-0 grid-cols-[35%_40%_25%]">
+      <div className="golden-planning-notes-panel-grid grid flex-1 min-h-0 grid-cols-[minmax(0,1.4fr)_192px_minmax(0,1fr)]">
         <GoldenPlanningNotesColumn label="Notes" />
-        <GoldenPlanningNotesColumn label="Projects" />
+        <div className="golden-drop-zones-slot flex items-center justify-center min-w-0 h-full">
+          <DropZonesCard resolution={resolved} />
+        </div>
         <GoldenPlanningNotesColumn label="Events" />
       </div>
     </div>

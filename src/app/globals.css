@@ -7994,6 +7994,88 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
   padding: 0;
 }
 
+/* DROP ZONES — Brian's plate + numbered discs. Render the SVG files. */
+.sb-drop-zones-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sb-drop-zones-card {
+  position: relative;
+  width: 192px;
+  height: 74.84px;
+  flex-shrink: 0;
+}
+
+.sb-drop-zones-plate,
+img.sb-drop-zones-plate {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 192px;
+  height: 74.84px;
+}
+
+.sb-drop-zones-discs {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 22px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+}
+
+.sb-drop-zone-disc,
+img.sb-drop-zone-disc {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.sb-drop-zones-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sb-drop-zones-picker-btn {
+  min-width: 28px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-weight: 700;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.sb-drop-zones-picker-btn.is-selected {
+  background: #1c1c1e;
+  border-color: #1c1c1e;
+  color: #fff;
+}
+
+.sb-drop-zones-desk-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .sb-drop-zones-desk-row {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
 .sb-tm-name-vector,
 .sb-card-vector-badge {
   display: flex;

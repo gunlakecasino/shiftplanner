@@ -1,6 +1,7 @@
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
+import type { DropZoneGroup } from "@/lib/shiftbuilder/dropZones";
 import type { AuxDef } from "@/lib/shiftbuilder/placement";
 import { defaultAuxDefsForNewNight } from "@/lib/shiftbuilder/auxLayout";
 import {
@@ -26,6 +27,7 @@ type NightCoreApiPayload = {
   rawBreakRows?: any[];
   slotDefaultBreaks: Record<string, number>;
   cardVectors?: Record<string, CardVector>;
+  dropZoneGroup?: DropZoneGroup | null;
 };
 
 function toSet(values: string[] | Set<string> | undefined | null): Set<string> {
@@ -53,6 +55,7 @@ function hydrateNightCoreFromBundle(raw: NightCoreApiPayload) {
     rawBreakRows: raw.rawBreakRows ?? [],
     slotDefaultBreaks: raw.slotDefaultBreaks,
     cardVectors: raw.cardVectors ?? {},
+    dropZoneGroup: raw.dropZoneGroup ?? null,
   };
 }
 
@@ -75,6 +78,7 @@ function emptyNightCoreResult(accessBlocked = false) {
     rawBreakRows: [] as unknown[],
     slotDefaultBreaks: {} as Record<string, number>,
     cardVectors: {} as Record<string, CardVector>,
+    dropZoneGroup: null as DropZoneGroup | null,
     accessBlocked,
   };
 }

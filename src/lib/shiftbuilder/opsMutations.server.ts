@@ -2595,6 +2595,25 @@ export async function updateActiveEngineConfigServer(
 // P1 residual writes — notes / night create / breaks seed / placement history
 // ---------------------------------------------------------------------------
 
+export async function saveNightDropZoneGroupServer(
+  nightId: string,
+  dropZoneGroup: 1 | 2 | 3,
+): Promise<{ ok: true; updatedAt: string; dropZoneGroup: 1 | 2 | 3 }> {
+  const id = typeof nightId === "string" ? nightId.trim() : "";
+  if (!id) throw new Error("saveNightDropZoneGroup: nightId is required");
+  if (dropZoneGroup !== 1 && dropZoneGroup !== 2 && dropZoneGroup !== 3) {
+    throw new Error("saveNightDropZoneGroup: group must be 1, 2, or 3");
+  }
+  const client = adminClient();
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from("nights")
+    .update({ drop_zone_group: dropZoneGroup, updated_at: now })
+    .eq("id", id);
+  if (error) throw new Error(`Failed to save drop zone group: ${error.message}`);
+  return { ok: true, updatedAt: now, dropZoneGroup };
+}
+
 export async function saveNightNotesServer(
   nightId: string,
   notes: string,

@@ -753,7 +753,7 @@ export function OfficialGravesTasksPage({
       />
       <div className="sb-graves-tasks-body">
         <section className="sb-official-notes-projects-events">
-          <GoldenPlanningNotesPanel />
+          <GoldenPlanningNotesPanel dropZones={snapshot.dropZones} />
         </section>
         <OfficialOverlapsSection rows={overlapRows} snapshot={snapshot} />
       </div>

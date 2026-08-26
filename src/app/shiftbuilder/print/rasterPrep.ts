@@ -40,7 +40,9 @@ export function stripGoldenRasterChrome(artboard: HTMLElement): void {
  * shipped card-vector files onto a PNG data URL so Golden / planner rasters keep the mark.
  */
 export async function embedCardVectorImagesForRaster(root: HTMLElement): Promise<void> {
-  const imgs = Array.from(root.querySelectorAll<HTMLImageElement>("img.sb-card-vector-svg"));
+  const imgs = Array.from(
+    root.querySelectorAll<HTMLImageElement>("img.sb-card-vector-svg, img.sb-drop-zone-svg"),
+  );
   await Promise.all(
     imgs.map(async (img) => {
       if (img.dataset.cardVectorEmbedded === "1") return;

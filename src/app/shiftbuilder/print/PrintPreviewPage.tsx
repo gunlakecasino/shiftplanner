@@ -267,7 +267,7 @@ export function PrintPreviewPage({
               />
             </div>
             {includeShiftNotes ? (
-              <GoldenPlanningNotesPanel />
+              <GoldenPlanningNotesPanel dropZones={snapshot.dropZones} />
             ) : null}
           </div>
         </div>

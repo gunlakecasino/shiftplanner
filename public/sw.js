@@ -121,6 +121,7 @@ self.addEventListener("fetch", (event) => {
   if (
     url.pathname.startsWith("/icons/") ||
     url.pathname.startsWith("/card-vectors/") ||
+    url.pathname.startsWith("/drop-zones/") ||
     url.pathname === "/manifest.json"
   ) {
     event.respondWith(staleWhileRevalidate(request, SHELL_CACHE));

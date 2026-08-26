@@ -77,6 +77,15 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source: "/drop-zones/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=604800",
+          },
+        ],
+      },
       // Print preview CSS is already ?v= busted (PRINT_PREVIEW_STYLESHEET_HREF).
       {
         source: "/shiftbuilder-print-preview.css",

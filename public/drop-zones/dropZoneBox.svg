@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 74.84">
+  <defs>
+    <style>
+      .dz-plate {
+        fill: #ededed;
+      }
+      .dz-title {
+        fill: #1c1c1e;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+      }
+    </style>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <rect class="dz-plate" x="0" y="0" width="192" height="74.84" rx="10" ry="10"/>
+    <text class="dz-title" text-anchor="middle" transform="translate(96 16.6)">DROP ZONES</text>
+  </g>
+</svg>

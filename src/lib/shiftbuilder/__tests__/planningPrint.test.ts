@@ -152,7 +152,14 @@ describe("planning worksheet print", () => {
     expect(html).not.toContain("sb-side-task-register");
     expect(html).toContain("sb-official-notes-projects-events");
     expect(html).toContain(">Notes<");
-    expect(html).toContain(">Projects<");
+    expect(html).not.toContain(">Projects<");
+    expect(html).toContain("DROP ZONES");
+    expect(html).toContain("/drop-zones/dropZoneBox.svg");
+    expect(html).toContain("/drop-zones/dz03.svg");
+    expect(html).toContain("/drop-zones/dz05.svg");
+    expect(html).toContain("/drop-zones/dz08.svg");
+    expect(html).toContain("/drop-zones/dz10.svg");
+    expect(html).toContain("sb-drop-zone-svg");
     expect(html).toContain(">Events<");
     expect(html).not.toContain("Saved shift note should not print");
   });

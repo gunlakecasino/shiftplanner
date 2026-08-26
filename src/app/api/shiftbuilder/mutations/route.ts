@@ -33,6 +33,7 @@ import {
   replaceNightSlotTasksForSlotServer,
   applyOverlapTasksToNightServer,
   restoreTMServer,
+  saveNightDropZoneGroupServer,
   saveNightNotesServer,
   seedDefaultBreaksForNightServer,
   setNightCardBorderServer,
@@ -124,6 +125,7 @@ const ACTION_PERMISSIONS: Record<string, ActionPerm> = {
   update_engine_config: "canAccessSudo",
   // Board residual
   save_night_notes: "canEditAssignments",
+  save_night_drop_zone_group: "canEditAssignments",
   get_or_create_night: "canEditAssignments",
   seed_default_breaks: "canEditAssignments",
   record_placement_history: "canEditAssignments",
@@ -546,6 +548,15 @@ export async function POST(request: NextRequest) {
           String(body.nightId),
           String(body.notes ?? ""),
         );
+        await bustCache(body);
+        return NextResponse.json(result);
+      }
+      case "save_night_drop_zone_group": {
+        const group = Number(body.dropZoneGroup);
+        if (group !== 1 && group !== 2 && group !== 3) {
+          return NextResponse.json({ error: "dropZoneGroup must be 1, 2, or 3" }, { status: 400 });
+        }
+        const result = await saveNightDropZoneGroupServer(String(body.nightId), group);
         await bustCache(body);
         return NextResponse.json(result);
       }

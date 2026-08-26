@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 46.9 46.9">
+  <defs>
+    <style>
+      .dz-fill { fill: #ff3b30; }
+      .dz-num {
+        fill: #1c1c1e;
+        stroke: #ffffff;
+        stroke-width: 1.7px;
+        stroke-linejoin: round;
+        paint-order: stroke fill;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 24px;
+        font-weight: 800;
+      }
+    </style>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <circle class="dz-fill" cx="23.45" cy="23.45" r="23.45"/>
+    <text class="dz-num" text-anchor="middle" dominant-baseline="central" x="23.45" y="24.2">4</text>
+  </g>
+</svg>

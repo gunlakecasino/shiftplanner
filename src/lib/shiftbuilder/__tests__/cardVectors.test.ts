@@ -361,6 +361,7 @@ describe("Golden / floor PDF vector mark", () => {
     );
     expect(raster).toContain("embedCardVectorImagesForRaster");
     expect(raster).toContain("img.sb-card-vector-svg");
+    expect(raster).toContain("img.sb-drop-zone-svg");
     expect(raster).toContain("toDataURL(\"image/png\")");
     expect(exportDoc).toContain("embedCardVectorImagesForRaster");
   });

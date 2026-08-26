@@ -1082,6 +1082,21 @@ export async function getNightNotes(nightId: string): Promise<string> {
   return (data?.notes ?? "") as string;
 }
 
+export async function saveNightDropZoneGroup(
+  nightId: string,
+  dropZoneGroup: 1 | 2 | 3,
+  date?: string | null,
+): Promise<void> {
+  await runBoardMutation(
+    "save_night_drop_zone_group",
+    { nightId, dropZoneGroup, date: date ?? undefined },
+    async () => {
+      const { saveNightDropZoneGroupServer } = await import("./opsMutations.server");
+      return saveNightDropZoneGroupServer(nightId, dropZoneGroup);
+    },
+  );
+}
+
 export async function saveNightNotes(nightId: string, notes: string): Promise<void> {
   await runBoardMutation(
     "save_night_notes",
