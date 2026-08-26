@@ -1,26 +1,12 @@
 /* v1.0.0 — Production Release — UI frozen & shipped June 24 2026 */
 /* PRODUCTION-READY — ShiftBuilder v1.0.0 floor release (June 24, 2026) */
 /* UI frozen. Hardening only: security headers, structured logging, audit API, route aliases, UX transitions. */
-/* Material Symbols Rounded — self-hosted via npm, no CDN dependency */
-@import "material-symbols/rounded";
-
-/* Velvet shorthand — app-wide icon spans use class="ms" (Sudo, Settings, tabs, toasts) */
+/* Lucide icons (replaces the 5.3 MB Material Symbols Rounded woff2). */
 .ms {
-  font-family: "Material Symbols Rounded";
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
   display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: "liga";
+  flex-shrink: 0;
+  vertical-align: middle;
+  line-height: 1;
 }
 
 @import "./ios26-colors.css";
@@ -5174,17 +5160,17 @@ button,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .assignment-name,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-tm-primary-name,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace h3 {
-  font-size: clamp(20px, 1.45vw, 26px) !important;
+  font-size: clamp(16px, 1.15vw, 19px) !important;
   font-weight: 900 !important;
-  letter-spacing: -0.045em !important;
-  line-height: 1.02 !important;
+  letter-spacing: -0.03em !important;
+  line-height: 1.12 !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid h3,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-overlap-grid .sb-tm-primary-name,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-overlap-grid h3 {
-  font-size: clamp(18px, 1.2vw, 22px) !important;
+  font-size: clamp(15px, 1.05vw, 17px) !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-covered-by-block {
@@ -5350,21 +5336,21 @@ button,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-tm-primary-name,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace h3 {
   color: #111827 !important;
-  font-size: clamp(20px, 1.45vw, 26px) !important;
+  font-size: clamp(16px, 1.15vw, 19px) !important;
   font-weight: 900 !important;
-  letter-spacing: -0.045em !important;
-  line-height: 1.02 !important;
+  letter-spacing: -0.03em !important;
+  line-height: 1.12 !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-rr-grid h3 {
-  font-size: clamp(20px, 1.35vw, 25px) !important;
+  font-size: clamp(15px, 1.05vw, 17px) !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-overlap-grid .sb-tm-primary-name,
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-overlap-grid h3 {
-  font-size: clamp(16px, 1.05vw, 19px) !important;
-  letter-spacing: -0.035em !important;
+  font-size: clamp(14px, 0.95vw, 16px) !important;
+  letter-spacing: -0.03em !important;
 }
 
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-tm-placement-trail {
@@ -7214,6 +7200,43 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   text-align: left;
 }
 
+/* 192-wide Golden/zone desk density — name stays inside the card with chips + vector. */
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-name-stack {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-primary-name,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card .sb-tm-primary-name,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-overlap-grid .sb-tm-primary-name {
+  font-size: 17px !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.03em !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal !important;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 0 auto;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-name-chips,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-vector-badge {
+  position: relative;
+  z-index: 0;
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3)::after {
   background: linear-gradient(180deg, rgba(244, 246, 250, 0) 0%, rgba(244, 246, 250, 0.88) 70%, #F4F6FA 100%);
 }
@@ -7790,6 +7813,15 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card > .w-\[7px\] {
   align-self: stretch !important;
 }
 
+.sb-desk-card-body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sb-desk-card .sb-tm-primary-name {
+  padding-left: 0;
+}
+
 .sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-list-row::before,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-list-row::before {
   content: none !important;
@@ -7853,10 +7885,12 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
 
 .sb-card-vector {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   flex: 0 0 auto;
   min-width: 0;
-  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 0;
   transform: rotate(-2deg);
   pointer-events: none;
 }
@@ -7864,13 +7898,24 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
 .sb-card-vector-svg {
   display: block;
   width: auto;
-  height: auto;
+  height: 100%;
+  max-width: 100%;
   object-fit: contain;
 }
 
+.sb-card-vector--desk {
+  height: 12px;
+  max-width: 72px;
+}
+
 .sb-card-vector--desk .sb-card-vector-svg {
-  height: 18px;
-  max-width: 118px;
+  height: 12px;
+  max-width: 72px;
+}
+
+.sb-card-vector--pad {
+  height: 16px;
+  max-width: 108px;
 }
 
 .sb-card-vector--pad .sb-card-vector-svg {
@@ -7878,9 +7923,24 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
   max-width: 108px;
 }
 
+.sb-card-vector--planner {
+  height: 11px;
+  max-width: 76px;
+}
+
 .sb-card-vector--planner .sb-card-vector-svg {
   height: 11px;
   max-width: 76px;
+}
+
+.sb-card-vector--golden {
+  height: 9px;
+  max-width: 62px;
+}
+
+.sb-card-vector--golden .sb-card-vector-svg {
+  height: 9px;
+  max-width: 62px;
 }
 
 .sb-card-vector-picker {
@@ -7934,10 +7994,13 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
   padding: 0;
 }
 
-.sb-tm-name-vector {
-  display: inline-flex;
-  align-items: baseline;
+.sb-tm-name-vector,
+.sb-card-vector-badge {
+  display: flex;
+  align-items: center;
   flex: 0 0 auto;
   min-width: 0;
-  margin-left: 2px;
+  max-width: 100%;
+  margin-top: 3px;
+  line-height: 0;
 }

@@ -2,6 +2,7 @@
 
 import React from "react";
 import VirtualRosterList from "./VirtualRosterList";
+import { MsIcon as LucideMsIcon } from "./MsIcon";
 import { BuilderLoadingLine } from "./builderPrimitives";
 import {
   filterGravesScheduleRosterByBand,
@@ -80,17 +81,7 @@ function MsIcon({
   fill?: 0 | 1;
   className?: string;
 }) {
-  return (
-    <span
-      className={`ms ${className ?? ""}`}
-      style={{
-        fontSize: size,
-        fontVariationSettings: `"FILL" ${fill}, "wght" 400, "opsz" 20`,
-      }}
-    >
-      {name}
-    </span>
-  );
+  return <LucideMsIcon name={name} size={size} fill={fill} className={className} />;
 }
 
 function RosterSectionHeader({

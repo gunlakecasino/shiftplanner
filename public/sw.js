@@ -13,7 +13,7 @@
 //   • Everything else             → passthrough.
 //
 // Bump CACHE_VERSION on every release so activate() purges the previous caches.
-const CACHE_VERSION = "v6-ipad-20260823";
+const CACHE_VERSION = "v7-ipad-20260826";
 const SHELL_CACHE = `shiftforge-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `shiftforge-static-${CACHE_VERSION}`;
 const OFFLINE_URL = "/sheetbuilder";
@@ -118,7 +118,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Shell assets → stale-while-revalidate.
-  if (url.pathname.startsWith("/icons/") || url.pathname === "/manifest.json") {
+  if (
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/card-vectors/") ||
+    url.pathname === "/manifest.json"
+  ) {
     event.respondWith(staleWhileRevalidate(request, SHELL_CACHE));
     return;
   }

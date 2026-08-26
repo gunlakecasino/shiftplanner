@@ -11,6 +11,7 @@ import { printArtboardSizePx } from "./printPageGeometry";
 import {
   centerGoldenRasterContent,
   flattenGoldenRasterStageBleed,
+  embedCardVectorImagesForRaster,
   inlineLiveDomForRaster,
   mountGoldenRasterCaptureShell,
   prepareArtboardForRaster,
@@ -284,6 +285,7 @@ export async function rasterizeGoldenArtboardElement(args: {
   args.artboard.getBoundingClientRect();
 
   await waitForGoldenRenderSettled();
+  await embedCardVectorImagesForRaster(args.artboard);
   await new Promise<void>((r) => {
     requestAnimationFrame(() => requestAnimationFrame(() => r()));
   });
@@ -385,6 +387,7 @@ export async function rasterizeGoldenPageHtml(args: {
     applyArtboardContract(artboard, args.kind);
     artboard.getBoundingClientRect();
     await waitForGoldenRenderSettled();
+    await embedCardVectorImagesForRaster(artboard);
     await new Promise<void>((r) => {
       requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     });

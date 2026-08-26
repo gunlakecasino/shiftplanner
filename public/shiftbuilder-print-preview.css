@@ -1784,6 +1784,44 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   letter-spacing: -0.25px;
 }
 
+.sb-approved-card-vector,
+.sb-golden-card-vector {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-top: 3px;
+  height: 9px;
+  max-width: 62px;
+  line-height: 0;
+  overflow: hidden;
+}
+
+.sb-approved-card-vector .sb-card-vector,
+.sb-golden-card-vector .sb-card-vector {
+  height: 9px;
+  max-width: 62px;
+}
+
+.sb-approved-card-vector .sb-card-vector-svg,
+.sb-golden-card-vector .sb-card-vector-svg {
+  display: block;
+  height: 9px;
+  width: auto;
+  max-width: 62px;
+  object-fit: contain;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-vector {
+  margin-top: 2px;
+  height: 8px;
+  max-width: 52px;
+}
+
+.sb-approved-assignment-card.is-aux-mini .sb-approved-card-vector .sb-card-vector-svg {
+  height: 8px;
+  max-width: 52px;
+}
+
 .sb-approved-card-names.is-multiple {
   font-size: 14px;
   line-height: 1.15;

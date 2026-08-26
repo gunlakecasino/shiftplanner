@@ -66,9 +66,20 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Material Symbols (self-hosted via npm) — long cache + immutable
+      // Card-level vector SVGs — cache a week, but not immutable so Brian's
+      // artwork updates land without a hard cache bust.
       {
-        source: "/material-symbols/:path*",
+        source: "/card-vectors/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=604800",
+          },
+        ],
+      },
+      // Print preview CSS is already ?v= busted (PRINT_PREVIEW_STYLESHEET_HREF).
+      {
+        source: "/shiftbuilder-print-preview.css",
         headers: [
           {
             key: "Cache-Control",

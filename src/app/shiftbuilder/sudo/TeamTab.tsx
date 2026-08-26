@@ -17,6 +17,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { MsIcon } from "../components/MsIcon";
 // TM management functions are dynamically imported inside handlers/effects
 // to prevent static pulling of the heavy data module through sudoActions (Turbopack HMR fix).
 import type {
@@ -156,7 +157,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
           onClick={refresh}
           className={cn("text-[11px] inline-flex items-center gap-1.5", isDark ? "text-zinc-400 hover:text-zinc-200" : "text-[#6C6C72] hover:text-[#111]")}
         >
-          <span className="ms" style={{ fontSize: 12 }}>refresh</span> refresh
+          <MsIcon name="refresh" size={12} /> refresh
         </button>
       </div>
 
@@ -230,14 +231,14 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
             }}
             className="sb-interactive px-3 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[11px] font-medium inline-flex items-center gap-1.5"
           >
-            <span className="ms" style={{ fontSize: 12 }}>person_add</span> new TM
+            <MsIcon name="person_add" size={12} /> new TM
           </button>
         </div>
 
         {/* List */}
         {error && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
-            <span className="ms inline mr-1" style={{ fontSize: 12 }}>warning</span>
+            <MsIcon name="warning" className="inline mr-1" size={12} />
             {error}
           </div>
         )}
@@ -541,7 +542,7 @@ function TMEditDrawer({
                 disabled={saving}
                 className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-black/10 dark:border-white/10 text-[#6C6C72] dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
               >
-                <span className="ms mr-1" style={{ fontSize: 12 }}>archive</span>
+                <MsIcon name="archive" className="mr-1" size={12} />
                 soft-delete
               </button>
             ) : (
@@ -550,7 +551,7 @@ function TMEditDrawer({
                 disabled={saving}
                 className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-black/10 dark:border-white/10 text-[#6C6C72] dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
               >
-                <span className="ms mr-1" style={{ fontSize: 12 }}>undo</span>
+                <MsIcon name="undo" className="mr-1" size={12} />
                 restore
               </button>
             )}
@@ -573,7 +574,7 @@ function TMEditDrawer({
                 <BuilderBusyLabel>Saving</BuilderBusyLabel>
               ) : (
                 <>
-                  <span className="ms" style={{ fontSize: 14 }}>check_circle</span>
+                  <MsIcon name="check_circle" size={14} />
                   Save Changes
                 </>
               )}
@@ -913,7 +914,7 @@ function PrefsForm({
                       }}
                       className={cn(isDark ? "text-zinc-600 hover:text-red-400" : "text-neutral-400 hover:text-red-500")}
                     >
-                      <span className="ms" style={{ fontSize: 12 }}>delete</span>
+                      <MsIcon name="delete" size={12} />
                     </button>
                   </td>
                 </tr>
@@ -1020,7 +1021,7 @@ function PrefsForm({
                       }}
                       className={cn(isDark ? "text-zinc-600 hover:text-red-400" : "text-neutral-400 hover:text-red-500")}
                     >
-                      <span className="ms" style={{ fontSize: 12 }}>delete</span>
+                      <MsIcon name="delete" size={12} />
                     </button>
                   </td>
                 </tr>

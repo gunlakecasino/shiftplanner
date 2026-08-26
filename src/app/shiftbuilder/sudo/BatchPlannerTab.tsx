@@ -18,6 +18,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
+import { MsIcon } from "../components/MsIcon";
 import { SudoTabLoading } from "./SudoGlass";
 import { sudoIosClasses } from "./sudoIosTheme";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -237,7 +238,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
       {/* Header bar */}
       <div className={cn(ios.actionBar, "flex items-center justify-between")}>
         <div className="flex items-center gap-2">
-          <span className="ms text-amber-400" style={{ fontSize: 16 }}>bolt</span>
+          <MsIcon name="bolt" className="text-amber-400" size={16} />
           <span className={cn("text-[13px] font-semibold", ios.actionTitle)}>Batch Planner</span>
           <span className="text-zinc-500 text-[11px] font-mono">· weighted engine · no Grok</span>
         </div>
@@ -286,7 +287,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
                   </option>
                 ))}
               </select>
-              <span className="ms pointer-events-none absolute right-2.5 top-2.5 text-zinc-500" style={{ fontSize: 14 }}>expand_more</span>
+              <MsIcon name="expand_more" className="pointer-events-none absolute right-2.5 top-2.5 text-zinc-500" size={14} />
             </div>
           )}
         </div>
@@ -339,7 +340,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
               "disabled:opacity-40 disabled:cursor-not-allowed"
             )}
           >
-            {!batchRunning && <span className="ms" style={{ fontSize: 16 }}>play_arrow</span>}
+            {!batchRunning && <MsIcon name="play_arrow" size={16} />}
             {batchRunning ? (
               <BuilderBusyLabel>Running all nights</BuilderBusyLabel>
             ) : (
@@ -360,7 +361,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
                 : "text-neutral-500 hover:text-neutral-900 border-neutral-300 hover:border-neutral-400"
             )}
           >
-            <span className="ms" style={{ fontSize: 14 }}>refresh</span>
+            <MsIcon name="refresh" size={14} />
             Reset
           </button>
         </div>
@@ -373,7 +374,7 @@ export function BatchPlannerTab({ onDataChanged, isDark = false }: BatchPlannerT
               ? "bg-red-950/40 border-red-800/50 text-red-300"
               : "bg-red-50 border-red-200 text-red-700"
           )}>
-            <span className="ms shrink-0 mt-px" style={{ fontSize: 16 }}>cancel</span>
+            <MsIcon name="cancel" className="shrink-0 mt-px" size={16} />
             <span>{batchError}</span>
           </div>
         )}
@@ -526,7 +527,7 @@ function NightRowItem({
             <BuilderBusyLabel className="text-[11px]">Run</BuilderBusyLabel>
           ) : (
             <>
-              <span className="ms" style={{ fontSize: 12 }}>play_arrow</span>
+              <MsIcon name="play_arrow" size={12} />
               Run
             </>
           )}

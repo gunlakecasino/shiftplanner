@@ -38,6 +38,8 @@ import {
 } from "./officialZoneRowLayout";
 import { AsOfTimestamp } from "./AsOfTimestamp";
 import { GoldenPlanningNotesPanel } from "./GoldenPrintComponents";
+import { CardVectorMark } from "../components/CardVectorMark";
+import { parseCardVector } from "@/lib/shiftbuilder/cardVectors";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
@@ -314,6 +316,7 @@ function ApprovedAssignmentCard({
   const ink = approvedAccentInk(accent);
   const coverageBg = coverageBarBg(accent);
   const hasEditableTmField = Boolean(assignedName) || coveredBy.length === 0;
+  const cardVector = parseCardVector(snapshot.cardVectors?.[slotKey]);
 
   return (
     <div
@@ -375,6 +378,11 @@ function ApprovedAssignmentCard({
                 ) : null}
               </div>
             ))}
+          </div>
+        ) : null}
+        {cardVector ? (
+          <div className="sb-approved-card-vector">
+            <CardVectorMark vector={cardVector} size="golden" />
           </div>
         ) : null}
         {tasks.length > 0 ? (
@@ -618,13 +626,20 @@ export function OfficialGravesDeploymentPage({
   );
 }
 
-function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] }) {
+function OfficialOverlapCard({
+  slot,
+  cardVector,
+}: {
+  slot: PrintOverlapRow["slots"][number];
+  cardVector?: import("@/lib/shiftbuilder/cardVectors").CardVector | null;
+}) {
   const accent = getOverlapAccent(slot.key);
   const regularTasks = slot.tasks.filter((task) => !task.isCoverage);
   const tmName = printAssigneeName(slot.tmName, slot.tmId);
   const assigned = !!tmName;
   const openWork = !assigned && regularTasks.length > 0;
   const blank = !assigned && regularTasks.length === 0;
+  const vector = parseCardVector(cardVector);
   return (
     <div
       className={`sb-graves-overlap-card ${openWork ? "is-open-work" : ""}`.trim()}
@@ -639,7 +654,13 @@ function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] 
           fontSizePx={15}
           style={{ left: 7, right: 7, top: 4, height: 18 }}
         />
-        {blank ? null : (
+        {blank ? (
+          vector ? (
+            <div className="sb-approved-card-vector">
+              <CardVectorMark vector={vector} size="golden" />
+            </div>
+          ) : null
+        ) : (
           <>
             <div
               className={`sb-graves-overlap-name ${openWork ? "is-open" : ""}`}
@@ -647,6 +668,11 @@ function OfficialOverlapCard({ slot }: { slot: PrintOverlapRow["slots"][number] 
             >
               {tmName || "OPEN WORK"}
             </div>
+            {vector ? (
+              <div className="sb-approved-card-vector">
+                <CardVectorMark vector={vector} size="golden" />
+              </div>
+            ) : null}
             <div className="sb-approved-overlap-tasks">
               {regularTasks.map((task) => <div key={task.id}>- {task.label}</div>)}
             </div>
@@ -687,7 +713,11 @@ function OfficialOverlapsSection({ rows, snapshot }: { rows: PrintOverlapRow[]; 
             </div>
             <div className="sb-graves-overlap-grid">
               {row.slots.map((slot) => (
-                <OfficialOverlapCard key={slot.key} slot={slot} />
+                <OfficialOverlapCard
+                  key={slot.key}
+                  slot={slot}
+                  cardVector={snapshot.cardVectors?.[slot.key]}
+                />
               ))}
             </div>
           </div>

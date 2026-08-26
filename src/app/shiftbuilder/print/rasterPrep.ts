@@ -35,6 +35,65 @@ export function stripGoldenRasterChrome(artboard: HTMLElement): void {
   }
 }
 
+/**
+ * html-to-image often drops file-backed SVG <img> tags. Paint the already-decoded
+ * shipped card-vector files onto a PNG data URL so Golden / planner rasters keep the mark.
+ */
+export async function embedCardVectorImagesForRaster(root: HTMLElement): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll<HTMLImageElement>("img.sb-card-vector-svg"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      if (img.dataset.cardVectorEmbedded === "1") return;
+      const src = img.currentSrc || img.src;
+      if (!src) return;
+      if (src.startsWith("data:image/png")) {
+        img.dataset.cardVectorEmbedded = "1";
+        return;
+      }
+      try {
+        if (!img.complete || img.naturalWidth === 0) {
+          await img.decode();
+        }
+      } catch {
+        /* try canvas / fetch anyway */
+      }
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const canvas = root.ownerDocument.createElement("canvas");
+        const scale = 3;
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          img.src = canvas.toDataURL("image/png");
+          img.dataset.cardVectorEmbedded = "1";
+          try {
+            await img.decode();
+          } catch {
+            /* keep the data URL even if decode is a no-op */
+          }
+          return;
+        }
+      }
+      try {
+        const res = await fetch(src);
+        if (!res.ok) return;
+        const text = await res.text();
+        img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`;
+        img.dataset.cardVectorEmbedded = "1";
+        try {
+          await img.decode();
+        } catch {
+          /* ignore */
+        }
+      } catch {
+        /* leave the original file src */
+      }
+    }),
+  );
+}
+
 export type GoldenRasterCaptureMount = {
   shell: HTMLElement;
   artboard: HTMLElement;

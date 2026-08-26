@@ -5,15 +5,17 @@ import {
   CARD_VECTOR_IDS,
   CARD_VECTOR_META,
   CARD_VECTOR_SRC,
+  CARD_VECTOR_VIEWBOX,
   type CardVector,
 } from "@/lib/shiftbuilder/cardVectors";
 
-export type CardVectorMarkSize = "desk" | "planner" | "pad";
+export type CardVectorMarkSize = "desk" | "planner" | "pad" | "golden";
 
 const SIZE: Record<CardVectorMarkSize, { className: string; ariaHidden?: boolean }> = {
   desk: { className: "sb-card-vector sb-card-vector--desk" },
   planner: { className: "sb-card-vector sb-card-vector--planner", ariaHidden: true },
   pad: { className: "sb-card-vector sb-card-vector--pad" },
+  golden: { className: "sb-card-vector sb-card-vector--golden", ariaHidden: true },
 };
 
 export function CardVectorMark({
@@ -26,6 +28,7 @@ export function CardVectorMark({
   if (!vector) return null;
   const meta = CARD_VECTOR_META[vector];
   const box = SIZE[size];
+  const view = CARD_VECTOR_VIEWBOX[vector];
 
   return (
     <span
@@ -39,6 +42,8 @@ export function CardVectorMark({
       <img
         src={CARD_VECTOR_SRC[vector]}
         alt=""
+        width={view.width}
+        height={view.height}
         className="sb-card-vector-svg"
         draggable={false}
       />

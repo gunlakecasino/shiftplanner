@@ -154,6 +154,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|hot-update|frontman).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|hot-update|frontman|card-vectors|shiftbuilder-print-preview\\.css).*)",
   ],
 };

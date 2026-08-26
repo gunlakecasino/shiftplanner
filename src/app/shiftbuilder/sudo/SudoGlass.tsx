@@ -17,6 +17,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { MsIcon } from "../components/MsIcon";
 
 export interface GlassSurfaceProps {
   isDark?: boolean;
@@ -131,15 +132,11 @@ export function SudoTabButton({
       )}
     >
       {icon && (
-        <span
-          className="ms"
-          style={{
-            fontSize: 16,
-            color: active ? gold : undefined,
-          }}
-        >
-          {icon}
-        </span>
+        <MsIcon
+          name={icon}
+          size={16}
+          style={{ color: active ? gold : undefined }}
+        />
       )}
       <span className="flex-1 text-left">{label}</span>
       {comingSoon && (
@@ -291,7 +288,7 @@ export function CenteredGlassModal({
               className="sb-interactive text-[#6C6C72] dark:text-zinc-400 hover:text-[#111] dark:hover:text-zinc-100 rounded p-1.5"
               aria-label="Close"
             >
-              <span className="ms" style={{ fontSize: 18 }}>close</span>
+              <MsIcon name="close" size={18} />
             </button>
           </div>
         </div>

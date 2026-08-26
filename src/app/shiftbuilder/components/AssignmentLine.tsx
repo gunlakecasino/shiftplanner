@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AssignmentSkeleton } from "./builderPrimitives";
+import { MsIcon } from "./MsIcon";
 
 // Dashed assignment line — TM name rides on top, or empty when unfilled.
 const AssignmentLine = React.memo(function AssignmentLine({
@@ -28,7 +29,7 @@ const AssignmentLine = React.memo(function AssignmentLine({
   return (
     <div className={`border-b border-dashed border-[var(--ios-gray-4)] pb-[1px] ${text} leading-tight truncate flex items-center gap-1 ${tmName ? "font-semibold text-[var(--ios-label)] dark:text-[#F2F2F4]" : "text-[var(--ios-gray-5)] dark:text-[#48484A]"}`}>
       {isLocked && tmName && (
-        <span className="ms shrink-0 text-[var(--ios-orange)]" aria-label="Locked" style={{ fontSize: size === "sm" ? 10 : 12, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>lock</span>
+        <MsIcon name="lock" className="shrink-0 text-[var(--ios-orange)]" aria-label="Locked" size={size === "sm" ? 10 : 12} fill={1} />
       )}
       <span className="truncate">{tmName || placeholder || " "}</span>
     </div>

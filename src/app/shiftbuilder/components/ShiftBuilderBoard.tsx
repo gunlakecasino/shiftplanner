@@ -51,6 +51,7 @@ import { usePlacementFitMap } from "../hooks/usePlacementFitMap";
 import { nightIsoFromDate } from "./placementPadHelpers";
 import { buildCoveredByIndex } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
+import { MsIcon } from "./MsIcon";
 import type { DraftAssignmentRow } from "./placementFitForSlot";
 import { VIEWPORT_SYNC_EVENT } from "@/lib/shiftbuilder/viewportLock";
 
@@ -1300,7 +1301,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                     }}
                     title="This day is locked — no changes allowed"
                   >
-                    <span className="ms" style={{ fontSize: 13 }}>lock</span>
+                    <MsIcon name="lock" size={13} />
                     LOCKED
                   </span>
                 )}
@@ -1495,6 +1496,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       tasks={toTaskLines(selectedTasks[key])}
                       empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
                       coveredBy={coveredByIndex[key]}
+                      cardVector={cardVectors[key]}
                     />
                   ) : (
                     <>
@@ -1618,6 +1620,8 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                       wTasks={toTaskLines(selectedTasks[wKey])}
                       mTasks={toTaskLines(selectedTasks[mKey])}
                       coveredByIndex={coveredByIndex}
+                      cardVectorW={cardVectors[wKey]}
+                      cardVectorM={cardVectors[mKey]}
                     />
                   ) : (
                     <>
@@ -1821,6 +1825,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                           tasks={toTaskLines(selectedTasks[key])}
                           empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
                           coveredBy={coveredByIndex[key]}
+                          cardVector={cardVectors[key]}
                         />
                       ) : (
                         <>
@@ -1898,6 +1903,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                         tasks={toTaskLines(selectedTasks[key])}
                         empty={!slotShowsFilled(key, displayAssignments, isDraftMode, draftAssignments)}
                         coveredBy={coveredByIndex[key]}
+                        cardVector={cardVectors[key]}
                       />
                     ) : (
                       <>
@@ -2003,9 +2009,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
                                   {filledCount === 0 ? "0 open" : filledCount}
                                 </span>
                                 <span className="sb-flow-overlap-time">{row.countLabel}</span>
-                                <span className="ms sb-flow-overlap-chevron" aria-hidden="true">
-                                  chevron_right
-                                </span>
+                                <MsIcon name="chevron_right" className="sb-flow-overlap-chevron" aria-hidden />
                               </button>
                               <div className="divider" />
                             </div>

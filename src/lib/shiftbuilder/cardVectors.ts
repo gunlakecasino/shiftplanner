@@ -45,6 +45,13 @@ export const CARD_VECTOR_SRC: Record<CardVector, string> = {
   laundry: "/card-vectors/laundry.svg",
 };
 
+/** Intrinsic viewBoxes of the shipped files — keeps <img> from defaulting huge. */
+export const CARD_VECTOR_VIEWBOX: Record<CardVector, { width: number; height: number }> = {
+  sweep_9_10_sr: { width: 100.96, height: 16.2 },
+  sweep_5_8_hl: { width: 99.64, height: 14.63 },
+  laundry: { width: 40.87, height: 14.34 },
+};
+
 /** Leftover sweeper chips that used to stand in for vectors. Do not show as the mark. */
 export const LEGACY_SWEEPER_TASK_LABELS = [
   "Sweep 9/10/SR",
@@ -55,9 +62,84 @@ export const LEGACY_SWEEPER_TASK_LABELS = [
   "Sweeper 5 / 8 / HL",
 ] as const;
 
+/**
+ * Canned zone / RR duty titles that auto-seed from Card Defaults
+ * (`ops_work_items.is_slot_default`) plus leftover official-print aliases.
+ * Desk cards hide these. Coverage banners, extra-coverage chips, and real
+ * custom tasks stay. Overlap standing-pool titles are intentionally omitted.
+ */
+export const CANNED_DEFAULT_DESK_TASK_LABELS = [
+  // Live zone slot defaults
+  "Zone 1 Elevators + Stairwells",
+  "Zone 1 Self Serve Station",
+  "Lobby Restrooms + Trash",
+  "Zone 3 Self Serve Station",
+  "Poker Room: Clean Black Drink Trays",
+  "High Limit Table Games",
+  "Promo Stage",
+  "Team Member Locker Room",
+  "Team Member Smoking Room",
+  "Zone 6 Entry Door Glass",
+  "Zone 6 Outside Smoking Area",
+  "Pit 1 + 2: Trash",
+  "Pit 1 + 2: Vacuum",
+  "Zone 7 Self Serve Station",
+  "Zone 7 Smoking Room",
+  "Pit 3: Trash",
+  "Pit 3: Vacuum",
+  "Social Bar Tables",
+  "Beverage Station",
+  "131 Bar: Bartop Machines",
+  "High Limit Slots Restroom",
+  "Pit 4: Trash",
+  "Pit 4: Vacuum",
+  "Zone 10 Outdoor Smoking Area",
+  "Zone 10 Self Serve Station",
+  // Live RR slot defaults (same canned list, also lands on desk cards)
+  "Buffet Restroom (After Lunch)",
+  "Zone 1 Family Restroom",
+  "C.B.K. Locker Rooms",
+  "131 Restroom",
+  "Assist Zone 7 Smoking Room",
+  "T.D.R. Restroom",
+  "Team Member Locker Rooms",
+  "Zone 8 Family Restroom",
+  // Official / catalog aliases still sitting on some nights
+  "Chill Bar: Bartop Machines",
+  "Team Member Hallway",
+  "Team Member Locker Rooms",
+  "Team Member Restroom",
+  "Locker Rooms",
+  "Restroom",
+  "Smoking Room",
+  "Red Tray Carts",
+  "Vacuum",
+  "Trash",
+  "Poker Room",
+  "Black Tray Carts",
+  "Lobby Restrooms",
+  "Lobby Trash",
+  "Table Games / PIT",
+  "T.D.R. Restroom",
+  "Team Member Locker Room",
+  "Main Entry North",
+  "Main Entry South",
+  "Food Court North",
+  "Food Court South",
+  "Slots West",
+  "Slots East",
+  "High Limit",
+  "Table Games North",
+  "Table Games South",
+  "Poker",
+] as const;
+
 const CARD_VECTOR_SET = new Set<string>(CARD_VECTOR_IDS);
 const LEGACY_SWEEPER_SET = new Set(
   LEGACY_SWEEPER_TASK_LABELS.map((label) => normalizeTaskLabel(label)),
+);
+const CANNED_DEFAULT_DESK_SET = new Set(
+  CANNED_DEFAULT_DESK_TASK_LABELS.map((label) => normalizeTaskLabel(label)),
 );
 
 function normalizeTaskLabel(label: string): string {
@@ -78,10 +160,41 @@ export function isLegacySweeperTaskLabel(label: string | null | undefined): bool
   return LEGACY_SWEEPER_SET.has(normalizeTaskLabel(label));
 }
 
-export function visibleDeskSlotTasks<T extends { isCoverage?: boolean; taskLabel?: string }>(
+export function isCannedDefaultDeskTaskLabel(label: string | null | undefined): boolean {
+  if (!label) return false;
+  return CANNED_DEFAULT_DESK_SET.has(normalizeTaskLabel(label));
+}
+
+export function isCannedDefaultDeskTask(task: {
+  isCoverage?: boolean;
+  isOneOff?: boolean;
+  taskLabel?: string;
+}): boolean {
+  if (task.isCoverage) return false;
+  if (task.isOneOff) return false;
+  return isCannedDefaultDeskTaskLabel(task.taskLabel);
+}
+
+/** Desk cards: drop coverage (rendered as banners/chips), leftover sweeper labels, and canned defaults. Custom tasks stay. */
+export function visibleDeskSlotTasks<T extends {
+  isCoverage?: boolean;
+  isOneOff?: boolean;
+  catalogTaskId?: string | null;
+  taskLabel?: string;
+}>(
   tasks: T[] | undefined | null,
+  options?: { hideNonCustomZoneDuties?: boolean },
 ): T[] {
-  return (tasks ?? []).filter((task) => !task.isCoverage && !isLegacySweeperTaskLabel(task.taskLabel));
+  return (tasks ?? []).filter((task) => {
+    if (task.isCoverage) return false;
+    if (isLegacySweeperTaskLabel(task.taskLabel)) return false;
+    if (task.isOneOff) return true;
+    if (isCannedDefaultDeskTask(task)) return false;
+    // Zone cards: the canned list lags Card Defaults (Beverage Station, 131 Bar…).
+    // Anything not explicitly one-off is a template duty — off the card.
+    if (options?.hideNonCustomZoneDuties) return false;
+    return true;
+  });
 }
 
 export type CardVectorDefaultRow = {
