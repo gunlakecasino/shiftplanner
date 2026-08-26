@@ -153,7 +153,7 @@ describe("planning worksheet print", () => {
     expect(html).toContain("sb-official-notes-projects-events");
     expect(html).toContain(">Notes<");
     expect(html).not.toContain(">Projects<");
-    expect(html).toContain("DROP ZONES");
+    expect(html).toContain('aria-label="DROP ZONES group 1"');
     expect(html).toContain("/drop-zones/dropZoneBox.svg");
     expect(html).toContain("/drop-zones/dz03.svg");
     expect(html).toContain("/drop-zones/dz05.svg");

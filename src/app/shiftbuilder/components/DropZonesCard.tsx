@@ -31,7 +31,7 @@ export function DropZonesCard({
         className="sb-drop-zones-card"
         data-drop-zone-group={resolution.scheduledGroup}
         data-drop-zone-display={resolution.displayGroup}
-        aria-label={`Drop zones group ${resolution.scheduledGroup}`}
+        aria-label={`DROP ZONES group ${resolution.scheduledGroup}`}
       >
         <img
           src={DROP_ZONE_PLATE_SRC}

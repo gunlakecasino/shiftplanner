@@ -155,6 +155,7 @@ describe("Golden and desk drop zones card", () => {
     expect(html).toContain("/drop-zones/dz10.svg");
     expect(html).toContain("sb-drop-zones-picker");
     expect(html).toContain('aria-label="Drop zone group"');
+    expect(html).toContain('aria-label="DROP ZONES group 1"');
   });
 
   it("stores the group on nights, not a TM, and embeds the SVGs for Golden raster", () => {
