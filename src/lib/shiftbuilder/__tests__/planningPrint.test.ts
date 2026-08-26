@@ -152,19 +152,13 @@ describe("planning worksheet print", () => {
     expect(html).not.toContain("sb-side-task-register");
     expect(html).toContain("sb-official-notes-projects-events");
     expect(html).toContain(">Notes<");
-    expect(html).not.toContain(">Projects<");
-    expect(html).toContain('aria-label="DROP ZONES group 1"');
-    expect(html).toContain("/drop-zones/dropZoneBox.svg");
-    expect(html).toContain("/drop-zones/dz03.svg");
-    expect(html).toContain("/drop-zones/dz05.svg");
-    expect(html).toContain("/drop-zones/dz08.svg");
-    expect(html).toContain("/drop-zones/dz10.svg");
-    expect(html).toContain("sb-drop-zone-svg");
+    expect(html).toContain(">Projects<");
+    expect(html).not.toContain("/drop-zones/");
     expect(html).toContain(">Events<");
     expect(html).not.toContain("Saved shift note should not print");
   });
 
-  it("renders three blank writing bullets beside the official AUX grid", () => {
+  it("puts the DROP ZONES card beside the official AUX grid on page 1", () => {
     const html = renderToStaticMarkup(
       React.createElement(PrintPreviewPage, {
         view: "deployment",
@@ -174,7 +168,13 @@ describe("planning worksheet print", () => {
       }),
     );
 
-    expect(html.match(/sb-side-task-summary-blank-row/g)).toHaveLength(3);
+    expect(html).toContain("sb-approved-drop-zones-slot");
+    expect(html).toContain("/drop-zones/dropZoneBox.svg");
+    expect(html).toContain("/drop-zones/dz03.svg");
+    expect(html).toContain("/drop-zones/dz05.svg");
+    expect(html).toContain("/drop-zones/dz08.svg");
+    expect(html).toContain("/drop-zones/dz10.svg");
+    expect(html).not.toContain("sb-side-task-summary-blank-row");
   });
 
   it("defaults sudo-admin print commands to no timestamp", () => {

@@ -14,7 +14,7 @@ import {
 import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
 
 describe("official AUX print layout", () => {
-  it("fits up to five configured AUX cards in one row beside Side Tasks", () => {
+  it("fits up to five configured AUX cards in one row beside DROP ZONES", () => {
     const auxDefs: AuxDef[] = [
       { key: "AUX1", role: "admin", label: "ADMIN", locations: ["Floor Admin"] },
       { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: ["Z9 Smoking Room"] },
@@ -45,7 +45,7 @@ describe("official AUX print layout", () => {
     });
   });
 
-  it("gives the adaptive AUX cards all available space before Side Tasks", () => {
+  it("gives the adaptive AUX cards all available space before DROP ZONES", () => {
     [
       join(process.cwd(), "src/app/shiftbuilder/print/printPreview.css"),
       join(process.cwd(), "public/shiftbuilder-print-preview.css"),
@@ -53,13 +53,13 @@ describe("official AUX print layout", () => {
       const css = readFileSync(path, "utf8");
 
       expect(css).toMatch(
-        /\.sb-approved-aux-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 1fr\);/s,
+        /\.sb-approved-aux-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 192px;/s,
       );
       expect(css).toMatch(
         /\.sb-approved-aux-card-grid\s*\{[^}]*grid-column:\s*1;[^}]*width:\s*100%;/s,
       );
       expect(css).toMatch(
-        /\.sb-approved-side-task-card\s*\{[^}]*grid-column:\s*2;/s,
+        /\.sb-approved-drop-zones-slot\s*\{[^}]*grid-column:\s*2;/s,
       );
     });
   });

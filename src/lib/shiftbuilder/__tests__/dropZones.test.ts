@@ -106,8 +106,18 @@ describe("drop zone artwork", () => {
 });
 
 describe("Golden and desk drop zones card", () => {
-  it("replaces the Golden Projects column with group 1 discs", () => {
-    const html = renderToStaticMarkup(
+  it("puts group 1 discs on Golden page 1 bottom-right, not page 2", () => {
+    const pageOne = renderToStaticMarkup(
+      React.createElement(PrintPreviewPage, {
+        view: "deployment",
+        snapshot: snapshot({
+          dropZones: resolveDropZones(1, "2026-08-14"),
+        }),
+        weekDayDefs: [day],
+        printVariant: "official",
+      }),
+    );
+    const pageTwo = renderToStaticMarkup(
       React.createElement(PrintPreviewPage, {
         view: "breaks",
         snapshot: snapshot({
@@ -118,16 +128,17 @@ describe("Golden and desk drop zones card", () => {
       }),
     );
 
-    expect(html).not.toContain(">Projects<");
-    expect(html).toContain(">Notes<");
-    expect(html).toContain(">Events<");
-    expect(html).toContain("/drop-zones/dropZoneBox.svg");
-    expect(html).toContain("/drop-zones/dz03.svg");
-    expect(html).toContain("/drop-zones/dz05.svg");
-    expect(html).toContain("/drop-zones/dz08.svg");
-    expect(html).toContain("/drop-zones/dz10.svg");
-    expect(html).toContain('data-drop-zone-group="1"');
-    expect(html).not.toContain("sb-golden-subtask-row");
+    expect(pageOne).toContain("sb-approved-drop-zones-slot");
+    expect(pageOne).toContain("/drop-zones/dropZoneBox.svg");
+    expect(pageOne).toContain("/drop-zones/dz03.svg");
+    expect(pageOne).toContain("/drop-zones/dz05.svg");
+    expect(pageOne).toContain("/drop-zones/dz08.svg");
+    expect(pageOne).toContain("/drop-zones/dz10.svg");
+    expect(pageOne).toContain('data-drop-zone-group="1"');
+    expect(pageOne).not.toContain("sb-side-task-summary-blank-row");
+    expect(pageTwo).toContain(">Projects<");
+    expect(pageTwo).not.toContain("/drop-zones/");
+    expect(pageTwo).not.toContain("sb-approved-drop-zones-slot");
   });
 
   it("does not put drop zones on the portrait planner", () => {

@@ -21,7 +21,6 @@ import {
   getSlotCoverageLabel,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
-import type { PrintSideTask } from "@/lib/shiftbuilder/printSideTasks";
 import { buildOverlapRows } from "./buildPrintDaySnapshot";
 import { hasPrintAssigneeName, printAssigneeName } from "./printAssigneeName";
 import type { PrintDaySnapshot, PrintOverlapRow, PrintPreviewPageProps } from "./printPreviewTypes";
@@ -38,13 +37,15 @@ import {
 } from "./officialZoneRowLayout";
 import { AsOfTimestamp } from "./AsOfTimestamp";
 import { GoldenPlanningNotesPanel } from "./GoldenPrintComponents";
+import { DropZonesCard } from "../components/DropZonesCard";
 import { CardVectorMark } from "../components/CardVectorMark";
 import { parseCardVector } from "@/lib/shiftbuilder/cardVectors";
+import { resolveDropZones } from "@/lib/shiftbuilder/dropZones";
+import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
 
 const PAGE_TASK_ROWS = 8;
 const PAGE_TASK_ROWS_FOR_TALL_OVERLAPS = 7;
 const TALL_OVERLAP_TASK_LINE_THRESHOLD = 4;
-const PAGE_ONE_TASK_PREVIEW = 3;
 
 export function configuredOfficialAuxDefs(
   auxDefs: PrintDaySnapshot["auxDefs"],
@@ -58,9 +59,9 @@ export function officialAuxCardGridShape(auxCardCount: number): {
   columns: number;
   rows: number;
 } {
-  // The AUX rail owns the three tracks immediately beside Side Tasks. Keep up
-  // to five configured cards on one full-width row so they meet that panel
-  // instead of wrapping early and leaving a blank pocket between sections.
+  // The AUX rail owns the tracks immediately beside the page-1 DROP ZONES card.
+  // Keep up to five configured cards on one full-width row so they meet that
+  // 192-wide plate instead of wrapping early and leaving a blank pocket.
   const columns = Math.max(1, Math.min(5, auxCardCount));
   return {
     columns,
@@ -176,44 +177,6 @@ function ApprovedStatusHeader({
           </span>
         ))}
       </span>
-    </div>
-  );
-}
-
-function SideTasksSummaryCard({ tasks }: { tasks: PrintSideTask[] }) {
-  const active = tasks.filter((task) => !task.completed);
-  const rows = active.length <= PAGE_ONE_TASK_PREVIEW ? active : active.slice(0, 2);
-
-  return (
-    <div className="sb-approved-side-task-card">
-      <div className="sb-side-task-summary-header">
-        <span>SIDE TASKS</span>
-        {active.length > 0 ? (
-          <span className="sb-side-task-summary-link">{active.length} ACTIVE</span>
-        ) : null}
-      </div>
-      <div className="sb-side-task-summary-rows">
-        {rows.map((task, index) => (
-          <div key={task.id} className="sb-side-task-summary-row">
-            <span className="sb-side-task-summary-number">{index + 1}</span>
-            <span className="sb-side-task-summary-title">{task.title}</span>
-            <span className={`sb-side-task-summary-assignee ${!task.assigneeName ? "is-open" : ""}`}>
-              {task.assigneeName ?? "OPEN"}
-            </span>
-          </div>
-        ))}
-        {active.length > PAGE_ONE_TASK_PREVIEW ? (
-          <div className="sb-side-task-summary-overflow">+{active.length - 2} MORE</div>
-        ) : null}
-        <div className="sb-side-task-summary-blank-list" aria-label="Three blank side task lines">
-          {Array.from({ length: 3 }, (_, index) => (
-            <div key={index} className="sb-side-task-summary-blank-row">
-              <span className="sb-side-task-summary-blank-bullet" aria-hidden>•</span>
-              <span className="sb-side-task-summary-blank-line" />
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -618,7 +581,17 @@ export function OfficialGravesDeploymentPage({
                 />
               ))}
             </div>
-            <SideTasksSummaryCard tasks={snapshot.sideTasks ?? []} />
+            <div className="sb-approved-drop-zones-slot">
+              <DropZonesCard
+                resolution={
+                  snapshot.dropZones ??
+                  resolveDropZones(
+                    snapshot.dropZoneGroup ?? null,
+                    formatLocalDateISO(snapshot.day.date),
+                  )
+                }
+              />
+            </div>
           </div>
         </section>
       </div>
@@ -753,7 +726,7 @@ export function OfficialGravesTasksPage({
       />
       <div className="sb-graves-tasks-body">
         <section className="sb-official-notes-projects-events">
-          <GoldenPlanningNotesPanel dropZones={snapshot.dropZones} />
+          <GoldenPlanningNotesPanel />
         </section>
         <OfficialOverlapsSection rows={overlapRows} snapshot={snapshot} />
       </div>
