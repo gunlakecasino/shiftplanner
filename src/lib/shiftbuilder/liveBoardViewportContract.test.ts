@@ -353,6 +353,15 @@ describe("SheetBuilder sit 2026-08-25 desk cleanliness", () => {
     expect(globalsCss).toContain("BrianKillianInk-Regular");
     expect(globalsCss).not.toContain("#F4EFE6");
 
+    const mark = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CardVectorMark.tsx"),
+      "utf8",
+    );
+    expect(mark).toContain("CARD_VECTOR_SRC");
+    expect(mark).not.toContain("SweepInk");
+    expect(mark).not.toContain("LaundryInk");
+    expect(mark).not.toContain("Segoe Script");
+
     const pad = readFileSync(
       resolve(process.cwd(), "src/app/shiftbuilder/components/PlacementPad.tsx"),
       "utf8",

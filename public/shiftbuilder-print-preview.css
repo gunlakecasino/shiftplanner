@@ -2752,6 +2752,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: block;
   height: 11px;
   width: auto;
+  object-fit: contain;
 }
 
 .sb-planner-slot-covers,

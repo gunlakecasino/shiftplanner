@@ -4,6 +4,7 @@ import React from "react";
 import {
   CARD_VECTOR_IDS,
   CARD_VECTOR_META,
+  CARD_VECTOR_SRC,
   type CardVector,
 } from "@/lib/shiftbuilder/cardVectors";
 
@@ -14,69 +15,6 @@ const SIZE: Record<CardVectorMarkSize, { className: string; ariaHidden?: boolean
   planner: { className: "sb-card-vector sb-card-vector--planner", ariaHidden: true },
   pad: { className: "sb-card-vector sb-card-vector--pad" },
 };
-
-function SweepInk({
-  codes,
-  ink,
-}: {
-  codes: string;
-  ink: string;
-}) {
-  return (
-    <svg
-      viewBox="0 0 158 28"
-      className="sb-card-vector-svg"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <text
-        x="2"
-        y="20"
-        fill={ink}
-        fontFamily="BrianKillianInk-Regular, 'Segoe Script', 'Bradley Hand', 'Snell Roundhand', cursive"
-        fontSize="17"
-        fontStyle="italic"
-        letterSpacing="-0.02em"
-      >
-        Sweep
-      </text>
-      <text
-        x="68"
-        y="20"
-        fill={ink}
-        fontFamily="BrianKillianInk-Regular, 'Segoe Script', 'Bradley Hand', 'Snell Roundhand', cursive"
-        fontSize="15"
-        fontStyle="italic"
-        letterSpacing="0.01em"
-      >
-        {codes}
-      </text>
-    </svg>
-  );
-}
-
-function LaundryInk({ ink }: { ink: string }) {
-  return (
-    <svg
-      viewBox="0 0 92 28"
-      className="sb-card-vector-svg"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <text
-        x="2"
-        y="20"
-        fill={ink}
-        fontFamily="BrianKillianInk-Regular, 'Segoe Script', 'Bradley Hand', 'Snell Roundhand', cursive"
-        fontSize="18"
-        fontStyle="italic"
-        letterSpacing="-0.01em"
-      >
-        Laundry
-      </text>
-    </svg>
-  );
-}
 
 export function CardVectorMark({
   vector,
@@ -94,19 +32,16 @@ export function CardVectorMark({
       className={`${box.className} ${
         vector === "laundry" ? "sb-card-vector--laundry" : "sb-card-vector--sweep"
       }`}
-      style={{ color: meta.ink }}
       title={meta.label}
       aria-label={box.ariaHidden ? undefined : meta.ariaLabel}
       aria-hidden={box.ariaHidden ? true : undefined}
     >
-      {vector === "laundry" ? (
-        <LaundryInk ink={meta.ink} />
-      ) : (
-        <SweepInk
-          ink={meta.ink}
-          codes={vector === "sweep_9_10_sr" ? "9 | 10 | SR" : "5 | 8 | HL"}
-        />
-      )}
+      <img
+        src={CARD_VECTOR_SRC[vector]}
+        alt=""
+        className="sb-card-vector-svg"
+        draggable={false}
+      />
     </span>
   );
 }

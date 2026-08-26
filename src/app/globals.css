@@ -7864,6 +7864,8 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
 .sb-card-vector-svg {
   display: block;
   width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 .sb-card-vector--desk .sb-card-vector-svg {

@@ -38,6 +38,13 @@ export const CARD_VECTOR_META: Record<
   },
 };
 
+/** Brian's shipped artwork. Do not redraw or recreate as <text>. */
+export const CARD_VECTOR_SRC: Record<CardVector, string> = {
+  sweep_9_10_sr: "/card-vectors/sweep-9-10-sr.svg",
+  sweep_5_8_hl: "/card-vectors/sweep-5-8-hl.svg",
+  laundry: "/card-vectors/laundry.svg",
+};
+
 /** Leftover sweeper chips that used to stand in for vectors. Do not show as the mark. */
 export const LEGACY_SWEEPER_TASK_LABELS = [
   "Sweep 9/10/SR",

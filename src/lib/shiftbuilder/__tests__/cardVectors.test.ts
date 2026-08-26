@@ -95,8 +95,10 @@ describe("planner vector mark", () => {
 
     const html = renderToStaticMarkup(React.createElement(PortraitPlannerPage, { model: pages[0] }));
     expect(html).toContain("Drew");
-    expect(html).toContain("5 | 8 | HL");
-    expect(html).toContain("#f15a29");
+    expect(html).toContain("/card-vectors/sweep-5-8-hl.svg");
+    expect(html).not.toContain("Segoe Script");
+    expect(html).not.toContain("Bradley Hand");
+    expect(html).not.toContain("SweepInk");
     expect(html).not.toContain("Zone 8 Family Restroom");
     expect(html).not.toContain("Sweep 5/8/HL");
   });
@@ -118,6 +120,40 @@ describe("planner vector mark", () => {
     const card = pages[0].restrooms.find((row) => row.key === "MRR8");
     expect(card?.empty).toBe(true);
     expect(card?.vector).toBe("sweep_5_8_hl");
+  });
+});
+
+describe("Brian's shipped vector artwork", () => {
+  it("ships the three outlined files and never recreates ink as cursive text", () => {
+    const sweep910 = readFileSync(join(process.cwd(), "public/card-vectors/sweep-9-10-sr.svg"), "utf8");
+    const sweep58 = readFileSync(join(process.cwd(), "public/card-vectors/sweep-5-8-hl.svg"), "utf8");
+    const laundry = readFileSync(join(process.cwd(), "public/card-vectors/laundry.svg"), "utf8");
+    const mark = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/components/CardVectorMark.tsx"),
+      "utf8",
+    );
+    const vectors = readFileSync(join(process.cwd(), "src/lib/shiftbuilder/cardVectors.ts"), "utf8");
+
+    expect(sweep910).toContain('viewBox="0 0 100.96 16.2"');
+    expect(sweep910).toContain("fill: #f15a29");
+    expect(sweep910).toContain("<path");
+    expect(sweep58).toContain('viewBox="0 0 99.64 14.63"');
+    expect(sweep58).toContain("fill: #f15a29");
+    expect(sweep58).toContain("<path");
+    expect(laundry).toContain('viewBox="0 0 40.87 14.34"');
+    expect(laundry).toContain("fill: #1c75bc");
+    expect(laundry).toContain("BrianKillianInk-Regular");
+    expect(laundry).toContain(">Laundry</tspan>");
+    expect(laundry).not.toContain("Segoe Script");
+
+    expect(vectors).toContain("/card-vectors/sweep-9-10-sr.svg");
+    expect(vectors).toContain("/card-vectors/sweep-5-8-hl.svg");
+    expect(vectors).toContain("/card-vectors/laundry.svg");
+    expect(mark).toContain("CARD_VECTOR_SRC[vector]");
+    expect(mark).not.toContain("SweepInk");
+    expect(mark).not.toContain("LaundryInk");
+    expect(mark).not.toContain("Segoe Script");
+    expect(mark).not.toContain("Bradley Hand");
   });
 });
 
