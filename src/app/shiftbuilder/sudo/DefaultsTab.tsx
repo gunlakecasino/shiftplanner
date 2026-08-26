@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import BreakBadge from "../components/BreakBadge";
 import { BuilderBusyLabel } from "../components/builderPrimitives";
+import { MsIcon } from "../components/MsIcon";
 import { SudoTabLoading } from "./SudoGlass";
 import { useConfirm } from "../components/ConfirmDialog";
 // Break-default helpers are dynamically imported inside the handlers that use them.
@@ -306,7 +307,7 @@ export function DefaultsTab({ isDark = false }: DefaultsTabProps) {
         <div className="flex items-center gap-3 flex-wrap">
           {/* Title */}
           <div className="flex items-center gap-2 mr-2">
-            <span className="ms" style={{ fontSize: 16, color: isDark ? "#f87171" : "var(--ios-red)" }}>layers</span>
+            <MsIcon name="layers" size={16} style={{ color: isDark ? "#f87171" : "var(--ios-red)" }} />
             <span className={cn("text-[13px] font-semibold tracking-wide", ios.actionTitle)}>
               Card Defaults
             </span>
@@ -316,7 +317,7 @@ export function DefaultsTab({ isDark = false }: DefaultsTabProps) {
           <div className="flex items-center gap-2 flex-wrap">
             <PushButton
               label="Save GRAVE break map"
-              icon={<span className="ms" style={{ fontSize: 14 }}>save</span>}
+              icon={<MsIcon name="save" size={14} />}
               loading={seedingGrave}
               disabled={seedingGrave}
               onClick={handleSaveGraveBreakMap}
@@ -334,7 +335,7 @@ export function DefaultsTab({ isDark = false }: DefaultsTabProps) {
               <BuilderBusyLabel className="text-[11px]">Reloading</BuilderBusyLabel>
             ) : (
               <>
-                <span className="ms" style={{ fontSize: 14 }}>refresh</span>
+                <MsIcon name="refresh" size={14} />
                 Reload
               </>
             )}

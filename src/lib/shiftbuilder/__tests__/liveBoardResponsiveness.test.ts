@@ -198,6 +198,23 @@ describe("live board cache + nav contracts", () => {
     expect(nextConfig).toContain("private, no-cache, no-store, must-revalidate");
   });
 
+  it("caches card-vectors for a week and print CSS immutable, without caching HTML/API", () => {
+    const cardVectorsBlock = nextConfig.slice(
+      nextConfig.indexOf('source: "/card-vectors/:path*"'),
+      nextConfig.indexOf('source: "/shiftbuilder-print-preview.css"'),
+    );
+    expect(cardVectorsBlock).toContain("public, max-age=604800");
+    expect(cardVectorsBlock).not.toContain("immutable");
+    expect(nextConfig).toContain('source: "/shiftbuilder-print-preview.css"');
+    expect(nextConfig).toContain("public, max-age=31536000, immutable");
+    expect(middleware).toContain("card-vectors");
+    expect(middleware).toContain("shiftbuilder-print-preview");
+    expect(middleware).toContain('pathname.startsWith("/sheetbuilder")');
+    expect(middleware).toContain('pathname.startsWith("/shiftbuilder")');
+    expect(middleware).toContain('pathname === "/"');
+    expect(middleware).toContain("private, no-cache, no-store, must-revalidate");
+  });
+
   it("canvas poll skips during drag; Settings does not poll the night board", () => {
     expect(useCurrentNight).toContain("nightBoardRefetchInterval");
     expect(useCurrentNight).toContain("shouldRefetchNightBoardOnFocus");

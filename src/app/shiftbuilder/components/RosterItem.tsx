@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useDraggable } from "@dnd-kit/core";
+import { MsIcon } from "./MsIcon";
 
 export interface RosterItemProps {
   tm: {
@@ -104,12 +105,7 @@ const RosterItem = React.memo(function RosterItem({
             </button>
           ) : (
             <div className="sb-roster-placed-badge" title="Already placed on the board">
-              <span
-                className="ms"
-                style={{ fontSize: 14, fontVariationSettings: '"FILL" 1, "wght" 500, "opsz" 20' }}
-              >
-                check_circle
-              </span>
+              <MsIcon name="check_circle" size={14} fill={1} />
             </div>
           )}
         </div>

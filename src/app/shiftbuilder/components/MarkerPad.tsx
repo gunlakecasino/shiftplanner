@@ -13,6 +13,7 @@
 
 import React, { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
+import { MsIcon } from "./MsIcon";
 import {
   ZONE_DEFS, RR_DEFS,
   ZONE_ICONS, RR_ICONS,
@@ -215,7 +216,7 @@ export const TmPicker: React.FC<{
         flex: 1, display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center", gap: 6,
       }}>
-        <span className="ms" style={{ fontSize: 28, color: accent, fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+        <MsIcon name="check_circle" size={28} fill={1} style={{ color: accent }} />
         <span style={{ fontSize: isTablet ? 18 : 11, fontWeight: 700, color: textPrimary }}>Assigned</span>
       </div>
     );

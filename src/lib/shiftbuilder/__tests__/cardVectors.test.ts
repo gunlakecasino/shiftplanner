@@ -14,6 +14,7 @@ import {
   isLegacySweeperTaskLabel,
   parseCardVector,
   visibleDeskSlotTasks,
+  isCannedDefaultDeskTaskLabel,
 } from "@/lib/shiftbuilder/cardVectors";
 import type { PrintDaySnapshot } from "@/app/shiftbuilder/print/printPreviewTypes";
 import type { DayDef } from "@/lib/shiftbuilder/dateUtils";
@@ -49,9 +50,23 @@ describe("card vectors", () => {
     expect(isLegacySweeperTaskLabel("Sweep 9/10/SR")).toBe(true);
     expect(visibleDeskSlotTasks([
       { taskLabel: "Sweep 5/8/HL" },
-      { taskLabel: "Zone 8 Family Restroom" },
+      { taskLabel: "Need extra towels" },
       { taskLabel: "Covering Z9", isCoverage: true },
-    ]).map((t) => t.taskLabel)).toEqual(["Zone 8 Family Restroom"]);
+    ]).map((t) => t.taskLabel)).toEqual(["Need extra towels"]);
+  });
+
+  it("drops canned default/template zone duties and keeps real custom tasks", () => {
+    expect(isCannedDefaultDeskTaskLabel("Zone 8 Family Restroom")).toBe(true);
+    expect(isCannedDefaultDeskTaskLabel("Zone 7 Smoking Room")).toBe(true);
+    expect(isCannedDefaultDeskTaskLabel("Pit 3: Vacuum")).toBe(true);
+    expect(isCannedDefaultDeskTaskLabel("Need extra towels")).toBe(false);
+    expect(visibleDeskSlotTasks([
+      { taskLabel: "Zone 7 Smoking Room" },
+      { taskLabel: "Zone 7 Self Serve Station" },
+      { taskLabel: "Need extra towels" },
+      { taskLabel: "Covering Z2", isCoverage: true },
+      { taskLabel: "Pit 3: Trash", isOneOff: true },
+    ]).map((t) => t.taskLabel)).toEqual(["Need extra towels", "Pit 3: Trash"]);
   });
 });
 
@@ -144,6 +159,54 @@ describe("desk standing badge", () => {
     expect(shiftCard).not.toContain("sb-tm-name-vector shrink-0");
     expect(globals).toMatch(/\.sb-card-vector--desk \{\n  height: 12px;\n  max-width: 72px;/);
     expect(globals).not.toContain("max-width: 118px");
+  });
+
+  it("keeps Jessica / Silvia / Darlene inside the 192-wide desk card with chips + vector", () => {
+    const chrome = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    const shiftCard = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+      "utf8",
+    );
+    const globals = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+
+    expect(chrome).toContain("sb-tm-name-stack");
+    expect(chrome).toContain("sb-tm-name-chips");
+    expect(chrome).toContain("zone: 17");
+    expect(chrome).not.toContain("zone: 24");
+    expect(shiftCard).toContain("sb-tm-primary-name");
+    expect(shiftCard).not.toContain("text-[17px] font-bold text-[#111827] leading-tight truncate min-w-0 w-full");
+    expect(globals).toContain("192-wide Golden/zone desk density");
+    expect(globals).toContain("-webkit-line-clamp: 2");
+    expect(globals).toContain("overflow-wrap: anywhere");
+    expect(globals).not.toContain("font-size: clamp(20px, 1.45vw, 26px) !important");
+  });
+});
+
+describe("Origin snappy static assets", () => {
+  it("SWR-caches card-vectors like icons and does not cache API or HTML harder", () => {
+    const sw = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
+    expect(sw).toContain('CACHE_VERSION = "v7-ipad-20260826"');
+    expect(sw).toContain('url.pathname.startsWith("/card-vectors/")');
+    expect(sw).toContain('url.pathname.startsWith("/icons/")');
+    expect(sw).toContain('cache: "no-store"');
+    expect(sw).not.toContain('url.pathname.startsWith("/api")');
+    expect(sw).not.toContain('PRECACHE = [\n  "/sheetbuilder",\n  "/sheetbuilder/"');
+  });
+
+  it("drops the 5.3 MB Material Symbols Rounded import in favor of lucide", () => {
+    const globals = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+    const pkg = readFileSync(join(process.cwd(), "package.json"), "utf8");
+    const msIcon = readFileSync(
+      join(process.cwd(), "src/app/shiftbuilder/components/MsIcon.tsx"),
+      "utf8",
+    );
+    expect(globals).not.toContain('@import "material-symbols/rounded"');
+    expect(pkg).not.toContain("material-symbols");
+    expect(msIcon).toContain("lucide-react");
+    expect(msIcon).toContain("lock:");
   });
 });
 

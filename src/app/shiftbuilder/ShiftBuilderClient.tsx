@@ -266,6 +266,7 @@ import {
 } from "./components/placementPadHelpers";
 import { DragFitContext, computeDragFitMap } from "@/lib/shiftbuilder/dragFit";
 import DraftStatusPill from "./components/DraftStatusPill";
+import { MsIcon } from "./components/MsIcon";
 import {
   allWeekPlacementHistoriesCached,
   ensureWeekPlacementHistories,
@@ -8182,7 +8183,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             data-active={rosterOpen || undefined}
             onClick={() => setRosterOpen((v) => !v)}
           >
-            <span className="ms" aria-hidden>groups</span>
+            <MsIcon name="groups" size={18} aria-hidden />
             <span>Roster</span>
           </button>
           <button
@@ -8191,7 +8192,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             aria-label="Run day placements"
             onClick={stableOpenRunDayPlacements}
           >
-            <span className="ms" aria-hidden>auto_awesome</span>
+            <MsIcon name="auto_awesome" size={18} aria-hidden />
             <span>Run</span>
           </button>
           <button
@@ -8200,7 +8201,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             aria-label="Open print and export"
             onClick={() => setIsPrintCenterOpen(true)}
           >
-            <span className="ms" aria-hidden>print</span>
+            <MsIcon name="print" size={18} aria-hidden />
             <span>Print</span>
           </button>
           <button
@@ -8209,7 +8210,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             aria-label="Open reports"
             onClick={() => router.push("/sheetbuilder/reports")}
           >
-            <span className="ms" aria-hidden>bar_chart</span>
+            <MsIcon name="bar_chart" size={18} aria-hidden />
             <span>Reports</span>
           </button>
           {canAccessSudo && (
@@ -8219,7 +8220,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               aria-label="Open settings"
               onClick={stableOpenSettings}
             >
-              <span className="ms" aria-hidden>settings</span>
+              <MsIcon name="settings" size={18} aria-hidden />
               <span>Settings</span>
             </button>
           )}
@@ -9294,7 +9295,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                               aria-hidden="true"
                             >
                               {checked && (
-                                <span className="ms" style={{ fontSize: 11, fontVariationSettings: '"FILL" 1, "wght" 700, "opsz" 20', color: 'white' }}>check</span>
+                                <MsIcon name="check" size={11} fill={1} style={{ color: "white" }} />
                               )}
                             </div>
                             <span className="text-[13.5px]" style={{ fontFamily: "var(--font-atkinson)" }}>{opt.label}</span>
@@ -9343,7 +9344,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
             aria-live="polite"
           >
             {t.kind === "error" && (
-              <span className="ms mt-0.5 shrink-0" style={{ fontSize: 16, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}>error</span>
+              <MsIcon name="error" size={16} className="mt-0.5 shrink-0" />
             )}
             <div className="flex-1 leading-snug">{t.message}</div>
             <button

@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { TutorialAssignment } from "./tutorialScenario";
+import { MsIcon as LucideMsIcon } from "../MsIcon";
 
 type TutorialRosterProps = {
   placed: TutorialAssignment[];
@@ -10,17 +11,7 @@ type TutorialRosterProps = {
 };
 
 function MsIcon({ name, size = 12 }: { name: string; size?: number }) {
-  return (
-    <span
-      className="ms"
-      style={{
-        fontSize: size,
-        fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20',
-      }}
-    >
-      {name}
-    </span>
-  );
+  return <LucideMsIcon name={name} size={size} fill={1} />;
 }
 
 export function TutorialRoster({

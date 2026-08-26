@@ -20,6 +20,7 @@ import {
   formatCanvasRepeatReason,
   formatCanvasTrailChip,
 } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { MsIcon } from "./MsIcon";
 
 const CRITICAL_REPEAT_MARK_COLOR = "#B91C1C";
 
@@ -107,30 +108,38 @@ export function TmNameBlock({
   className?: string;
   nameClassName?: string;
 }) {
+  const chips = (
+    <>
+      {trailing}
+      {criticalRepeat ? (
+        <CriticalRepeatNameMark
+          title={
+            placementTrailMatchSlotKey
+              ? formatCanvasRepeatReason(placementTrailMatchSlotKey)
+              : undefined
+          }
+        />
+      ) : null}
+    </>
+  );
+
   return (
-    <div className={`flex flex-col min-w-0 w-full ${className}`.trim()}>
-      <div className="flex items-center gap-1 min-w-0 w-full">
-        <span
-          className={`sb-tm-primary-name font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate min-w-0 flex-1 ${nameClassName}`.trim()}
-          style={{
-            fontSize,
-            lineHeight: 1.05,
-            fontFamily: "var(--font-bricolage, var(--font-atkinson))",
-          }}
-        >
-          {name}
-        </span>
-        {trailing}
-        {criticalRepeat ? (
-          <CriticalRepeatNameMark
-            title={
-              placementTrailMatchSlotKey
-                ? formatCanvasRepeatReason(placementTrailMatchSlotKey)
-                : undefined
-            }
-          />
-        ) : null}
-      </div>
+    <div className={`sb-tm-name-stack flex flex-col min-w-0 w-full max-w-full ${className}`.trim()}>
+      <span
+        className={`sb-tm-primary-name font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] min-w-0 w-full max-w-full ${nameClassName}`.trim()}
+        style={{
+          fontSize,
+          lineHeight: 1.12,
+          fontFamily: "var(--font-bricolage, var(--font-atkinson))",
+        }}
+      >
+        {name}
+      </span>
+      {trailing || criticalRepeat ? (
+        <div className="sb-tm-name-chips flex flex-wrap items-center gap-1 min-w-0 max-w-full">
+          {chips}
+        </div>
+      ) : null}
       {vector ? <div className="sb-card-vector-badge">{vector}</div> : null}
       <TmPlacementTrail
         labels={placementTrail}
@@ -174,9 +183,9 @@ export function CriticalRepeatNameMark({
 export type CardNameScale = "zone" | "rr" | "aux";
 
 const NAME_SIZE_BUILDER: Record<CardNameScale, number> = {
-  zone: 24, /* refined larger for better readability, less cutoff */
-  rr: 24,
-  aux: 20,
+  zone: 17, /* 192-wide Golden/desk density — Jessica / Silvia / Darlene must fit */
+  rr: 17,
+  aux: 16,
 };
 
 const NAME_SIZE_PRINT: Record<CardNameScale, number> = {
@@ -307,13 +316,13 @@ export function DuplicateTmBadge({
 
 function LockIcon({ size }: { size: number }) {
   return (
-    <span
-      className="ms shrink-0 text-[#FF9500]"
+    <MsIcon
+      name="lock"
+      className="shrink-0 text-[#FF9500]"
+      size={size}
+      fill={1}
       aria-label="Locked"
-      style={{ fontSize: size, fontVariationSettings: '"FILL" 1, "wght" 400, "opsz" 20' }}
-    >
-      lock
-    </span>
+    />
   );
 }
 
@@ -910,13 +919,13 @@ export function SlotAssignmentBody({
             key={placementIdentityKey(state)}
             className="flex flex-col items-start gap-0.5 min-w-0 w-full"
           >
-            <div className="flex items-center gap-1.5 min-w-0 w-full">
+            <div className="sb-tm-name-stack flex flex-col items-start gap-0.5 min-w-0 w-full max-w-full">
               {state.isLocked ? <LockIcon size={lockSize} /> : null}
               <span
-                className="font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] truncate px-1 py-[1px] inline-block min-w-0 w-full"
+                className="sb-tm-primary-name font-bold tracking-[-0.35px] text-[#111] dark:text-[#F2F2F4] px-1 py-[1px] min-w-0 w-full max-w-full"
                 style={{
                   fontSize,
-                  lineHeight: 1.0,
+                  lineHeight: 1.12,
                   fontFamily: "var(--font-bricolage, var(--font-atkinson))",
                 }}
               >

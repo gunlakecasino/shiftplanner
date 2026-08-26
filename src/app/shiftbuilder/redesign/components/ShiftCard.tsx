@@ -59,9 +59,9 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
                 <div className="min-w-0 flex flex-col gap-1 items-start text-left">
                   <div className="sb-covered-by-label text-[8px] font-semibold uppercase tracking-[0.1em] text-[#94A3B8]">Covered by</div>
                   {coverage.map((c) => (
-                    <div key={c.label} className="flex items-baseline gap-1.5 min-w-0">
+                    <div key={c.label} className="flex items-baseline gap-1.5 min-w-0 max-w-full">
                       <span className="text-[10px] font-bold text-[#64748B] shrink-0">{c.label}</span>
-                      <span className="text-[15px] font-bold text-[#334155] truncate">{c.name}</span>
+                      <span className="sb-tm-primary-name text-[15px] font-bold text-[#334155] min-w-0">{c.name}</span>
                     </div>
                   ))}
                   {nameVector ? <div className="sb-card-vector-badge">{nameVector}</div> : null}
@@ -100,8 +100,8 @@ export function ShiftCard({ zone, label, name, secondName, notes, unassigned, co
             {slotTitle}
           </div>
           {projectPills ? <div className="mb-1 min-w-0">{projectPills}</div> : null}
-          <div className="flex flex-col gap-0.5 mb-2 items-start text-left min-w-0 w-full">
-            <div className="text-[17px] font-bold text-[#111827] leading-tight truncate min-w-0 w-full">{name}</div>
+          <div className="sb-tm-name-stack flex flex-col gap-0.5 mb-2 items-start text-left min-w-0 w-full max-w-full">
+            <div className="sb-tm-primary-name text-[17px] font-bold text-[#111827] leading-tight min-w-0 w-full max-w-full">{name}</div>
             {nameVector ? <div className="sb-card-vector-badge">{nameVector}</div> : null}
             {nameMeta}
             {secondName && (
