@@ -85,7 +85,7 @@ function AuxCardsSection({
                 def={def}
                 tmName={a.tmName}
                 breakGroup={a.breakGroup ?? 0}
-                tasks={toTaskLines(tasksBySlot[def.key])}
+                tasks={toTaskLines(tasksBySlot[def.key], { omitDefaultTasks: true })}
                 placementTrail={a.tmId ? placementTrailsByTmId[a.tmId] : undefined}
                 empty={!isBlank && !slotShowsFilled(def.key, assignments)}
                 coveredBy={coveredByIndex[def.key]}
@@ -137,7 +137,7 @@ function OverlapRowsSection({
                   <GoldenOverlapSlot
                     slotKey={slot.key}
                     tmName={slot.tmName}
-                    tasks={slot.tasks}
+                    tasks={slot.tasks.filter((task) => task.isCoverage)}
                   />
                 </div>
               ))}
@@ -453,7 +453,7 @@ export function PrintPreviewPage({
               >
                 {ZONE_VISUAL_ORDER.map((zKey) => {
                   const a = assignments[zKey] || {};
-                  const tasks = toTaskLines(tasksBySlot[zKey]);
+                  const tasks = toTaskLines(tasksBySlot[zKey], { omitDefaultTasks: true });
                   return (
                     <div key={zKey} className="relative h-full" data-slot-key={zKey}>
                       <GoldenZoneCard
@@ -477,7 +477,7 @@ export function PrintPreviewPage({
                 >
                   {ZONE_PRINT_ROW_1.map((zKey) => {
                     const a = assignments[zKey] || {};
-                    const tasks = toTaskLines(tasksBySlot[zKey]);
+                    const tasks = toTaskLines(tasksBySlot[zKey], { omitDefaultTasks: true });
                     return (
                       <div key={zKey} className="relative h-full min-h-0" data-slot-key={zKey}>
                         <GoldenZoneCard
@@ -499,7 +499,7 @@ export function PrintPreviewPage({
                 >
                   {ZONE_PRINT_ROW_2.map((zKey) => {
                     const a = assignments[zKey] || {};
-                    const tasks = toTaskLines(tasksBySlot[zKey]);
+                    const tasks = toTaskLines(tasksBySlot[zKey], { omitDefaultTasks: true });
                     return (
                       <div key={zKey} className="relative h-full min-h-0" data-slot-key={zKey}>
                         <GoldenZoneCard
@@ -543,6 +543,7 @@ export function PrintPreviewPage({
               tasksBySlot={tasksBySlot}
               coveredByIndex={coveredByIndex}
               placementTrailsByTmId={placementTrailsByTmId}
+              omitDefaultTasks
             />
           </div>
         </section>

@@ -11,7 +11,7 @@ import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import CoverageBar from "./CoverageBar";
-import { TmPlacementTrail, type SlotAssignmentState } from "./assignmentCardChrome";
+import { assignmentShowsSkeleton, TmPlacementTrail, type SlotAssignmentState } from "./assignmentCardChrome";
 import {
   formatCoveragePositionLabel,
   type CoveredByEntry,
@@ -184,7 +184,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   );
 
   const isCovered = coveredBy.length > 0;
-  const isEmpty = !hasTM && !loading && !isCovered;
+  const isEmpty = !hasTM && !assignmentShowsSkeleton(loading, hasTM, assignments) && !isCovered;
   const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
@@ -202,7 +202,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
   const regularTasks = (selectedTasks[def.key] || []).filter((t) => !t.isCoverage);
 
   let assignmentState: SlotAssignmentState;
-  if (loading && !hasTM) {
+  if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
     assignmentState = { kind: "loading" };
   } else if (draftActive) {
     assignmentState = {

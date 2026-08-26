@@ -254,7 +254,7 @@ describe("SheetBuilder live undo toast (PR C)", () => {
 describe("SheetBuilder modern lightweight desk", () => {
   it("uses cool gray canvas, white cards, and keeps covering as inset chips", () => {
     expect(globalsCss).toContain("Modern lightweight desk — live board cards only");
-    expect(globalsCss).toContain("--sb-card-paper: #FFFFFF");
+    expect(globalsCss).toContain("--sb-card-paper: #F7F8FB");
     expect(globalsCss).toContain("--sb-paper: #F4F6FA");
     expect(globalsCss).toContain("--sb-substrate-2: #EEF1F6");
     expect(globalsCss).toContain("Dock open — keep the cool desk");
@@ -306,6 +306,43 @@ describe("SheetBuilder modern lightweight desk", () => {
     expect(floatingNav).toContain('"Published"');
     expect(floatingNav).not.toContain('"PUBLISHED"');
     expect(floatingNav).toContain("Overlap sheet");
+  });
+});
+
+describe("SheetBuilder sit 2026-08-25 desk cleanliness", () => {
+  it("runs color rails the full card height and drops task bullets", () => {
+    const sitStart = globalsCss.indexOf("Sit 2026-08-25 — desk cleanliness");
+    expect(sitStart).toBeGreaterThan(-1);
+    const sitCss = globalsCss.slice(sitStart);
+    expect(sitCss).toContain("height: 100% !important");
+    expect(sitCss).toContain(".sb-desk-card-rail");
+    expect(sitCss).toContain("content: none !important");
+    expect(sitCss).toContain("white-space: normal !important");
+    expect(sitCss).toContain("--sb-card-paper, #F7F8FB");
+    expect(sitCss).not.toContain("#F4EFE6");
+    expect(sitCss).not.toContain("backdrop-filter: blur");
+
+    const shiftCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/redesign/components/ShiftCard.tsx"),
+      "utf8",
+    );
+    expect(shiftCard).toContain("sb-desk-card-rail");
+    expect(shiftCard).toContain("sb-desk-task-row");
+    expect(shiftCard).not.toContain("rounded-full");
+    expect(shiftCard).not.toContain("h-1.5 w-1.5");
+
+    const stripe = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    expect(stripe).toContain("sb-card-accent-stripe");
+    expect(stripe).not.toContain("h-[3px] w-full shrink-0");
+    expect(stripe).toContain("assignmentShowsSkeleton");
+  });
+
+  it("does not skeleton empty seats once the night payload exists", () => {
+    expect(shiftBuilderClient).toContain("loadingAssignments={boardColdLoading && !hasBoardPayload}");
+    expect(shiftBuilderClient).not.toMatch(/loadingAssignments=\{boardColdLoading\}/);
   });
 });
 

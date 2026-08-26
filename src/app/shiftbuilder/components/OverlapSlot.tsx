@@ -11,6 +11,7 @@ import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./C
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { cardAccentInk, overlapSlotLabel } from "@/lib/shiftbuilder/constants";
 import {
+  assignmentShowsSkeleton,
   CardAccentStripe,
   SlotAssignmentBody,
   TaskListDivider,
@@ -100,7 +101,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
   const currentTmId = slotTm.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
-  const isEmpty = !hasTM && !loading;
+  const isEmpty = !hasTM && !assignmentShowsSkeleton(loading, hasTM, assignments);
   const isDuplicate = !!currentTmId && conflictingTms?.has(currentTmId);
   const otherSlotsForTm =
     currentTmId && tmConflictSlots?.[currentTmId]
@@ -108,7 +109,7 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       : [];
 
   let assignmentState: SlotAssignmentState;
-  if (loading && !hasTM) {
+  if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
     assignmentState = { kind: "loading" };
   } else if (draftActive) {
     assignmentState = {

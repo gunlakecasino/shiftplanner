@@ -2445,7 +2445,7 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sb-planner-roster-head {
@@ -2773,15 +2773,53 @@ body.golden-export-raster .print-dual-container .print-artboard[data-print-varia
 }
 
 .sb-planner-notes {
-  flex: 0 0 168px;
-  min-height: 168px;
-  max-height: 168px;
+  flex: 0 1 var(--sb-planner-notes-h, 168px);
+  min-height: 56px;
+  height: var(--sb-planner-notes-h, 168px);
+  max-height: var(--sb-planner-notes-h, 168px);
   display: flex;
   flex-direction: column;
   min-width: 0;
   margin-top: 8px;
   padding-top: 6px;
   border-top: 1px solid #ececf0;
+}
+
+.sb-planner-sheet[data-roster-density="pack"] .sb-planner-roster-list {
+  gap: 4px;
+}
+
+.sb-planner-sheet[data-roster-density="pack"] .sb-planner-roster-row,
+.sb-planner-sheet[data-roster-density="pack"] .sb-planner-roster-writein-row {
+  min-height: 16px;
+  padding: 1px 0 2px;
+}
+
+.sb-planner-sheet[data-roster-density="pack"] .sb-planner-trail {
+  min-height: 8px;
+}
+
+.sb-planner-sheet[data-roster-density="dense"] .sb-planner-body {
+  padding-top: 5px;
+}
+
+.sb-planner-sheet[data-roster-density="dense"] .sb-planner-roster-list {
+  gap: 3px;
+}
+
+.sb-planner-sheet[data-roster-density="dense"] .sb-planner-roster-row,
+.sb-planner-sheet[data-roster-density="dense"] .sb-planner-roster-writein-row {
+  min-height: 15px;
+  padding: 1px 0 1px;
+}
+
+.sb-planner-sheet[data-roster-density="dense"] .sb-planner-trail {
+  min-height: 8px;
+}
+
+.sb-planner-sheet[data-roster-density="dense"] .sb-planner-notes {
+  margin-top: 4px;
+  padding-top: 4px;
 }
 
 .sb-planner-notes-head {

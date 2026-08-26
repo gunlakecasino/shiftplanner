@@ -17,6 +17,7 @@ import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import {
+  assignmentShowsSkeleton,
   CardAccentStripe,
   SlotAssignmentBody,
   type SlotAssignmentState,
@@ -76,6 +77,7 @@ export interface RRCardProps {
 const RRSide: React.FC<{
   slotKey: string;
   assignment: any;
+  boardAssignments?: Record<string, unknown>;
   tasks: NightSlotTask[] | undefined;
   onClick: (k: string, el: HTMLElement, e?: React.MouseEvent) => void;
   loading?: boolean;
@@ -109,6 +111,7 @@ const RRSide: React.FC<{
 }> = ({
   slotKey,
   assignment,
+  boardAssignments,
   tasks,
   onClick,
   loading = false,
@@ -154,7 +157,10 @@ const RRSide: React.FC<{
     : [];
 
   let assignmentState: SlotAssignmentState;
-  if (loading && !hasTM && !(isDraftMode && draftInfo?.proposedTmName)) {
+  if (
+    assignmentShowsSkeleton(loading, hasTM, boardAssignments) &&
+    !(isDraftMode && draftInfo?.proposedTmName)
+  ) {
     assignmentState = { kind: "loading" };
   } else if (isDraftMode && draftInfo?.proposedTmName && !draftInfo.proposedClear) {
     assignmentState = {
@@ -468,6 +474,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
           <RRSide
             slotKey={wKey}
             assignment={assignments[wKey]}
+            boardAssignments={assignments}
             tasks={wRegular}
             draftInfo={draftInfoW}
             coveredBy={wCoveredBy}
@@ -495,6 +502,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
           <RRSide
             slotKey={mKey}
             assignment={assignments[mKey]}
+            boardAssignments={assignments}
             tasks={mRegular}
             draftInfo={draftInfoM}
             coveredBy={mCoveredBy}

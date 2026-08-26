@@ -19,8 +19,8 @@ import {
 import { rasterArtboardSizePx } from "@/app/shiftbuilder/print/rasterPrep";
 import { assembleGoldenPrintPages } from "@/app/shiftbuilder/print/assemblePages";
 import { GOLDEN_HEIGHT_PX, GOLDEN_WIDTH_PX } from "@/app/shiftbuilder/print/goldenConstants";
-import { LETTER_PORTRAIT_PT, PLANNER_NOTES_MIN_PX, PLANNER_ROSTER_PER_PAGE, PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "@/app/shiftbuilder/print/portraitConstants";
-import { printArtboardSizePx, printPageOrientation } from "@/app/shiftbuilder/print/printPageGeometry";
+import { LETTER_PORTRAIT_PT, PLANNER_NOTES_FLOOR_PX, PLANNER_NOTES_MIN_PX, PLANNER_ROSTER_PER_PAGE, PORTRAIT_HEIGHT_PX, PORTRAIT_WIDTH_PX } from "@/app/shiftbuilder/print/portraitConstants";
+import { plannerNotesBandPx, plannerRosterDensity, plannerRosterWriteinLines, printArtboardSizePx, printPageOrientation } from "@/app/shiftbuilder/print/printPageGeometry";
 import {
   buildPrintQueue,
   countPrintPages,
@@ -89,6 +89,12 @@ describe("portrait planner model", () => {
     expect(printPageOrientation("deploy")).toBe("landscape");
     expect(printPageOrientation("planner")).toBe("portrait");
     expect(PLANNER_NOTES_MIN_PX).toBe(168);
+    expect(PLANNER_NOTES_FLOOR_PX).toBe(56);
+    expect(plannerNotesBandPx(8)).toBe(168);
+    expect(plannerNotesBandPx(24)).toBe(72);
+    expect(plannerNotesBandPx(32)).toBe(56);
+    expect(plannerRosterDensity(24)).toBe("dense");
+    expect(plannerRosterWriteinLines(24)).toBe(0);
   });
 
   it("maps overlap flags to PM / Graves / AM and treats unmarked as grave", () => {
@@ -187,35 +193,62 @@ describe("portrait planner model", () => {
     expect(roster.find((row) => row.name === "Jordan")?.placed).toBe(true);
   });
 
-  it("paginates a long roster and repeats the group head on the next sheet", () => {
-    const names = Array.from({ length: PLANNER_ROSTER_PER_PAGE + 3 }, (_, i) => `TM ${String(i + 1).padStart(2, "0")}`);
-    const pages = paginatePlannerRoster(names);
-    expect(pages).toHaveLength(2);
-    expect(pages[0]).toHaveLength(PLANNER_ROSTER_PER_PAGE);
-    expect(pages[1]).toHaveLength(3);
-
-    const longRoster = names.map((name, i) => ({
-      tmId: `tm-${i}`,
-      name,
-      isFullGrave: true,
-      isPMOverlap: false,
-      isAMOverlap: false,
-    }));
+  it("keeps a full-night roster on one Letter portrait sheet", () => {
+    const graves = Array.from({ length: 14 }, (_, i) => `Grave ${String(i + 1).padStart(2, "0")}`);
+    const pms = Array.from({ length: 6 }, (_, i) => `PM ${i + 1}`);
+    const ams = Array.from({ length: 4 }, (_, i) => `AM ${i + 1}`);
+    const longRoster = [
+      ...pms.map((name, i) => ({
+        tmId: `tm-pm-${i}`,
+        name,
+        isFullGrave: false,
+        isPMOverlap: true,
+        isAMOverlap: false,
+      })),
+      ...graves.map((name, i) => ({
+        tmId: `tm-grave-${i}`,
+        name,
+        isFullGrave: true,
+        isPMOverlap: false,
+        isAMOverlap: false,
+      })),
+      ...ams.map((name, i) => ({
+        tmId: `tm-am-${i}`,
+        name,
+        isFullGrave: false,
+        isPMOverlap: false,
+        isAMOverlap: true,
+      })),
+    ];
     const models = buildPortraitPlannerPages(snapshot({ scheduledRoster: longRoster }));
-    expect(models).toHaveLength(2);
-    expect(models[1].rosterContinued).toBe(true);
-    expect(models[1].zones).toHaveLength(10);
-    expect(models[1].rosterGroups[0]?.label).toBe("Graves");
-    expect(models[1].rosterGroups[0]?.continued).toBe(true);
-    expect(models[1].rosterGroups.some((group) => group.label === "AM")).toBe(true);
+    expect(models).toHaveLength(1);
+    expect(models[0].pageCount).toBe(1);
+    expect(models[0].roster).toHaveLength(24);
+    expect(models[0].roster.map((row) => row.name)).toEqual(
+      [...pms, ...graves, ...ams].sort((a, b) => {
+        const band = (name: string) => (name.startsWith("PM") ? 0 : name.startsWith("Grave") ? 1 : 2);
+        const bandCmp = band(a) - band(b);
+        return bandCmp !== 0 ? bandCmp : a.localeCompare(b);
+      }),
+    );
+
+    const html = renderToStaticMarkup(
+      React.createElement(PortraitPlannerPage, { model: models[0] }),
+    );
+    expect(html).toContain('data-roster-density="dense"');
+    expect(html).toContain("--sb-planner-notes-h:72px");
+    expect(html).toContain("Huddle notes");
+    for (const name of [...pms, ...graves, ...ams]) {
+      expect(html).toContain(name);
+    }
+    expect(html).not.toContain("of 2");
 
     const packed = paginatePlannerRosterGroups(
       buildPlannerRosterGroups(snapshot({ scheduledRoster: longRoster })),
       PLANNER_ROSTER_PER_PAGE,
     );
-    expect(packed[0].find((group) => group.band === "grave")?.rows).toHaveLength(PLANNER_ROSTER_PER_PAGE);
-    expect(packed[1].find((group) => group.band === "grave")?.continued).toBe(true);
-    expect(packed[1].find((group) => group.band === "grave")?.rows[0]?.name).toBeTruthy();
+    expect(packed).toHaveLength(1);
+    expect(paginatePlannerRoster(longRoster.map((row) => row.name))).toHaveLength(1);
   });
 
   it("builds a blank-night workbook without crashing", () => {
@@ -334,6 +367,8 @@ describe("portrait planner page", () => {
     expect(html).toContain("sb-planner-roster-writein-row");
     expect(html).not.toContain("Passdown:");
     expect(html).not.toContain("TODO");
+    expect(html).not.toContain("Chill Bar");
+    expect(html).not.toContain("Red Tray Carts");
   });
 
   it("keeps write-in cells when the night is blank", () => {
@@ -399,7 +434,9 @@ describe("portrait planner density css", () => {
     expect(planner).toContain("flex: 1 1 auto;");
     expect(planner).toContain(".sb-planner-section-rr");
     expect(planner).toContain(".sb-planner-notes");
-    expect(planner).toContain(`flex: 0 0 ${PLANNER_NOTES_MIN_PX}px;`);
+    expect(planner).toContain("flex: 0 1 var(--sb-planner-notes-h, 168px);");
+    expect(planner).toContain("data-roster-density");
+    expect(planner).toContain("min-height: 56px;");
     expect(planner).toContain("repeating-linear-gradient");
     expect(planner).toContain(".sb-planner-roster-group-head");
     expect(planner).toContain(".sb-planner-trail");

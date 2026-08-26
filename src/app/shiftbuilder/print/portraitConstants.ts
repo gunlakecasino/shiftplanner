@@ -6,18 +6,21 @@ export const PORTRAIT_HEIGHT_PX = 1056;
 export const LETTER_PORTRAIT_PT = { width: 612, height: 792 } as const;
 
 /**
- * Quiet roster column: prefer one page; overflow continues on a second sheet.
- * Count is names only (section heads + write-in hairlines sit outside it).
- * Sized for name + last-5 trail so the huddle-notes band stays reserved.
+ * Quiet roster column. A full night (grave + PM/AM overlaps) must stay on
+ * one Letter portrait sheet — helpers may still pack, but print never
+ * paginates a live roster onto page 2.
  */
-export const PLANNER_ROSTER_PER_PAGE = 28;
+export const PLANNER_ROSTER_PER_PAGE = 40;
 
 /** Newest-first placement codes printed under planner names. Golden still shows 3. */
 export const PLANNER_TRAIL_COUNT = 5;
 
 /**
- * Ruled huddle-notes band on Letter portrait. Absorbs leftover artboard
- * height after packed RR / zone / aux / overlap grids. Print-useful;
- * never filled with invented copy.
+ * Preferred ruled huddle-notes band when the TM rail is short.
+ * Yields toward PLANNER_NOTES_FLOOR_PX as the roster grows.
  */
-export const PLANNER_NOTES_MIN_PX = 168;
+export const PLANNER_NOTES_PREF_PX = 168;
+export const PLANNER_NOTES_MIN_PX = PLANNER_NOTES_PREF_PX;
+
+/** Smallest notes band that still reads as a ruled huddle box. */
+export const PLANNER_NOTES_FLOOR_PX = 56;

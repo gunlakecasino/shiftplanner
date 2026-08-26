@@ -208,12 +208,13 @@ export function coverageBodyPadding(
   return showDigitalAssists ? 10 : 12;
 }
 
-/** Accent stripe — the live SheetBuilder redesign promotes this into a full-width top bar. */
+/** Accent rail — full card height on the live desk. Color stays on the uniform code. */
 export function CardAccentStripe({ color }: { color: string }) {
   return (
     <div
-      className={`sb-card-accent-stripe h-[3px] w-full shrink-0 ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
+      className={`sb-card-accent-stripe ${isGoldAccent(color) ? "sb-accent-stripe--gold" : ""}`}
       style={{ backgroundColor: color }}
+      aria-hidden="true"
     />
   );
 }
@@ -717,6 +718,17 @@ export function UnassignedPrintLabel({ showDigitalAssists: _showDigitalAssists }
       <span className="sb-unassigned-primary">— Unassigned —</span>
     </div>
   );
+}
+
+/** Empty seats on a known night are empty — never leftover skeleton bars. */
+export function assignmentShowsSkeleton(
+  loading: boolean,
+  hasTM: boolean,
+  boardAssignments?: Record<string, unknown> | null,
+): boolean {
+  if (!loading || hasTM) return false;
+  if (boardAssignments && Object.keys(boardAssignments).length > 0) return false;
+  return true;
 }
 
 export type SlotAssignmentState =

@@ -21,6 +21,7 @@ import type { PrerenderedPlacementFit } from "./placementFitScore";
 import AuxRolePicker from "./AuxRolePicker";
 import { premiumSpring } from "@/lib/premiumSpring";
 import {
+  assignmentShowsSkeleton,
   CardAccentStripe,
   CardSlotHeader,
   SlotAssignmentBody,
@@ -144,7 +145,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   // even on cards that haven't had a role/label explicitly set yet.
   const isConfigured = hasTM || (isDraftMode && draftInfo?.proposedTmName && !draftInfo?.proposedClear) || coveredBy.length > 0 || !isUnsetBlank;
 
-  const isEmpty = !hasTM && !loading;
+  const isEmpty = !hasTM && !assignmentShowsSkeleton(loading, hasTM, assignments);
   const currentTmId = a?.tmId;
   const isFocused = !!focusedTmId && currentTmId === focusedTmId;
   const isDimmed = !!focusedTmId && currentTmId !== focusedTmId;
@@ -357,7 +358,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   const regularTasks = (selectedTasks[def.key] || []).filter((t) => !t.isCoverage);
 
   let assignmentState: SlotAssignmentState;
-  if (loading && !hasTM) {
+  if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
     assignmentState = { kind: "loading" };
   } else if (isDraftMode && draftInfo?.proposedTmName && !draftInfo?.proposedClear) {
     assignmentState = {

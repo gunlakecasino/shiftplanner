@@ -8472,7 +8472,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onOpenSettings={canAccessSudo ? stableOpenSettings : undefined}
                 isDraftMode={isDraftMode}
                 isCurrentNightLocked={boardInteractionLocked}
-                loadingAssignments={boardColdLoading}
+                loadingAssignments={boardColdLoading && !hasBoardPayload}
                 onDayPillClick={handleBoardDayPill}
                 onBreakGroupChange={handleBoardBreakGroupChange}
                 onRemoveTask={handleBoardRemoveTask}
@@ -9092,7 +9092,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 onOpenSettings={canAccessSudo ? stableOpenSettings : undefined}
                 isDraftMode={isDraftMode}
                 isCurrentNightLocked={boardInteractionLocked}
-                loadingAssignments={boardColdLoading}
+                loadingAssignments={boardColdLoading && !hasBoardPayload}
                 // auxDefs now from narrow Zustand selector in Board (3.4)
                 onDayPillClick={handleBoardDayPill}
                 onBreakGroupChange={handleBoardBreakGroupChange}

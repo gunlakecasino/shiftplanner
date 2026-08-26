@@ -534,27 +534,28 @@ function overlapRows(
 
 export function buildPortraitPlannerPages(snapshot: PrintDaySnapshot): PortraitPlannerPageModel[] {
   const groups = buildPlannerRosterGroups(snapshot);
-  const chunks = paginatePlannerRosterGroups(groups);
   const maps = buildCoverageMaps(snapshot);
   const restrooms = restroomCards(snapshot, maps);
   const zones = zoneCards(snapshot, maps);
   const aux = auxCards(snapshot, maps);
   const overlaps = overlapRows(snapshot, maps);
 
-  return chunks.map((pageGroups, index) => ({
-    dayName: snapshot.day.name,
-    dateNum: snapshot.day.dateNum,
-    monthYear: snapshot.day.monthYear,
-    dayColor: snapshot.day.color,
-    nightMeta: snapshot.day.meta?.trim() || "11p – 7a",
-    pageIndex: index + 1,
-    pageCount: chunks.length,
-    rosterContinued: index > 0,
-    roster: pageGroups.flatMap((group) => group.rows),
-    rosterGroups: pageGroups,
-    restrooms,
-    zones,
-    aux,
-    overlaps,
-  }));
+  return [
+    {
+      dayName: snapshot.day.name,
+      dateNum: snapshot.day.dateNum,
+      monthYear: snapshot.day.monthYear,
+      dayColor: snapshot.day.color,
+      nightMeta: snapshot.day.meta?.trim() || "11p – 7a",
+      pageIndex: 1,
+      pageCount: 1,
+      rosterContinued: false,
+      roster: groups.flatMap((group) => group.rows),
+      rosterGroups: groups,
+      restrooms,
+      zones,
+      aux,
+      overlaps,
+    },
+  ];
 }

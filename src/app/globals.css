@@ -7044,7 +7044,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   --sb-substrate: #EEF1F6;
   --sb-substrate-2: #EEF1F6;
   --sb-desk: #F4F6FA;
-  --sb-card-paper: #FFFFFF;
+  --sb-card-paper: #F7F8FB;
   --sb-card-line: #E6EAF0;
   --ios-background-primary: #F4F6FA;
 }
@@ -7742,4 +7742,100 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card > .w-\[7px\] {
   border: 0 !important;
   color: #94A3B8 !important;
   font-weight: 500 !important;
+}
+
+/* ==========================================================================
+   Sit 2026-08-25 — desk cleanliness.
+   Full-height rails, real task rows, quieter paper. Live canvas only.
+   Golden landscape metrics and rail COLORS stay on the uniform code.
+   ========================================================================== */
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-refined-card {
+  background: var(--sb-card-paper, #F7F8FB) !important;
+}
+
+.sb-desk-card-rail,
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-card-accent-stripe,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card > .sb-card-accent-stripe,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-card-accent-stripe {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  z-index: 3;
+  width: 7px !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  align-self: stretch !important;
+  flex: 0 0 7px;
+  border-radius: 20px 0 0 20px !important;
+  pointer-events: none;
+}
+
+.sb-desk-card,
+.sb-package-card-wrapper {
+  position: relative;
+  padding-left: 0 !important;
+}
+
+.sb-desk-card-rail {
+  position: relative !important;
+  inset: auto !important;
+  height: auto !important;
+  min-height: 100% !important;
+  align-self: stretch !important;
+}
+
+.sb-sheetbuilder-redesign .sb-builder-stage .builder-workspace .sb-list-row::before,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-list-row::before {
+  content: none !important;
+  display: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list .sb-list-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-task-scroll .sb-list-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card-tasks .sb-list-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-task-row {
+  display: flex !important;
+  align-items: flex-start;
+  flex: 0 0 auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  white-space: normal !important;
+  padding: 3px 0 !important;
+  color: #4B5563 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+}
+
+.sb-desk-task-row-label {
+  display: block;
+  min-width: 0;
+  color: #4B5563;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card-tasks {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip {
+  border-radius: 8px !important;
+  padding: 5px 8px !important;
+  font-size: 10px !important;
+}
+
+body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card-rail {
+  transform: none;
 }
