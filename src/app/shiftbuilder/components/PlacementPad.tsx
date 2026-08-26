@@ -724,7 +724,6 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     setEvidenceOpen(false);
     setAddingTask(false);
     setTaskInput("");
-    setSweeperOpen(false);
     setOverlapInsight(null);
     setOverlapInsightLoading(isOverlapSlot);
   }, [slotKey, a.tmId, selectedDay.date, insightsEnabled, isOverlapSlot]);

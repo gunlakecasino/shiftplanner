@@ -8895,7 +8895,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                     onRemoveTask: handleBoardRemoveTask,
                     onClearSlotTasks: handleClearSlotTasks,
                     onCopyRestroomPairingTasks: handleCopyRestroomPairingTasks,
-                    onSetCardVector: (sk: string, vector) => void handleSetCardVector(sk, vector),
+                    onSetCardVector: stableSetCardVector,
                     cardVector: effectiveCardVectors[selectedSlotKey] ?? null,
                     onRequestEngineInsight: handleBoardRequestEngineInsight,
                     scheduledUnassigned: activePickerScheduledUnassigned,

@@ -347,7 +347,9 @@ describe("SheetBuilder sit 2026-08-25 desk cleanliness", () => {
 
   it("assigns card vectors on the slot, not the TM, and shows ink instead of leftover chips", () => {
     expect(shiftBuilderClient).toContain("onSetCardVector={stableSetCardVector}");
+    expect(shiftBuilderClient).toContain("onSetCardVector: stableSetCardVector");
     expect(shiftBuilderClient.match(/onSetCardVector=\{stableSetCardVector\}/g)?.length).toBe(2);
+    expect(shiftBuilderClient).not.toMatch(/onSetCardVector: \(sk: string, vector\) =>/);
     expect(shiftBuilderClient).toContain("cardVectors={effectiveCardVectors}");
     expect(shiftBuilderClient).not.toContain("Failed to assign sweeper task");
     expect(globalsCss).toContain("Card-level VECTORS");
