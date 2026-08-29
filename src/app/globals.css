@@ -6479,18 +6479,21 @@ button,
     overflow: hidden;
   }
 
+  /* Restroom pairs grow so 17px names stay readable. Canvas already scrolls.
+     A fixed 252px track crushed Women's/Men's halves and leaked coverage chips. */
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid {
-    grid-auto-rows: 252px !important;
+    grid-auto-rows: minmax(300px, auto) !important;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid > * {
-    height: 252px !important;
-    min-height: 0 !important;
+    height: auto !important;
+    min-height: 300px !important;
     overflow: hidden;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-rr-grid .assignment-card {
     min-height: 0 !important;
+    overflow: hidden !important;
   }
 
   .sb-sheetbuilder-redesign .sb-builder-stage.sb-builder-live .builder-workspace .sb-with-aux-sidebar > section:nth-child(2) {
@@ -7396,6 +7399,111 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   align-items: flex-start !important;
   justify-content: flex-start !important;
   max-width: 100%;
+}
+
+/* ==========================================================================
+   iPad landscape desk — restroom names stay zone-size; chips yield first.
+   Live canvas only. Golden print metrics are untouched.
+   ========================================================================== */
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid {
+  min-width: 0;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .assignment-card {
+  container-type: size;
+  container-name: sb-rr-card;
+  overflow: hidden !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid h3 {
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.03em !important;
+  flex-shrink: 0 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-card-assign-zone,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-name-stack {
+  flex: 0 0 auto !important;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-quiet-cover-note {
+  display: flex;
+  align-items: flex-start;
+  min-height: 22px;
+  padding-top: 2px;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-quiet-cover-note__label {
+  color: #94A3B8;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--chips {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip {
+  min-width: 0;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip .sb-coverage-bar-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip .sb-coverage-bar-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (orientation: landscape) and (min-width: 1001px) and (max-width: 1366px) {
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid h3,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid .sb-tm-primary-name {
+    font-size: 17px !important;
+    font-weight: 900 !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-break-badge-btn {
+    display: none !important;
+  }
+}
+
+@container sb-rr-card (max-height: 136px) {
+  .sb-coverage-footer--chips {
+    flex-wrap: nowrap !important;
+    max-height: 24px !important;
+    overflow: hidden !important;
+  }
+}
+
+@container sb-rr-card (max-height: 108px) {
+  .sb-coverage-footer,
+  .sb-coverage-footer--chips {
+    visibility: hidden;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header .ml-auto,

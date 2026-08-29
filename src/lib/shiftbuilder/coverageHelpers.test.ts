@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildCoverageLabelIndex,
   buildCoveredByIndex,
+  canonicalCoverageTargetKey,
+  dedupeCoveredByEntries,
   expandCoverageToKeys,
   getSlotCoverageLabel,
   parseCoverageTargetFromTaskLabel,
@@ -139,5 +141,41 @@ describe("Brian 2026-08-23 — WRR6 covering WRR7 must not leak to men's", () =>
     );
     expect(coveredBy.Z4).toMatchObject([{ tmName: "Kathy", sourceKey: "Z3" }]);
     expect(coveredBy.Z3).toBeUndefined();
+  });
+});
+
+describe("Z9SR / AUX2 is one seat", () => {
+  const z9Layout = [{ key: "AUX2", role: "z9sr" as const, label: "Z9 SR", locations: [] }];
+
+  it("canonicalizes Z9SR onto tonight's z9sr AUX shell", () => {
+    expect(canonicalCoverageTargetKey("Z9SR", z9Layout)).toBe("AUX2");
+    expect(canonicalCoverageTargetKey("AUX2", z9Layout)).toBe("AUX2");
+    expect(canonicalCoverageTargetKey("Z3", z9Layout)).toBe("Z3");
+  });
+
+  it("renders one TM once when two coverage tasks alias the same Z9 SR seat", () => {
+    const coveredBy = buildCoveredByIndex(
+      { Z3: { tmId: "sheri", tmName: "Sheri O" } },
+      {
+        Z3: [
+          { id: "a", taskLabel: "And Zone 9 Smoking Room", isCoverage: true, coverageSide: "A" },
+          { id: "b", taskLabel: "And Z9 SR", isCoverage: true, coverageSide: "B" },
+        ],
+      },
+      z9Layout,
+    );
+
+    expect(coveredBy.AUX2).toHaveLength(1);
+    expect(coveredBy.AUX2).toMatchObject([{ tmName: "Sheri O", sourceKey: "Z3" }]);
+    expect(coveredBy.Z9SR).toBeUndefined();
+  });
+
+  it("dedupes the same coverer even when A/B sides were already assigned", () => {
+    expect(
+      dedupeCoveredByEntries([
+        { tmName: "Sheri O", tmId: "sheri", side: "A", sourceKey: "Z3", taskLabel: "And AUX2" },
+        { tmName: "Sheri O", tmId: "sheri", side: "B", sourceKey: "Z3", taskLabel: "And Z9SR" },
+      ]),
+    ).toHaveLength(1);
   });
 });
