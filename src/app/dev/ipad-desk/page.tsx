@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useLayoutEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { DndContext } from "@dnd-kit/core";
 import ZoneCard from "@/app/shiftbuilder/components/ZoneCard";
 import RRCard from "@/app/shiftbuilder/components/RRCard";
@@ -72,14 +73,15 @@ const selectedTasks: Record<string, NightSlotTask[]> = {
   WRR1: [task("w1-c", "WRR1", "AND LOBBY", { isCoverage: true, color: "#ffcc00" })],
 };
 
-export default function IpadDeskFixturePage() {
-  const macDesk =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("desk") === "mac";
+function IpadDeskFixtureInner() {
+  const macDesk = useSearchParams().get("desk") === "mac";
   if (!macDesk && typeof document !== "undefined") {
     document.documentElement.setAttribute("data-sb-ipad-desk", "force");
     document.documentElement.classList.add(IPAD_DESK_CLASS);
     document.body.classList.add(IPAD_DESK_CLASS);
+    if (window.matchMedia("(orientation: portrait)").matches) {
+      document.documentElement.classList.add("sb-ipad-portrait");
+    }
   }
   useLayoutEffect(() => {
     if (macDesk) {
@@ -91,6 +93,10 @@ export default function IpadDeskFixturePage() {
     document.documentElement.setAttribute("data-sb-ipad-desk", "force");
     document.documentElement.classList.add(IPAD_DESK_CLASS);
     document.body.classList.add(IPAD_DESK_CLASS);
+    document.documentElement.classList.toggle(
+      "sb-ipad-portrait",
+      window.matchMedia("(orientation: portrait)").matches,
+    );
     const original = window.matchMedia.bind(window);
     window.matchMedia = ((query: string) => {
       if (query.includes("max-width: 1420px") || query.includes("min-width: 768px")) {
@@ -164,5 +170,13 @@ export default function IpadDeskFixturePage() {
       </div>
     </IpadDeskProvider>
     </DndContext>
+  );
+}
+
+export default function IpadDeskFixturePage() {
+  return (
+    <React.Suspense fallback={null}>
+      <IpadDeskFixtureInner />
+    </React.Suspense>
   );
 }

@@ -8551,3 +8551,12 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
 html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
+
+@media (orientation: portrait) and (min-width: 768px) and (max-width: 1100px) {
+  html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid,
+  html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid,
+  .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid,
+  .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
