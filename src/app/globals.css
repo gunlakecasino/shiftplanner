@@ -8194,3 +8194,267 @@ img.sb-drop-zone-disc {
   margin-top: 3px;
   line-height: 0;
 }
+
+/* ==========================================================================
+   iPad desk — 13-inch Pro night board
+
+   Distinct live-canvas variant for Brian's floor iPad. Not a Mac-grid squash.
+   Activate via html.sb-ipad-desk (JS) and the coarse 13″ media query (first paint).
+   Landscape ~1366×1024 / 1376×1032. Portrait ~1024×1366 / 1032×1376.
+   Golden print / .print-artboard is untouched.
+   ========================================================================== */
+
+.sb-coverage-rail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 28px;
+  padding: 7px 8px 7px 14px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.sb-coverage-rail__label {
+  min-width: 0;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.sb-coverage-rail__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: inherit;
+  opacity: 0.92;
+  border-radius: 10px;
+}
+
+.sb-coverage-footer--rails {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  margin-top: auto;
+  padding: 0 !important;
+  gap: 0;
+}
+
+@media (pointer: coarse) and (min-width: 768px) and (max-width: 1420px) {
+  .sb-sheetbuilder-redesign.sb-canvas-builder {
+    --sb-ipad-name: 21px;
+    --sb-ipad-tap: 48px;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace {
+    --sb-grid-gap: 12px;
+    padding: 16px 18px 36px !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-section-live-meta {
+    display: none !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sheet-section-header {
+    min-height: 20px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    grid-auto-rows: minmax(176px, auto) !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid .assignment-card {
+    min-height: 176px !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    grid-auto-rows: minmax(228px, auto) !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair {
+    gap: 0 !important;
+    background: #ffffff;
+    border: 1px solid #e6eaf0;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-pair {
+    padding-left: 0 !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half {
+    min-height: 108px;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half + .sb-ipad-rr-half {
+    border-top: 1px solid #eef1f6 !important;
+  }
+
+  /* First paint: two stacked Mac cards merge into one pair until JS hydrates. */
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair:not(.sb-ipad-rr-pair) > .assignment-card {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair:not(.sb-ipad-rr-pair) > .assignment-card + .assignment-card {
+    border-top: 1px solid #eef1f6 !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair:not(.sb-ipad-rr-pair) > .assignment-card .sb-card-accent-stripe {
+    display: none;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid .sb-tm-primary-name,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-tm-primary-name,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid h3 {
+    font-size: 21px !important;
+    font-weight: 800 !important;
+    line-height: 1.18 !important;
+    letter-spacing: -0.03em !important;
+    -webkit-line-clamp: 2;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-side-label,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-canvas-slot-label {
+    font-size: 12px !important;
+    letter-spacing: 0.06em !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite {
+    min-height: 48px !important;
+    padding: 10px 4px !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite span {
+    font-size: 15px !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-card-assign-zone {
+    min-height: 48px;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-coverage-footer--chips {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap !important;
+    gap: 0;
+    padding: 0 !important;
+    max-height: none !important;
+    visibility: visible !important;
+    overflow: hidden;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-bar--chip,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-chip {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+    min-height: 28px !important;
+    padding: 7px 10px 7px 14px !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-desk-card-rail,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-card-accent-stripe {
+    width: 8px !important;
+    display: block !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-tm-placement-trail,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-fit-chip,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-break-badge-btn {
+    display: none !important;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) and (min-width: 768px) and (max-width: 1100px) {
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid {
+    grid-auto-rows: minmax(188px, auto) !important;
+  }
+
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid {
+    grid-auto-rows: minmax(240px, auto) !important;
+  }
+}
+
+/* Fixture / JS class — same night desk without waiting on pointer:coarse. */
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder {
+  --sb-ipad-name: 21px;
+  --sb-ipad-tap: 48px;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair {
+  gap: 0 !important;
+  background: #ffffff;
+  border: 1px solid #e6eaf0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half {
+  min-height: 108px;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half + .sb-ipad-rr-half,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half + .sb-ipad-rr-half {
+  border-top: 1px solid #eef1f6 !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid .sb-tm-primary-name,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-tm-primary-name,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid .sb-tm-primary-name,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-tm-primary-name {
+  font-size: 21px !important;
+  font-weight: 800 !important;
+  line-height: 1.18 !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-section-live-meta,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-section-live-meta {
+  display: none !important;
+}
+
+html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid,
+html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}

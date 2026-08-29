@@ -25,6 +25,7 @@ import { formatCanvasRrSideLabel } from "@/lib/shiftbuilder/canvasPrideLabels";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
+import { useIpadDesk } from "@/lib/shiftbuilder/useIpadDesk";
 
 export interface RRCardProps {
   def: any;
@@ -288,6 +289,7 @@ function RRSideShell({
   onRemoveTask,
   body,
   taskBadge,
+  pairHalf = false,
 }: {
   sideLabel: string;
   sideTitle: string;
@@ -306,16 +308,19 @@ function RRSideShell({
   ) => void;
   body: React.ReactNode;
   taskBadge?: React.ReactNode;
+  /** iPad pair: this is a half inside one card, not its own card. */
+  pairHalf?: boolean;
 }) {
+  const coveragePresentation = pairHalf ? "rail" : undefined;
   return (
     <div
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col flex-1 rounded-2xl h-full min-h-0 ${isEmpty ? "empty sb-card-empty" : ""}`}
+      className={`${pairHalf ? "sb-ipad-rr-half" : "assignment-card sb-assignment-card sb-refined-card"} relative overflow-hidden flex flex-col flex-1 ${pairHalf ? "" : "rounded-2xl"} h-full min-h-0 ${isEmpty ? "empty sb-card-empty" : ""}`}
       style={{
         ["--card-accent" as string]: color,
-        ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
+        ...(!pairHalf && borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
       }}
     >
-      <CardAccentStripe color={color} />
+      {!pairHalf && <CardAccentStripe color={color} />}
 
       {/* Refined header to match ZoneCard exactly for visual uniformity */}
       <div className="sb-card-slot-header sb-rr-card-header px-3 pt-2 flex flex-col items-start gap-1">
@@ -326,26 +331,29 @@ function RRSideShell({
         >
           {sideLabel}
         </span>
-        <div className="sb-rr-meta-pills flex items-center gap-1 flex-wrap min-w-0">
-          {taskBadge}
-          {!isCovered && !isEmpty && (
-            <PlacementFitChip fit={fitChip} compact />
-          )}
-        </div>
+        {!pairHalf && (
+          <div className="sb-rr-meta-pills flex items-center gap-1 flex-wrap min-w-0">
+            {taskBadge}
+            {!isCovered && !isEmpty && (
+              <PlacementFitChip fit={fitChip} compact />
+            )}
+          </div>
+        )}
       </div>
 
       <div className={`flex flex-col flex-1 min-h-0 overflow-hidden px-3 pt-1 ${coverageTasks.length > 0 ? 'sb-card-content-with-footer' : ''}`}>
         {body}
       </div>
       {coverageTasks.length > 0 && (
-        <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
+        <div className={`sb-coverage-footer shrink-0 ${pairHalf ? "sb-coverage-footer--rails" : showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
           {coverageTasks.map((t) => (
             <CoverageBar
               key={t.id}
               task={t}
               slotKey={slotKey}
               onRemoveTask={onRemoveTask}
-              builderCalm={showDigitalAssists}
+              builderCalm={showDigitalAssists && !pairHalf}
+              presentation={coveragePresentation}
             />
           ))}
         </div>
@@ -395,6 +403,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const color = getRRAccent(def.num);
   const wLabel = formatCanvasRrSideLabel(def.num, "womens");
   const mLabel = formatCanvasRrSideLabel(def.num, "mens");
+  const ipadDesk = useIpadDesk();
 
   const wDraftName =
     isDraftMode && draftInfoW?.proposedTmName && !draftInfoW.proposedClear
@@ -455,9 +464,10 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             onContextMenu: longPress.onContextMenu,
           }
         : {})}
-      className={`relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${bothEmpty ? "empty" : ""} ${isTodayKiosk ? "sb-today-kiosk-card assignment-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`sb-rr-pair relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${ipadDesk ? "sb-ipad-rr-pair assignment-card" : ""} ${bothEmpty ? "empty" : ""} ${isTodayKiosk ? "sb-today-kiosk-card assignment-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{ ["--card-accent" as string]: color }}
     >
+      {ipadDesk ? <CardAccentStripe color={color} /> : null}
       <RRSideShell
         sideLabel={wLabel.line}
         sideTitle={wLabel.title}
@@ -470,6 +480,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         coverageTasks={wCoverageTasks}
         slotKey={wKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
+        pairHalf={ipadDesk}
         body={(
           <RRSide
             slotKey={wKey}
@@ -498,6 +509,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         coverageTasks={mCoverageTasks}
         slotKey={mKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
+        pairHalf={ipadDesk}
         body={(
           <RRSide
             slotKey={mKey}

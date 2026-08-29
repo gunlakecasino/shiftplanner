@@ -10,6 +10,15 @@ export const TABLET_COMPACT_NAV_MAX_WIDTH_PX = 1400;
 export const TABLET_COMPACT_NAV_MQ = `${TABLET_TOUCH_MQ} and (max-width: ${TABLET_COMPACT_NAV_MAX_WIDTH_PX}px)`;
 
 /**
+ * 13-inch iPad Pro night desk — coarse pointer inside the 13″ CSS range.
+ * Landscape ~1366×1024 / 1376×1032; portrait ~1024×1366 / 1032×1376.
+ * Fine-pointer Mac at the same width stays on the dense desk.
+ */
+export const IPAD_DESK_MAX_WIDTH_PX = 1420;
+export const IPAD_DESK_MQ = `${TABLET_TOUCH_MQ} and (max-width: ${IPAD_DESK_MAX_WIDTH_PX}px)`;
+export const IPAD_DESK_CLASS = "sb-ipad-desk";
+
+/**
  * True for any coarse pointer (finger / Apple Pencil).
  * Use for interaction mode: single-tap pads, larger drag distance, haptics.
  * Does NOT require min-width — Split View iPad is often < 768 CSS px.
@@ -36,6 +45,16 @@ export function isTabletTouchDevice(): boolean {
   if (typeof window === "undefined") return false;
   try {
     return window.matchMedia(TABLET_TOUCH_MQ).matches;
+  } catch {
+    return false;
+  }
+}
+
+/** True on full-width iPad in the 13″ Pro CSS range (not Split View phones). */
+export function isIpadDeskDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.matchMedia(IPAD_DESK_MQ).matches;
   } catch {
     return false;
   }

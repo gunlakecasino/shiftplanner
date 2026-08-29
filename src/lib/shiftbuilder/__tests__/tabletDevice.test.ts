@@ -38,6 +38,28 @@ describe("tabletDevice interaction helpers", () => {
     expect(isTabletTouchDevice()).toBe(true);
   });
 
+  it("isIpadDeskDevice is coarse tablet inside the 13-inch CSS range", async () => {
+    stubMatchMedia({
+      "(pointer: coarse)": true,
+      "(pointer: coarse) and (min-width: 768px)": true,
+      "(pointer: coarse) and (min-width: 768px) and (max-width: 1420px)": true,
+    });
+    const { isIpadDeskDevice, isTabletTouchDevice } = await import("../tabletDevice");
+    expect(isTabletTouchDevice()).toBe(true);
+    expect(isIpadDeskDevice()).toBe(true);
+  });
+
+  it("isIpadDeskDevice is false on fine-pointer Mac at the same width", async () => {
+    stubMatchMedia({
+      "(pointer: coarse)": false,
+      "(pointer: coarse) and (min-width: 768px)": false,
+      "(pointer: coarse) and (min-width: 768px) and (max-width: 1420px)": false,
+      "(hover: none)": false,
+    });
+    const { isIpadDeskDevice } = await import("../tabletDevice");
+    expect(isIpadDeskDevice()).toBe(false);
+  });
+
   it("desktop fine pointer is not coarse", async () => {
     stubMatchMedia({
       "(pointer: coarse)": false,
