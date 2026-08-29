@@ -7494,7 +7494,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
 }
 
 @container sb-rr-card (max-height: 108px) {
-  .sb-coverage-footer,
+  .sb-coverage-footer:not(.sb-coverage-footer--rails),
   .sb-coverage-footer--chips {
     visibility: hidden;
     height: 0 !important;
@@ -8245,6 +8245,42 @@ img.sb-drop-zone-disc {
   gap: 0;
 }
 
+/* Beat Mac canvas `.sb-coverage-bar { width: auto }` — rails are banners. */
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 28px !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 7px 8px 7px 14px !important;
+  border-radius: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-bar-label {
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
+  opacity: 1 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--rails {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  visibility: visible !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: hidden !important;
+}
+
 @media (pointer: coarse) and (min-width: 768px) and (max-width: 1420px) {
   .sb-sheetbuilder-redesign.sb-canvas-builder {
     --sb-ipad-name: 21px;
@@ -8322,9 +8358,9 @@ img.sb-drop-zone-disc {
     display: none;
   }
 
-  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid .sb-tm-primary-name,
-  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-tm-primary-name,
-  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid h3 {
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid .sb-tm-primary-name,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid h3 {
     font-size: 21px !important;
     font-weight: 800 !important;
     line-height: 1.18 !important;
@@ -8354,7 +8390,8 @@ img.sb-drop-zone-disc {
     min-height: 48px;
   }
 
-  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-coverage-footer--chips {
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--chips,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--rails {
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap !important;
@@ -8365,12 +8402,15 @@ img.sb-drop-zone-disc {
     overflow: hidden;
   }
 
-  .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-bar--chip,
-  .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-chip {
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail {
+    display: flex !important;
     width: 100% !important;
     max-width: 100% !important;
     border-radius: 0 !important;
     min-height: 28px !important;
+    margin: 0 !important;
     padding: 7px 10px 7px 14px !important;
   }
 
@@ -8444,24 +8484,39 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair > .ass
   display: none;
 }
 
-html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-coverage-footer--chips,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-coverage-footer--chips {
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--chips,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--rails,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--chips,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--rails {
   display: flex;
   flex-direction: column;
   flex-wrap: nowrap !important;
   gap: 0;
   padding: 0 !important;
+  max-height: none !important;
+  visibility: visible !important;
 }
 
-html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-bar--chip,
-html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-chip,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-bar--chip,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-chip {
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar--chip,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-chip,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail {
+  display: flex !important;
   width: 100% !important;
   max-width: 100% !important;
   border-radius: 0 !important;
   min-height: 28px !important;
-  padding: 7px 10px 7px 14px !important;
+  margin: 0 !important;
+  padding: 8px 10px 8px 14px !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label {
+  font-size: 12px !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
 }
 
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half,
@@ -8478,10 +8533,10 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half +
   border-top: 1px solid #eef1f6 !important;
 }
 
-html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid .sb-tm-primary-name,
-html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-tm-primary-name,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid .sb-tm-primary-name,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid .sb-tm-primary-name {
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid .sb-tm-primary-name,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid .sb-tm-primary-name,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name {
   font-size: 21px !important;
   font-weight: 800 !important;
   line-height: 1.18 !important;

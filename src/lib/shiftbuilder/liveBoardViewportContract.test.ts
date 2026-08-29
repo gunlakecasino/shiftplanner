@@ -763,6 +763,12 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(globalsCss).toContain("sb-ipad-rr-half");
     expect(globalsCss).toContain(".sb-coverage-rail");
     expect(globalsCss).toContain("sb-coverage-footer--rails");
+    expect(globalsCss).toContain(
+      ".sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail",
+    );
+    expect(globalsCss).toMatch(
+      /\.assignment-card \.sb-coverage-rail[\s\S]{0,180}width: 100% !important/,
+    );
     expect(globalsCss).toContain("--sb-ipad-name: 21px");
     expect(globalsCss).toContain("(pointer: coarse) and (min-width: 768px) and (max-width: 1420px)");
     expect(globalsCss).toContain("grid-auto-rows: minmax(228px, auto) !important");

@@ -1,11 +1,24 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from "react";
 import {
   IPAD_DESK_CLASS,
   IPAD_DESK_MQ,
   isIpadDeskDevice,
 } from "./tabletDevice";
+
+const IpadDeskContext = createContext<boolean | null>(null);
+
+/** Fixture / tests can force the night desk without coarse-pointer matchMedia. */
+export function IpadDeskProvider({
+  value,
+  children,
+}: {
+  value: boolean;
+  children: ReactNode;
+}) {
+  return <IpadDeskContext.Provider value={value}>{children}</IpadDeskContext.Provider>;
+}
 
 /**
  * Live 13-inch iPad desk. Syncs `html.sb-ipad-desk` so CSS is a real
@@ -17,6 +30,7 @@ function ipadDeskForced(): boolean {
 }
 
 export function useIpadDesk(enabled = true): boolean {
+  const forcedCtx = useContext(IpadDeskContext);
   const [on, setOn] = useState(() => {
     if (typeof document === "undefined") return false;
     return ipadDeskForced() || document.documentElement.classList.contains(IPAD_DESK_CLASS) || isIpadDeskDevice();
@@ -52,11 +66,13 @@ export function useIpadDesk(enabled = true): boolean {
       mq.removeEventListener?.("change", apply);
       portraitMq.removeEventListener?.("change", apply);
       window.removeEventListener("resize", apply);
-      document.documentElement.classList.remove(IPAD_DESK_CLASS, "sb-ipad-portrait");
-      document.body.classList.remove(IPAD_DESK_CLASS);
+      if (!ipadDeskForced()) {
+        document.documentElement.classList.remove(IPAD_DESK_CLASS, "sb-ipad-portrait");
+        document.body.classList.remove(IPAD_DESK_CLASS);
+      }
     };
   }, [enabled]);
 
   const forced = typeof document !== "undefined" && ipadDeskForced();
-  return enabled && (forced || on);
+  return enabled && (forcedCtx === true || forced || on);
 }

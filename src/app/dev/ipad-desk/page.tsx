@@ -5,6 +5,7 @@ import { DndContext } from "@dnd-kit/core";
 import ZoneCard from "@/app/shiftbuilder/components/ZoneCard";
 import RRCard from "@/app/shiftbuilder/components/RRCard";
 import { IPAD_DESK_CLASS } from "@/lib/shiftbuilder/tabletDevice";
+import { IpadDeskProvider } from "@/lib/shiftbuilder/useIpadDesk";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 
 /**
@@ -81,7 +82,12 @@ export default function IpadDeskFixturePage() {
     document.body.classList.add(IPAD_DESK_CLASS);
   }
   useLayoutEffect(() => {
-    if (macDesk) return;
+    if (macDesk) {
+      document.documentElement.removeAttribute("data-sb-ipad-desk");
+      document.documentElement.classList.remove(IPAD_DESK_CLASS, "sb-ipad-portrait");
+      document.body.classList.remove(IPAD_DESK_CLASS);
+      return;
+    }
     document.documentElement.setAttribute("data-sb-ipad-desk", "force");
     document.documentElement.classList.add(IPAD_DESK_CLASS);
     document.body.classList.add(IPAD_DESK_CLASS);
@@ -111,6 +117,7 @@ export default function IpadDeskFixturePage() {
 
   return (
     <DndContext>
+    <IpadDeskProvider value={!macDesk}>
       <div className={`sb-builder-shell sb-sheetbuilder-redesign sb-canvas-builder min-h-screen bg-[#F4F6FA]${macDesk ? "" : " sb-ipad-desk"}`}>
         <div className="sb-builder-stage sb-builder-live">
           <div className="builder-workspace p-5">
@@ -155,6 +162,7 @@ export default function IpadDeskFixturePage() {
           </div>
         </div>
       </div>
+    </IpadDeskProvider>
     </DndContext>
   );
 }
