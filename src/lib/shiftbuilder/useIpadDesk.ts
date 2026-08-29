@@ -11,23 +11,30 @@ import {
  * Live 13-inch iPad desk. Syncs `html.sb-ipad-desk` so CSS is a real
  * variant, not a late JS paint. Print / preview must pass enabled=false.
  */
+function ipadDeskForced(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.documentElement.getAttribute("data-sb-ipad-desk") === "force";
+}
+
 export function useIpadDesk(enabled = true): boolean {
   const [on, setOn] = useState(() => {
     if (typeof document === "undefined") return false;
-    return document.documentElement.classList.contains(IPAD_DESK_CLASS) || isIpadDeskDevice();
+    return ipadDeskForced() || document.documentElement.classList.contains(IPAD_DESK_CLASS) || isIpadDeskDevice();
   });
 
   useLayoutEffect(() => {
     if (typeof document === "undefined") return;
     if (!enabled) {
-      document.documentElement.classList.remove(IPAD_DESK_CLASS);
-      document.body.classList.remove(IPAD_DESK_CLASS);
+      if (!ipadDeskForced()) {
+        document.documentElement.classList.remove(IPAD_DESK_CLASS);
+        document.body.classList.remove(IPAD_DESK_CLASS);
+      }
       setOn(false);
       return;
     }
 
     const apply = () => {
-      const match = isIpadDeskDevice();
+      const match = ipadDeskForced() || isIpadDeskDevice();
       const portrait = window.matchMedia("(orientation: portrait)").matches;
       setOn(match);
       document.documentElement.classList.toggle(IPAD_DESK_CLASS, match);

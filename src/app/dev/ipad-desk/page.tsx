@@ -76,11 +76,13 @@ export default function IpadDeskFixturePage() {
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("desk") === "mac";
   if (!macDesk && typeof document !== "undefined") {
+    document.documentElement.setAttribute("data-sb-ipad-desk", "force");
     document.documentElement.classList.add(IPAD_DESK_CLASS);
     document.body.classList.add(IPAD_DESK_CLASS);
   }
   useLayoutEffect(() => {
     if (macDesk) return;
+    document.documentElement.setAttribute("data-sb-ipad-desk", "force");
     document.documentElement.classList.add(IPAD_DESK_CLASS);
     document.body.classList.add(IPAD_DESK_CLASS);
     const original = window.matchMedia.bind(window);
@@ -101,6 +103,7 @@ export default function IpadDeskFixturePage() {
     }) as typeof window.matchMedia;
     return () => {
       window.matchMedia = original;
+      document.documentElement.removeAttribute("data-sb-ipad-desk");
       document.documentElement.classList.remove(IPAD_DESK_CLASS);
       document.body.classList.remove(IPAD_DESK_CLASS);
     };
