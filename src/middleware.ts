@@ -24,6 +24,10 @@ import type { NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const url = request.nextUrl;
 
+  if (url.pathname === "/api/health") {
+    return NextResponse.next();
+  }
+
   // === NEVER touch HMR / Turbopack chunk requests ===
   if (
     url.pathname.startsWith("/_next/static/") ||
@@ -154,6 +158,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|hot-update|frontman|card-vectors|drop-zones|shiftbuilder-print-preview\\.css).*)",
+    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|sw.js|manifest.json|hot-update|frontman|card-vectors|drop-zones|shiftbuilder-print-preview\\.css).*)",
   ],
 };

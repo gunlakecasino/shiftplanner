@@ -17,6 +17,7 @@
  */
 
 export async function register() {
+  if (process.env.NODE_ENV === "production") return;
   if (process.env.NEXT_RUNTIME === "nodejs") {
     // @ts-expect-error - @frontman-ai/nextjs Instrumentation export lacks types in 0.6.x (young package). Safe in dev-only path.
     const { setup } = await import("@frontman-ai/nextjs/Instrumentation");
