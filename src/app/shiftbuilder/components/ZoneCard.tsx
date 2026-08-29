@@ -10,13 +10,15 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
-import CoverageBar from "./CoverageBar";
+import CoverageBar, { CoveragePaperRail } from "./CoverageBar";
 import { assignmentShowsSkeleton, TmPlacementTrail, type SlotAssignmentState } from "./assignmentCardChrome";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
+import { formatCoveredByRail } from "@/lib/shiftbuilder/canvasPrideLabels";
 import {
   formatCoveragePositionLabel,
+  getSlotAccentColor,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
@@ -275,8 +277,19 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     label: formatCoveragePositionLabel(def.key, entry.side, coveredBy.length),
     name: entry.tmName,
   }));
-  const packageCoverageFooter = zoneCoverageTasks.length > 0 ? (
+  const showIpadRails = ipadDesk && (coveredBy.length > 0 || zoneCoverageTasks.length > 0);
+  const showMacCoverageFooter = !ipadDesk && zoneCoverageTasks.length > 0;
+  const packageCoverageFooter = showIpadRails || showMacCoverageFooter ? (
     <div className={`sb-coverage-footer shrink-0 ${ipadDesk ? "sb-coverage-footer--rails" : showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
+      {ipadDesk
+        ? coveredBy.map((entry) => (
+            <CoveragePaperRail
+              key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
+              label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
+              accent={getSlotAccentColor(entry.sourceKey)}
+            />
+          ))
+        : null}
       {zoneCoverageTasks.map((task) => (
         <CoverageBar
           key={task.id}
@@ -329,7 +342,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         taskContent={packageTaskContent}
         footer={packageCoverageFooter}
         unassigned={assignmentState.kind === "unassigned" || assignmentState.kind === "covered"}
-        coverage={assignmentState.kind === "covered" ? packageCoverage : undefined}
+        coverage={ipadDesk ? undefined : assignmentState.kind === "covered" ? packageCoverage : undefined}
         onClick={() => {
           if (isLocked) return;
           const el = document.querySelector(`[data-slot-key="${def.key}"]`) as HTMLElement | null;

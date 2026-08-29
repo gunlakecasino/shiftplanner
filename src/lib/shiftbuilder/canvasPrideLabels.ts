@@ -184,6 +184,20 @@ export function coverageChipTone(accent: string): CoverageChipTone {
   };
 }
 
+/**
+ * Incoming covered-by rail — same family as outgoing "Covering …".
+ * One line: "Covered by Name · Women's 6". Print/engine do not import this.
+ */
+export function formatCoveredByRail(tmName: string, sourceKey?: string): string {
+  const name = (tmName || "TM").trim() || "TM";
+  if (!sourceKey?.trim()) return `Covered by ${name}`;
+  const covering = formatCanvasCoverageChip(
+    `AND ${formatCanvasTrailChip(sourceKey).label}`,
+  );
+  const place = covering.replace(/^Covering\s+/, "").trim();
+  return place ? `Covered by ${name} · ${place}` : `Covered by ${name}`;
+}
+
 /** Coverage footer copy — "And Zone 9" / "+ ZONE 6" → "Covering Zone 9". */
 export function formatCanvasCoverageChip(taskLabel: string): string {
   const body = taskLabel

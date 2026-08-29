@@ -8,6 +8,7 @@ import RRCard from "@/app/shiftbuilder/components/RRCard";
 import { IPAD_DESK_FORCE_ATTR, IPAD_DESK_FORCE_VALUE } from "@/lib/shiftbuilder/tabletDevice";
 import { IpadDeskProvider } from "@/lib/shiftbuilder/useIpadDesk";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import type { CoveredByEntry } from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
  * Visual QA fixture for the 13-inch iPad night desk.
@@ -37,6 +38,7 @@ function task(
 
 const ZONE_DEFS = [
   { key: "Z5", label: "ZONE 5 + HIGH LIMITS" },
+  { key: "Z6", label: "ZONE 6" },
   { key: "Z7", label: "ZONE 7 + SMOKING ROOM" },
   { key: "Z1", label: "ZONE 1" },
 ];
@@ -74,6 +76,25 @@ const selectedTasks: Record<string, NightSlotTask[]> = {
   WRR1: [task("w1-c", "WRR1", "AND LOBBY", { isCoverage: true, color: "#ffcc00" })],
 };
 
+const coveredByIndex: Record<string, CoveredByEntry[]> = {
+  Z6: [
+    {
+      tmName: "Carter",
+      tmId: "tm_carter",
+      sourceKey: "MRR6",
+      taskLabel: "AND ZONE 6",
+    },
+  ],
+  WRR8: [
+    {
+      tmName: "Jessica Martinez",
+      tmId: "tm_jessica",
+      sourceKey: "Z7",
+      taskLabel: "AND Women's Restroom 8",
+    },
+  ],
+};
+
 function IpadDeskFixtureInner() {
   const macDesk = useSearchParams().get("desk") === "mac";
   useLayoutEffect(() => {
@@ -104,7 +125,9 @@ function IpadDeskFixtureInner() {
                       def={def}
                       assignments={assignments}
                       selectedTasks={selectedTasks}
+                      coveredBy={coveredByIndex[def.key]}
                       onCardClick={() => {}}
+                      onRemoveTask={() => {}}
                       showDigitalAssists
                       showTaskBadge
                     />
@@ -123,7 +146,9 @@ function IpadDeskFixtureInner() {
                       def={def}
                       assignments={assignments}
                       selectedTasks={selectedTasks}
+                      coveredByIndex={coveredByIndex}
                       onGenderClick={() => {}}
+                      onRemoveTask={() => {}}
                       showDigitalAssists
                       showTaskBadge
                     />

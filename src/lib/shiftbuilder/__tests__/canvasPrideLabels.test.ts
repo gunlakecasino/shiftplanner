@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   coverageChipTone,
   formatCanvasCoverageChip,
+  formatCoveredByRail,
   formatCanvasRepeatReason,
   formatCanvasRrSideLabel,
   formatCanvasTrailChip,
@@ -93,6 +94,21 @@ describe("formatCanvasCoverageChip", () => {
       "Covering Women's 6",
     );
     expect(formatCanvasCoverageChip("And Women's Restroom 6").startsWith("Covering Men's")).toBe(false);
+  });
+});
+
+describe("formatCoveredByRail", () => {
+  it("uses the same place language as outgoing Covering chips", () => {
+    expect(formatCoveredByRail("Brian", "WRR6")).toBe("Covered by Brian · Women's 6");
+    expect(formatCoveredByRail("JT", "Z5")).toBe("Covered by JT · Zone 5");
+    expect(formatCoveredByRail("Ana", "MRR1")).toBe("Covered by Ana · Men's 1+2");
+  });
+
+  it("does not leak AND / + leftovers or a second banner family", () => {
+    expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/\bAND\b|\+/);
+    expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/^Covering /);
+    expect(formatCoveredByRail("", "Z4")).toBe("Covered by TM · Zone 4");
+    expect(formatCoveredByRail("Lee")).toBe("Covered by Lee");
   });
 });
 
