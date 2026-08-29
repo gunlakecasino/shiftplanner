@@ -10,6 +10,7 @@ import {
   JetBrains_Mono,
 } from "next/font/google";
 import "./globals.css";
+import { IPAD_DESK_BOOT_SCRIPT } from "@/lib/shiftbuilder/tabletDevice";
 
 export { viewport } from "./viewport";
 
@@ -92,6 +93,7 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('oms-theme');var s=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t!=='light'&&s)){document.documentElement.classList.add('dark');}}catch(e){}})();`,
           }}
         />
+        <script dangerouslySetInnerHTML={{ __html: IPAD_DESK_BOOT_SCRIPT }} />
         {/* === Service Worker: pre-hydration DEV cleanup only ===
             Production registration + the update/reload lifecycle live in
             <PwaRegister/> (src/app/shiftbuilder/components/PwaRegister.tsx) — a single

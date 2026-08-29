@@ -17,6 +17,15 @@ export const TABLET_COMPACT_NAV_MQ = `${TABLET_TOUCH_MQ} and (max-width: ${TABLE
 export const IPAD_DESK_MAX_WIDTH_PX = 1420;
 export const IPAD_DESK_MQ = `${TABLET_TOUCH_MQ} and (max-width: ${IPAD_DESK_MAX_WIDTH_PX}px)`;
 export const IPAD_DESK_CLASS = "sb-ipad-desk";
+export const IPAD_DESK_PORTRAIT_CLASS = "sb-ipad-portrait";
+export const IPAD_DESK_FORCE_ATTR = "data-sb-ipad-desk";
+export const IPAD_DESK_FORCE_VALUE = "force";
+
+/**
+ * Blocking head script (same pattern as oms-theme). Sets html.sb-ipad-desk
+ * before ShiftBuilderClient mounts. html only — never body, never a cookie.
+ */
+export const IPAD_DESK_BOOT_SCRIPT = `(function(){try{if(!window.matchMedia(${JSON.stringify(IPAD_DESK_MQ)}).matches)return;var h=document.documentElement;h.classList.add(${JSON.stringify(IPAD_DESK_CLASS)});if(window.matchMedia("(orientation: portrait)").matches)h.classList.add(${JSON.stringify(IPAD_DESK_PORTRAIT_CLASS)});}catch(e){}})();`;
 
 /**
  * True for any coarse pointer (finger / Apple Pencil).

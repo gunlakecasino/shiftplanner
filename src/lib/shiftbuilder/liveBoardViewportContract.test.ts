@@ -623,7 +623,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.280"');
+    expect(version).toContain('"1.281"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -757,6 +757,16 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
 });
 
 describe("iPad desk — 13-inch Pro night board", () => {
+  const layout = readFileSync(resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
+  const tabletDevice = readFileSync(
+    resolve(process.cwd(), "src/lib/shiftbuilder/tabletDevice.ts"),
+    "utf8",
+  );
+  const useIpadDesk = readFileSync(
+    resolve(process.cwd(), "src/lib/shiftbuilder/useIpadDesk.tsx"),
+    "utf8",
+  );
+
   it("is a distinct pair-card variant with coverage rails, not a chip-yield squash", () => {
     expect(globalsCss).toContain("iPad desk — 13-inch Pro night board");
     expect(globalsCss).toContain("sb-ipad-rr-pair");
@@ -764,25 +774,44 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(globalsCss).toContain(".sb-coverage-rail");
     expect(globalsCss).toContain("sb-coverage-footer--rails");
     expect(globalsCss).toContain(
-      ".sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail",
+      ".sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail",
     );
     expect(globalsCss).toMatch(
-      /\.assignment-card \.sb-coverage-rail[\s\S]{0,180}width: 100% !important/,
+      /\.assignment-card \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,220}width: 100% !important/,
+    );
+    expect(globalsCss).toMatch(
+      /\.assignment-card \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,220}min-height: 48px !important/,
     );
     expect(globalsCss).toContain("--sb-ipad-name: 21px");
+    expect(globalsCss).toContain("--sb-ipad-tap: 48px");
     expect(globalsCss).toContain("(pointer: coarse) and (min-width: 768px) and (max-width: 1420px)");
     expect(globalsCss).toContain(
       "(orientation: portrait) and (min-width: 768px) and (max-width: 1100px)",
     );
     expect(globalsCss).toContain("grid-auto-rows: minmax(228px, auto) !important");
+    expect(globalsCss).not.toContain("Mac-merge-until-hydrate");
+    expect(globalsCss).not.toContain("two stacked Mac cards merge");
     expect(rrCard).toContain("sb-rr-pair");
     expect(rrCard).toContain("pairHalf={ipadDesk}");
     expect(rrCard).toContain("useIpadDesk");
     expect(shiftBuilderClient).toContain("useIpadDesk");
+    expect(shiftBuilderClient).toContain("IpadDeskProvider");
     expect(shiftBuilderClient).toContain("sb-ipad-desk");
     expect(globalsCss).not.toMatch(
       /\.print-artboard[\s\S]{0,200}sb-ipad-rr-pair/,
     );
+  });
+
+  it("sets html.sb-ipad-desk from one boot script and one provider; cards only read", () => {
+    expect(tabletDevice).toContain("IPAD_DESK_BOOT_SCRIPT");
+    expect(tabletDevice).toContain("IPAD_DESK_MQ");
+    expect(tabletDevice).toContain("max-width: ${IPAD_DESK_MAX_WIDTH_PX}px");
+    expect(layout).toContain("IPAD_DESK_BOOT_SCRIPT");
+    expect(useIpadDesk).toContain("writeIpadDeskDocumentClass");
+    expect(useIpadDesk).not.toMatch(/classList\.remove\s*\(/);
+    expect(useIpadDesk).toContain("Does not write the document class");
+    expect(rrCard).toContain("does not write html.sb-ipad-desk");
+    expect(shiftBuilderClient).toContain("<IpadDeskProvider enabled={isBuilderLiveCanvas}>");
   });
 });
 
@@ -930,10 +959,10 @@ describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
     expect(cheatsheet).toContain("previousFocusRef");
   });
 
-  it("improves the PIN side toward a cool desk and bumps 1.280", () => {
+  it("improves the PIN side toward a cool desk and bumps 1.281", () => {
     expect(authGateCss).toContain("sb-auth-visual__desk");
     expect(authGateCss).toContain("#F4F6FA");
     expect(authGateCss).toContain("object-fit: contain");
-    expect(version).toContain('"1.280"');
+    expect(version).toContain('"1.281"');
   });
 });

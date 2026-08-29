@@ -5,13 +5,14 @@ import { useSearchParams } from "next/navigation";
 import { DndContext } from "@dnd-kit/core";
 import ZoneCard from "@/app/shiftbuilder/components/ZoneCard";
 import RRCard from "@/app/shiftbuilder/components/RRCard";
-import { IPAD_DESK_CLASS } from "@/lib/shiftbuilder/tabletDevice";
+import { IPAD_DESK_FORCE_ATTR, IPAD_DESK_FORCE_VALUE } from "@/lib/shiftbuilder/tabletDevice";
 import { IpadDeskProvider } from "@/lib/shiftbuilder/useIpadDesk";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 
 /**
  * Visual QA fixture for the 13-inch iPad night desk.
  * Blocked in production by middleware (`/dev/`). Not a product surface.
+ * Forces the desk via data-sb-ipad-desk=force; the provider writes html.sb-ipad-desk.
  */
 function task(
   id: string,
@@ -75,49 +76,14 @@ const selectedTasks: Record<string, NightSlotTask[]> = {
 
 function IpadDeskFixtureInner() {
   const macDesk = useSearchParams().get("desk") === "mac";
-  if (!macDesk && typeof document !== "undefined") {
-    document.documentElement.setAttribute("data-sb-ipad-desk", "force");
-    document.documentElement.classList.add(IPAD_DESK_CLASS);
-    document.body.classList.add(IPAD_DESK_CLASS);
-    if (window.matchMedia("(orientation: portrait)").matches) {
-      document.documentElement.classList.add("sb-ipad-portrait");
-    }
-  }
   useLayoutEffect(() => {
     if (macDesk) {
-      document.documentElement.removeAttribute("data-sb-ipad-desk");
-      document.documentElement.classList.remove(IPAD_DESK_CLASS, "sb-ipad-portrait");
-      document.body.classList.remove(IPAD_DESK_CLASS);
+      document.documentElement.removeAttribute(IPAD_DESK_FORCE_ATTR);
       return;
     }
-    document.documentElement.setAttribute("data-sb-ipad-desk", "force");
-    document.documentElement.classList.add(IPAD_DESK_CLASS);
-    document.body.classList.add(IPAD_DESK_CLASS);
-    document.documentElement.classList.toggle(
-      "sb-ipad-portrait",
-      window.matchMedia("(orientation: portrait)").matches,
-    );
-    const original = window.matchMedia.bind(window);
-    window.matchMedia = ((query: string) => {
-      if (query.includes("max-width: 1420px") || query.includes("min-width: 768px")) {
-        return {
-          matches: true,
-          media: query,
-          addEventListener: () => {},
-          removeEventListener: () => {},
-          addListener: () => {},
-          removeListener: () => {},
-          onchange: null,
-          dispatchEvent: () => false,
-        } as MediaQueryList;
-      }
-      return original(query);
-    }) as typeof window.matchMedia;
+    document.documentElement.setAttribute(IPAD_DESK_FORCE_ATTR, IPAD_DESK_FORCE_VALUE);
     return () => {
-      window.matchMedia = original;
-      document.documentElement.removeAttribute("data-sb-ipad-desk");
-      document.documentElement.classList.remove(IPAD_DESK_CLASS);
-      document.body.classList.remove(IPAD_DESK_CLASS);
+      document.documentElement.removeAttribute(IPAD_DESK_FORCE_ATTR);
     };
   }, [macDesk]);
 

@@ -338,7 +338,7 @@ import {
   isTabletTouchDevice,
   type StageInsets,
 } from "./hooks/useZoom";
-import { useIpadDesk } from "@/lib/shiftbuilder/useIpadDesk";
+import { IpadDeskProvider, useIpadDesk } from "@/lib/shiftbuilder/useIpadDesk";
 
 
 
@@ -8057,6 +8057,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   });
 
   return (
+    <IpadDeskProvider enabled={isBuilderLiveCanvas}>
     <div
       className={`sb-builder-shell sb-sheetbuilder-redesign flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder${isPrintPreview ? "" : " sb-canvas-builder"}${ipadDesk ? " sb-ipad-desk" : ""}`}
       {...(!boardColdLoading ? { "data-sb-route-ready": "" } : {})}
@@ -9463,6 +9464,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           No more overtaking box in the surface. */}
 
     </div>
+    </IpadDeskProvider>
   );
 }
 

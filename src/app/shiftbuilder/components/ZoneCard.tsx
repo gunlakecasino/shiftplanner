@@ -185,7 +185,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
   };
   const color = getZoneColor(def.key);
-  const ipadDesk = useIpadDesk();
+  const ipadDesk = useIpadDesk(); // reader — does not write html.sb-ipad-desk
   const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     def.key, "zone", slotTm, isLocked,
   );
