@@ -219,4 +219,64 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
 
     expect(mapped.MRR1).toBeUndefined();
   });
+
+  it("does not materialize AUX2A + AUX2B when Z9SR and AUX2 are the same seat", () => {
+    const z9Layout: AuxDef[] = [
+      { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: [] },
+    ];
+    const assignments = {
+      Z3: {
+        tmId: "sheri",
+        tmName: "Sheri O",
+        additionalCoverageSlots: ["Z9SR", "AUX2"],
+      },
+    };
+
+    const mapped = mapNightTasksToUiKeys([], z9Layout, assignments);
+    const coveredBy = buildCoveredByIndex(assignments, mapped, z9Layout);
+
+    expect(mapped.Z3?.filter((row) => row.isCoverage)).toHaveLength(1);
+    expect(coveredBy.AUX2).toHaveLength(1);
+    expect(coveredBy.AUX2).toMatchObject([
+      { tmName: "Sheri O", sourceKey: "Z3", isSynthetic: true },
+    ]);
+    expect(coveredBy.AUX2?.[0].side ?? null).toBeNull();
+    expect(coveredBy.Z9SR).toBeUndefined();
+  });
+
+  it("does not project Z9SR coverage onto the TM already sitting in that AUX shell", () => {
+    const z9Layout: AuxDef[] = [
+      { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: [] },
+    ];
+    const mapped = mapNightTasksToUiKeys([], z9Layout, {
+      AUX2: { tmId: "sheri", tmName: "Sheri O", additionalCoverageSlots: ["Z9SR"] },
+    });
+
+    expect(mapped.AUX2).toBeUndefined();
+  });
+
+  it("collapses a stored Z9SR banner with an AUX2 additional_coverage write", () => {
+    const z9Layout: AuxDef[] = [
+      { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: [] },
+    ];
+    const assignments = {
+      Z3: { tmId: "sheri", tmName: "Sheri O", additionalCoverageSlots: ["AUX2"] },
+    };
+    const mapped = mapNightTasksToUiKeys(
+      [
+        task({
+          id: "legacy-z9sr",
+          slotKey: "zone_3",
+          slotType: "zone",
+          taskLabel: "And Zone 9 Smoking Room",
+          isCoverage: true,
+        }),
+      ],
+      z9Layout,
+      assignments,
+    );
+
+    expect(mapped.Z3?.filter((row) => row.isCoverage)).toHaveLength(1);
+    expect(buildCoveredByIndex(assignments, mapped, z9Layout).AUX2).toHaveLength(1);
+  });
 });

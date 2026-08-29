@@ -10,9 +10,12 @@ import type { NightSlotTask } from "./data";
 import type { AuxDef } from "./placement";
 import {
   buildCoverageLabelIndex,
+  canonicalCoverageTargetKey,
+  coverageSeatKeys,
   getSlotAccentColor,
   getSlotCoverageLabel,
   parseCoverageTargetFromTaskLabel,
+  sameCoverageSeat,
   type CoverageSide,
 } from "./coverageHelpers";
 import { dbToUi, uiToDb } from "./slot-keys";
@@ -139,6 +142,7 @@ export function mapNightTasksToUiKeys(
   const labelToKey = buildCoverageLabelIndex(currentAuxDefs);
 
   // Collapse duplicate stored presentation rows by normalized source + target.
+  // Z9SR and the z9sr AUX shell are the same seat — keep one banner.
   // Unknown legacy labels remain visible because they cannot be reconciled safely.
   for (const [sourceKey, tasks] of Object.entries(tasksByUiKey)) {
     const seenTargets = new Set<string>();
@@ -150,8 +154,10 @@ export function mapNightTasksToUiKeys(
         sourceKey,
       );
       if (!targetKey) return true;
-      if (seenTargets.has(targetKey)) return false;
-      seenTargets.add(targetKey);
+      const canonical = canonicalCoverageTargetKey(targetKey, currentAuxDefs);
+      if (sameCoverageSeat(sourceKey, canonical, currentAuxDefs)) return false;
+      if (seenTargets.has(canonical)) return false;
+      seenTargets.add(canonical);
       return true;
     });
   }
@@ -162,23 +168,30 @@ export function mapNightTasksToUiKeys(
     if (!assignment?.tmId && !assignment?.tmName?.trim()) continue;
 
     for (const targetKey of coverageTargets(assignment)) {
-      if (targetKey === sourceKey) continue;
+      const canonical = canonicalCoverageTargetKey(targetKey, currentAuxDefs);
+      if (sameCoverageSeat(sourceKey, canonical, currentAuxDefs)) continue;
 
       // Empty-zone fallback is not valid once the direct target is staffed.
-      const targetAssignment = assignments[targetKey];
-      if (targetAssignment?.tmId || targetAssignment?.tmName?.trim()) continue;
+      const staffed = coverageSeatKeys(canonical, currentAuxDefs).some((seatKey) => {
+        const row = assignments[seatKey];
+        return !!(row?.tmId || row?.tmName?.trim());
+      });
+      if (staffed) continue;
 
       const existing = tasksByUiKey[sourceKey] ?? [];
-      const alreadyProjected = existing.some(
-        (task) =>
-          task.isCoverage &&
-          parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey, sourceKey) ===
-          targetKey,
-      );
+      const alreadyProjected = existing.some((task) => {
+        if (!task.isCoverage) return false;
+        const parsed = parseCoverageTargetFromTaskLabel(
+          task.taskLabel,
+          labelToKey,
+          sourceKey,
+        );
+        return !!parsed && sameCoverageSeat(parsed, canonical, currentAuxDefs);
+      });
       if (alreadyProjected) continue;
 
       (tasksByUiKey[sourceKey] ??= []).push(
-        syntheticCoverageTask(sourceKey, targetKey, currentAuxDefs),
+        syntheticCoverageTask(sourceKey, canonical, currentAuxDefs),
       );
     }
   }

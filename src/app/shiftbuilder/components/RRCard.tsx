@@ -3,14 +3,12 @@
 import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
-  type BreakGroup,
   cardAccentInk,
   getRRAccent,
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import CoverageBar from "./CoverageBar";
-import BreakBadge from "./BreakBadge";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
@@ -220,6 +218,7 @@ const RRSide: React.FC<{
               : undefined
           }
           onUnassignedClick={(e) => handleAssignZoneClick(e, slotKey, onClick, isLocked)}
+          coveredPresentation="quiet"
           vector={cardVector ? <CardVectorMark vector={cardVector} size="desk" /> : undefined}
         />
       </div>
@@ -284,7 +283,6 @@ function RRSideShell({
   isEmpty,
   isCovered = false,
   fitChip,
-  breakNum,
   coverageTasks,
   slotKey,
   onRemoveTask,
@@ -299,7 +297,6 @@ function RRSideShell({
   isEmpty: boolean;
   isCovered?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
-  breakNum: BreakGroup;
   coverageTasks: NightSlotTask[];
   slotKey: string;
   onRemoveTask?: (
@@ -334,7 +331,6 @@ function RRSideShell({
           {!isCovered && !isEmpty && (
             <PlacementFitChip fit={fitChip} compact />
           )}
-          <BreakBadge value={breakNum} size="sm" />
         </div>
       </div>
 
@@ -412,11 +408,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const wEmpty = !assignments[wKey]?.tmName && !wDraftName;
   const bothEmpty = mEmpty && wEmpty && !loading;
 
-  const mA = assignments[mKey] || {};
-  const wA = assignments[wKey] || {};
-  const mBreak = (mA.breakGroup ?? 0) as BreakGroup;
-  const wBreak = (wA.breakGroup ?? 0) as BreakGroup;
-
   const mTasks = selectedTasks[mKey] || [];
   const wTasks = selectedTasks[wKey] || [];
   const mRegular = visibleDeskSlotTasks(mTasks);
@@ -476,7 +467,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isEmpty={wEmpty && !loading}
         isCovered={wIsCovered}
         fitChip={fitChipW}
-        breakNum={wBreak}
         coverageTasks={wCoverageTasks}
         slotKey={wKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
@@ -505,7 +495,6 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isEmpty={mEmpty && !loading}
         isCovered={mIsCovered}
         fitChip={fitChipM}
-        breakNum={mBreak}
         coverageTasks={mCoverageTasks}
         slotKey={mKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}

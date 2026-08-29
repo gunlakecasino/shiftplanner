@@ -43,8 +43,9 @@ describe("live board short-landscape viewport contract", () => {
     expect(compactEnd).toBeGreaterThan(compactStart);
     expect(compactCss).toContain("(max-height: 1300px)");
     expect(compactCss).toContain("grid-auto-rows: 132px !important");
-    expect(compactCss).toContain("grid-auto-rows: 252px !important");
+    expect(compactCss).toContain("grid-auto-rows: minmax(300px, auto) !important");
     expect(compactCss).toContain("grid-auto-rows: 96px !important");
+    expect(compactCss).not.toContain("grid-auto-rows: 252px !important");
     expect(compactCss).not.toContain("minmax(148px, auto)");
     expect(compactCss).not.toContain("minmax(262px, auto)");
     expect(compactCss).not.toContain("minmax(108px, auto)");
@@ -712,6 +713,9 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
     expect(rrCard).not.toContain("${def.label} WOMEN'S");
     expect(rrCard).not.toContain("${def.label} MEN'S");
     expect(rrCard).not.toContain("◆");
+    expect(rrCard).toContain("coveredPresentation=\"quiet\"");
+    expect(rrCard).not.toContain("BreakBadge");
+    expect(rrCard).not.toContain("breakNum");
   });
 
   it("keeps coverage on the named restroom half and hides grey trail codes", () => {
@@ -724,6 +728,8 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
       "utf8",
     );
     expect(chrome).toContain("Assign TM");
+    expect(chrome).toContain("QuietCoverNote");
+    expect(chrome).toContain("sb-quiet-cover-note");
     expect(chrome).not.toContain("ASSIGN TM");
     expect(chrome).toContain("formatCanvasTrailChip");
     expect(chrome).toContain("formatCanvasRepeatReason");
@@ -747,6 +753,22 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
     expect(globalsCss).toContain("Canvas pride — live board cards only");
     expect(globalsCss).toContain("sb-tm-trail-chip");
     expect(globalsCss).toContain("content: none !important");
+  });
+});
+
+describe("iPad landscape restroom desk", () => {
+  it("keeps restroom names at zone size and yields chips inside the card", () => {
+    expect(globalsCss).toContain("iPad landscape desk — restroom names stay zone-size; chips yield first.");
+    expect(globalsCss).toContain("container-name: sb-rr-card");
+    expect(globalsCss).toContain(".sb-quiet-cover-note__label");
+    expect(globalsCss).toMatch(
+      /\.sb-rr-grid \.sb-tm-primary-name,[\s\S]*?font-size: 17px !important/,
+    );
+    expect(globalsCss).toContain("@container sb-rr-card (max-height: 136px)");
+    expect(globalsCss).toContain("@container sb-rr-card (max-height: 108px)");
+    expect(globalsCss).not.toMatch(
+      /\.print-artboard[\s\S]{0,200}sb-quiet-cover-note/,
+    );
   });
 });
 

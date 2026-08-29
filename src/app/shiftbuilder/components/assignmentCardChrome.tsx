@@ -657,6 +657,23 @@ function CoveredByBlock({
   );
 }
 
+/** Empty covered restroom — quiet note, never a ghost coverer name. */
+export function QuietCoverNote({
+  onClick,
+}: {
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      className="sb-quiet-cover-note min-w-0 w-full"
+      onClick={onClick}
+      title="Covered by another placement — tap to open slot"
+    >
+      <span className="sb-quiet-cover-note__label">Covered</span>
+    </div>
+  );
+}
+
 /** Builder covered-by row — top-pinned like assigned TM names. */
 export function CoveredByOverlay({
   scale,
@@ -768,6 +785,7 @@ export function SlotAssignmentBody({
   onSwapCoverageSides,
   projectPills,
   vector,
+  coveredPresentation = "names",
 }: {
   state: SlotAssignmentState;
   scale: CardNameScale;
@@ -778,6 +796,11 @@ export function SlotAssignmentBody({
   inviteSize?: UnassignedInviteSize;
   /** Zone/RR use glass invite; aux uses dash label + drop hint. */
   emptyPresentation?: "invite" | "label";
+  /**
+   * Empty restrooms that are only covered should look empty with a quiet
+   * note. Coverer names stay on the source card chips, not as ghost names.
+   */
+  coveredPresentation?: "names" | "quiet";
   /** Aux cards shrink name when tasks are present. */
   nameSizeOverride?: number;
   /** Prior-3 placement repeat — show inline mark beside TM name. */
@@ -936,7 +959,12 @@ export function SlotAssignmentBody({
           </div>
         )
       ) : state.kind === "covered" ? (
-        showDigitalAssists && onUnassignedClick ? (
+        coveredPresentation === "quiet" ? (
+          <QuietCoverNote
+            key="quiet-cover"
+            onClick={showDigitalAssists ? onUnassignedClick : undefined}
+          />
+        ) : showDigitalAssists && onUnassignedClick ? (
           <CoveredByOverlay
             key="covered"
             scale={scale}

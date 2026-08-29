@@ -232,11 +232,70 @@ function sideSortOrder(side: CoverageSide | null | undefined): number {
   return 2;
 }
 
+/** Flex AUX shell that currently owns the Zone 9 smoking-room seat. */
+export function z9srAuxSeatKey(auxDefs: AuxDef[] = []): string | null {
+  return auxDefs.find((def) => def.role === "z9sr")?.key ?? null;
+}
+
+/**
+ * Z9SR and tonight's z9sr AUX shell are the same seat.
+ * additional_coverage of both must not materialize AUX2A + AUX2B.
+ */
+export function canonicalCoverageTargetKey(
+  uiKey: string,
+  auxDefs: AuxDef[] = [],
+): string {
+  const z9srAux = z9srAuxSeatKey(auxDefs);
+  if (uiKey === "Z9SR" && z9srAux) return z9srAux;
+  return uiKey;
+}
+
+export function coverageSeatKeys(
+  uiKey: string,
+  auxDefs: AuxDef[] = [],
+): string[] {
+  const keys = new Set<string>([uiKey]);
+  const z9srAux = z9srAuxSeatKey(auxDefs);
+  if (uiKey === "Z9SR" && z9srAux) keys.add(z9srAux);
+  if (z9srAux && uiKey === z9srAux) keys.add("Z9SR");
+  return [...keys];
+}
+
+export function sameCoverageSeat(
+  a: string,
+  b: string,
+  auxDefs: AuxDef[] = [],
+): boolean {
+  return canonicalCoverageTargetKey(a, auxDefs) === canonicalCoverageTargetKey(b, auxDefs);
+}
+
+function covererIdentity(entry: CoveredByEntry): string {
+  const tmId = entry.tmId?.trim();
+  if (tmId) return `id:${tmId}`;
+  return `name:${entry.tmName.trim().toLowerCase()}`;
+}
+
+/** One TM covers a seat once — never AUX2A + AUX2B for the same person. */
+export function dedupeCoveredByEntries(entries: CoveredByEntry[]): CoveredByEntry[] {
+  const seen = new Set<string>();
+  const unique: CoveredByEntry[] = [];
+  for (const entry of [...entries].sort((a, b) => a.tmName.localeCompare(b.tmName))) {
+    const id = covererIdentity(entry);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(entry);
+  }
+  return unique;
+}
+
 /** Apply default A/B when exactly two coverers and sides are missing or duplicated. */
 export function resolveDualCoverageSides(
   entries: CoveredByEntry[],
 ): CoveredByEntry[] {
   if (entries.length !== 2) return entries;
+  if (covererIdentity(entries[0]) === covererIdentity(entries[1])) {
+    return [entries[0]];
+  }
 
   const withA = entries.find((e) => e.side === "A");
   const withB = entries.find((e) => e.side === "B");
@@ -288,12 +347,14 @@ export function buildCoveredByIndex(
 
     for (const t of tasks) {
       if (!t.isCoverage) continue;
-      const targetKey = parseCoverageTargetFromTaskLabel(
+      const parsed = parseCoverageTargetFromTaskLabel(
         t.taskLabel,
         labelToKey,
         sourceKey,
       );
-      if (!targetKey) continue;
+      if (!parsed) continue;
+      const targetKey = canonicalCoverageTargetKey(parsed, auxDefs);
+      if (sameCoverageSeat(sourceKey, targetKey, auxDefs)) continue;
 
       if (!index[targetKey]) index[targetKey] = [];
       index[targetKey].push({
@@ -310,7 +371,7 @@ export function buildCoveredByIndex(
 
   const result: Record<string, CoveredByEntry[]> = {};
   for (const [key, entries] of Object.entries(index)) {
-    const deduped = entries.sort((a, b) => a.tmName.localeCompare(b.tmName));
+    const deduped = dedupeCoveredByEntries(entries);
     result[key] =
       deduped.length === 2 ? resolveDualCoverageSides(deduped) : deduped;
   }
