@@ -7344,7 +7344,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   overflow: hidden !important;
 }
 
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer:not(.sb-coverage-footer--rails),
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--chips {
   position: relative !important;
   flex-shrink: 0 !important;
@@ -8205,28 +8205,54 @@ img.sb-drop-zone-disc {
    ========================================================================== */
 
 .sb-coverage-rail {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   width: 100%;
-  min-height: var(--sb-ipad-tap, 48px);
-  padding: 2px 6px 2px 14px;
+  min-height: 0;
+  height: auto;
+  padding: 5px 10px 5px 14px;
   gap: 8px;
   box-sizing: border-box;
+  border-radius: 0;
+}
+
+.sb-coverage-rail--has-remove {
+  padding-right: 44px;
+}
+
+.sb-coverage-rail__tick {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  flex: 0 0 8px;
 }
 
 .sb-coverage-rail__label {
   min-width: 0;
+  flex: 1 1 auto;
   font-family: var(--font-ui, var(--font-inter-tight), system-ui);
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sb-coverage-rail__remove {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 44px;
+  height: 44px;
   min-width: 44px;
   min-height: 44px;
   padding: 0;
@@ -8241,8 +8267,12 @@ img.sb-drop-zone-disc {
   width: 100%;
   max-width: 100%;
   margin-top: auto;
-  padding: 0 !important;
+  padding: 12px 0 10px !important;
   gap: 0;
+}
+
+.sb-coverage-footer--rails > .sb-coverage-rail + .sb-coverage-rail {
+  border-top: 1px solid #e8e4dc;
 }
 
 /* Rails beat live-canvas chip width:auto / pill radius by equal-or-higher specificity. */
@@ -8250,13 +8280,18 @@ img.sb-drop-zone-disc {
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail {
   display: flex !important;
   width: 100% !important;
-  max-width: 100% !important;
-  min-height: 48px !important;
+  max-width: none !important;
+  min-height: 0 !important;
   height: auto !important;
   margin: 0 !important;
-  padding: 2px 6px 2px 14px !important;
+  padding: 5px 10px 5px 14px !important;
   border-radius: 0 !important;
   box-sizing: border-box !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove {
+  padding-right: 44px !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label,
@@ -8273,12 +8308,12 @@ img.sb-drop-zone-disc {
   flex-direction: column !important;
   width: 100% !important;
   max-width: 100% !important;
-  padding: 0 !important;
+  padding: 12px 0 !important;
   gap: 0 !important;
   visibility: visible !important;
   max-height: none !important;
   height: auto !important;
-  overflow: hidden !important;
+  overflow: visible !important;
 }
 
 @media (pointer: coarse) and (min-width: 768px) and (max-width: 1420px) {
@@ -8399,21 +8434,31 @@ img.sb-drop-zone-disc {
     flex-direction: column;
     flex-wrap: nowrap !important;
     gap: 0;
-    padding: 0 !important;
+    padding: 12px 0 !important;
     max-height: none !important;
     visibility: visible !important;
-    overflow: hidden;
+    overflow: visible !important;
   }
 
   html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
-  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail {
+  html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail {
     display: flex !important;
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: none !important;
     border-radius: 0 !important;
-    min-height: 48px !important;
+    min-height: 0 !important;
+    height: auto !important;
     margin: 0 !important;
-    padding: 2px 6px 2px 14px !important;
+    padding: 5px 10px 5px 14px !important;
+  }
+
+  html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove,
+  html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove,
+  .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove {
+    padding-right: 44px !important;
   }
 
   html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-desk-card-rail,
@@ -8525,20 +8570,31 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage 
   flex-direction: column;
   flex-wrap: nowrap !important;
   gap: 0;
-  padding: 0 !important;
+  padding: 12px 0 !important;
   max-height: none !important;
   visibility: visible !important;
+  overflow: visible !important;
 }
 
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail {
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail {
   display: flex !important;
   width: 100% !important;
-  max-width: 100% !important;
+  max-width: none !important;
   border-radius: 0 !important;
-  min-height: 48px !important;
+  min-height: 0 !important;
+  height: auto !important;
   margin: 0 !important;
-  padding: 2px 6px 2px 14px !important;
+  padding: 5px 10px 5px 14px !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail.sb-coverage-rail--has-remove {
+  padding-right: 44px !important;
 }
 
 html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid,

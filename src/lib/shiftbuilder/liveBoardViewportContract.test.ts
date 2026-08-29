@@ -623,7 +623,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.281"');
+    expect(version).toContain('"1.282"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -777,9 +777,17 @@ describe("iPad desk — 13-inch Pro night board", () => {
       ".sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail",
     );
     expect(globalsCss).toMatch(
-      /\.assignment-card \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,220}width: 100% !important/,
+      /\.assignment-card \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,280}width: 100% !important/,
     );
     expect(globalsCss).toMatch(
+      /\.assignment-card \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,280}min-height: 0 !important/,
+    );
+    expect(globalsCss).toContain(".sb-coverage-rail__tick");
+    expect(globalsCss).toContain("width: 8px;");
+    expect(globalsCss).toContain(
+      ".sb-coverage-footer--rails > .sb-coverage-rail + .sb-coverage-rail",
+    );
+    expect(globalsCss).not.toMatch(
       /\.assignment-card \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,220}min-height: 48px !important/,
     );
     expect(globalsCss).toContain("--sb-ipad-name: 21px");
@@ -812,6 +820,36 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(useIpadDesk).toContain("Does not write the document class");
     expect(rrCard).toContain("does not write html.sb-ipad-desk");
     expect(shiftBuilderClient).toContain("<IpadDeskProvider enabled={isBuilderLiveCanvas}>");
+  });
+
+  it("uses one quiet paper-rail footer for outgoing and incoming coverage", () => {
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    const zoneCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/ZoneCard.tsx"),
+      "utf8",
+    );
+    const pride = readFileSync(
+      resolve(process.cwd(), "src/lib/shiftbuilder/canvasPrideLabels.ts"),
+      "utf8",
+    );
+    expect(coverageBar).toContain("export function CoveragePaperRail");
+    expect(coverageBar).toContain("coverageChipTone");
+    expect(coverageBar).toContain("chipTone.surface");
+    expect(coverageBar).toContain("chipTone.ink");
+    expect(coverageBar).toContain("sb-coverage-rail__tick");
+    expect(coverageBar).not.toContain("coverageBarBg");
+    expect(coverageBar).not.toMatch(/useRail[\s\S]{0,400}#ffffff/);
+    expect(pride).toContain("export function formatCoveredByRail");
+    expect(zoneCard).toContain("formatCoveredByRail");
+    expect(zoneCard).toContain("CoveragePaperRail");
+    expect(zoneCard).toContain("coverage={ipadDesk ? undefined");
+    expect(rrCard).toContain("formatCoveredByRail");
+    expect(rrCard).toContain("CoveragePaperRail");
+    expect(rrCard).toContain("incomingRails");
+    expect(rrCard).toContain("coveredBy.length > 0 && !pairHalf");
   });
 });
 
@@ -963,6 +1001,6 @@ describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
     expect(authGateCss).toContain("sb-auth-visual__desk");
     expect(authGateCss).toContain("#F4F6FA");
     expect(authGateCss).toContain("object-fit: contain");
-    expect(version).toContain('"1.281"');
+    expect(version).toContain('"1.282"');
   });
 });

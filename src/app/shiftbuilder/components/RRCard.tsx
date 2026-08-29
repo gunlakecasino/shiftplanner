@@ -8,7 +8,7 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
-import CoverageBar from "./CoverageBar";
+import CoverageBar, { CoveragePaperRail } from "./CoverageBar";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
@@ -21,7 +21,8 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
-import { formatCanvasRrSideLabel } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { formatCanvasRrSideLabel, formatCoveredByRail } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { getSlotAccentColor } from "@/lib/shiftbuilder/coverageHelpers";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
@@ -113,6 +114,8 @@ const RRSide: React.FC<{
   fitChip?: PrerenderedPlacementFit | null;
   placementTrail?: string[];
   cardVector?: CardVector | null;
+  /** iPad pair half — incoming covered-by is a footer rail, not QuietCoverNote. */
+  pairHalf?: boolean;
 }> = ({
   slotKey,
   assignment,
@@ -137,6 +140,7 @@ const RRSide: React.FC<{
   fitChip,
   placementTrail,
   cardVector,
+  pairHalf = false,
 }) => {
   const a = assignment || {};
   // Draft-aware TM identity, mirroring ZoneCard/OverlapSlot: in draft mode a
@@ -182,7 +186,7 @@ const RRSide: React.FC<{
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
-  } else if (coveredBy.length > 0) {
+  } else if (coveredBy.length > 0 && !pairHalf) {
     assignmentState = { kind: "covered", coveredBy };
   } else {
     assignmentState = { kind: "unassigned" };
@@ -285,6 +289,7 @@ function RRSideShell({
   isCovered = false,
   fitChip,
   coverageTasks,
+  coveredBy = [],
   slotKey,
   onRemoveTask,
   body,
@@ -300,6 +305,7 @@ function RRSideShell({
   isCovered?: boolean;
   fitChip?: PrerenderedPlacementFit | null;
   coverageTasks: NightSlotTask[];
+  coveredBy?: import("@/lib/shiftbuilder/coverageHelpers").CoveredByEntry[];
   slotKey: string;
   onRemoveTask?: (
     slotKey: string,
@@ -312,6 +318,8 @@ function RRSideShell({
   pairHalf?: boolean;
 }) {
   const coveragePresentation = pairHalf ? "rail" : undefined;
+  const incomingRails = pairHalf ? coveredBy : [];
+  const showCoverageFooter = incomingRails.length > 0 || coverageTasks.length > 0;
   return (
     <div
       className={`${pairHalf ? "sb-ipad-rr-half" : "assignment-card sb-assignment-card sb-refined-card"} relative overflow-hidden flex flex-col flex-1 ${pairHalf ? "" : "rounded-2xl"} h-full min-h-0 ${isEmpty ? "empty sb-card-empty" : ""}`}
@@ -341,11 +349,18 @@ function RRSideShell({
         )}
       </div>
 
-      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden px-3 pt-1 ${coverageTasks.length > 0 ? 'sb-card-content-with-footer' : ''}`}>
+      <div className={`flex flex-col flex-1 min-h-0 overflow-hidden px-3 pt-1 ${showCoverageFooter ? 'sb-card-content-with-footer' : ''}`}>
         {body}
       </div>
-      {coverageTasks.length > 0 && (
+      {showCoverageFooter ? (
         <div className={`sb-coverage-footer shrink-0 ${pairHalf ? "sb-coverage-footer--rails" : showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
+          {incomingRails.map((entry) => (
+            <CoveragePaperRail
+              key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
+              label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
+              accent={getSlotAccentColor(entry.sourceKey)}
+            />
+          ))}
           {coverageTasks.map((t) => (
             <CoverageBar
               key={t.id}
@@ -357,7 +372,7 @@ function RRSideShell({
             />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -478,6 +493,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isCovered={wIsCovered}
         fitChip={fitChipW}
         coverageTasks={wCoverageTasks}
+        coveredBy={wCoveredBy}
         slotKey={wKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
         pairHalf={ipadDesk}
@@ -489,6 +505,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             tasks={wRegular}
             draftInfo={draftInfoW}
             coveredBy={wCoveredBy}
+            pairHalf={ipadDesk}
             fitChip={fitChipW}
             placementTrail={placementTrailW}
             cardVector={cardVectorW}
@@ -507,6 +524,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
         isCovered={mIsCovered}
         fitChip={fitChipM}
         coverageTasks={mCoverageTasks}
+        coveredBy={mCoveredBy}
         slotKey={mKey}
         onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
         pairHalf={ipadDesk}
@@ -518,6 +536,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             tasks={mRegular}
             draftInfo={draftInfoM}
             coveredBy={mCoveredBy}
+            pairHalf={ipadDesk}
             fitChip={fitChipM}
             placementTrail={placementTrailM}
             cardVector={cardVectorM}
