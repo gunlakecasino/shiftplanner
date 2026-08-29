@@ -623,7 +623,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.279"');
+    expect(version).toContain('"1.280"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -756,18 +756,32 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
   });
 });
 
-describe("iPad landscape restroom desk", () => {
-  it("keeps restroom names at zone size and yields chips inside the card", () => {
-    expect(globalsCss).toContain("iPad landscape desk — restroom names stay zone-size; chips yield first.");
-    expect(globalsCss).toContain("container-name: sb-rr-card");
-    expect(globalsCss).toContain(".sb-quiet-cover-note__label");
-    expect(globalsCss).toMatch(
-      /\.sb-rr-grid \.sb-tm-primary-name,[\s\S]*?font-size: 17px !important/,
+describe("iPad desk — 13-inch Pro night board", () => {
+  it("is a distinct pair-card variant with coverage rails, not a chip-yield squash", () => {
+    expect(globalsCss).toContain("iPad desk — 13-inch Pro night board");
+    expect(globalsCss).toContain("sb-ipad-rr-pair");
+    expect(globalsCss).toContain("sb-ipad-rr-half");
+    expect(globalsCss).toContain(".sb-coverage-rail");
+    expect(globalsCss).toContain("sb-coverage-footer--rails");
+    expect(globalsCss).toContain(
+      ".sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail",
     );
-    expect(globalsCss).toContain("@container sb-rr-card (max-height: 136px)");
-    expect(globalsCss).toContain("@container sb-rr-card (max-height: 108px)");
+    expect(globalsCss).toMatch(
+      /\.assignment-card \.sb-coverage-rail[\s\S]{0,180}width: 100% !important/,
+    );
+    expect(globalsCss).toContain("--sb-ipad-name: 21px");
+    expect(globalsCss).toContain("(pointer: coarse) and (min-width: 768px) and (max-width: 1420px)");
+    expect(globalsCss).toContain(
+      "(orientation: portrait) and (min-width: 768px) and (max-width: 1100px)",
+    );
+    expect(globalsCss).toContain("grid-auto-rows: minmax(228px, auto) !important");
+    expect(rrCard).toContain("sb-rr-pair");
+    expect(rrCard).toContain("pairHalf={ipadDesk}");
+    expect(rrCard).toContain("useIpadDesk");
+    expect(shiftBuilderClient).toContain("useIpadDesk");
+    expect(shiftBuilderClient).toContain("sb-ipad-desk");
     expect(globalsCss).not.toMatch(
-      /\.print-artboard[\s\S]{0,200}sb-quiet-cover-note/,
+      /\.print-artboard[\s\S]{0,200}sb-ipad-rr-pair/,
     );
   });
 });
@@ -916,10 +930,10 @@ describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
     expect(cheatsheet).toContain("previousFocusRef");
   });
 
-  it("improves the PIN side toward a cool desk and bumps 1.279", () => {
+  it("improves the PIN side toward a cool desk and bumps 1.280", () => {
     expect(authGateCss).toContain("sb-auth-visual__desk");
     expect(authGateCss).toContain("#F4F6FA");
     expect(authGateCss).toContain("object-fit: contain");
-    expect(version).toContain('"1.279"');
+    expect(version).toContain('"1.280"');
   });
 });

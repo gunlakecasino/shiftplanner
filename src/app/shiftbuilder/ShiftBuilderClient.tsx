@@ -338,6 +338,7 @@ import {
   isTabletTouchDevice,
   type StageInsets,
 } from "./hooks/useZoom";
+import { useIpadDesk } from "@/lib/shiftbuilder/useIpadDesk";
 
 
 
@@ -1191,6 +1192,7 @@ function AuthedShiftBuilder() {
     (currentView === "deployment" || currentView === "breaks") && !isPrintPreview;
   const isBuilderDeployment = currentView === "deployment" && !isPrintPreview;
   const relaxedFrameClass = isBuilderLiveCanvas ? "sb-relaxed-frame" : "";
+  const ipadDesk = useIpadDesk(isBuilderLiveCanvas);
 
   // Called-off TMs should never be picked by the engine or proposed by Grok
   // for the current night.
@@ -8056,7 +8058,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
   return (
     <div
-      className={`sb-builder-shell sb-sheetbuilder-redesign flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder${isPrintPreview ? "" : " sb-canvas-builder"}`}
+      className={`sb-builder-shell sb-sheetbuilder-redesign flex flex-col text-[var(--ios-label)] dark:text-[var(--ios-label)] overflow-hidden relative sb-shiftbuilder${isPrintPreview ? "" : " sb-canvas-builder"}${ipadDesk ? " sb-ipad-desk" : ""}`}
       {...(!boardColdLoading ? { "data-sb-route-ready": "" } : {})}
       style={{
         "--stage-accent": selectedDay?.color ?? "var(--sb-gold)",

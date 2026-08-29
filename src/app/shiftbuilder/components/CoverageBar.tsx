@@ -6,6 +6,7 @@ import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import {
   COVERAGE_BAR_FONT_SIZE,
   COVERAGE_BAR_H,
+  coverageBarBg,
   isGoldAccent,
 } from "@/lib/shiftbuilder/constants";
 import {
@@ -23,6 +24,7 @@ const CoverageBar = React.memo(function CoverageBar({
   slotKey,
   onRemoveTask,
   builderCalm = false,
+  presentation,
 }: {
   task: NightSlotTask;
   slotKey: string;
@@ -33,12 +35,45 @@ const CoverageBar = React.memo(function CoverageBar({
   ) => void;
   /** Softer saturation in live builder — print/preview stays full strength. */
   builderCalm?: boolean;
+  /** iPad night desk uses a full-width color rail, not a chip. */
+  presentation?: "chip" | "rail";
 }) {
   const [hovered, setHovered] = React.useState(false);
   const accent = task.color || "#6B7280";
   const goldBanner = isGoldAccent(accent);
   const chipTone = coverageChipTone(accent);
-  const label = builderCalm ? formatCanvasCoverageChip(task.taskLabel) : task.taskLabel;
+  const useRail = presentation === "rail";
+  const label = builderCalm || useRail ? formatCanvasCoverageChip(task.taskLabel) : task.taskLabel;
+
+  if (useRail) {
+    const railBg = goldBanner ? "var(--sb-gold-surface)" : coverageBarBg(accent);
+    const railInk = goldBanner ? "var(--sb-gold-ink)" : "#ffffff";
+    return (
+      <div
+        className={`sb-coverage-bar sb-coverage-rail ${goldBanner ? "sb-coverage-bar--gold-accent" : ""}`}
+        style={{ background: railBg, color: railInk }}
+        title={task.taskLabel}
+      >
+        <span className="sb-coverage-rail__label sb-coverage-bar-label font-semibold leading-none truncate">
+          {label}
+        </span>
+        {onRemoveTask && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemoveTask(slotKey, task.taskLabel, task.id);
+            }}
+            className="sb-interactive sb-coverage-rail__remove sb-tablet-touch-target leading-none font-bold flex-shrink-0"
+            title="Remove coverage"
+            aria-label={`Remove coverage: ${task.taskLabel}`}
+          >
+            <X size={14} strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if (builderCalm) {
     return (

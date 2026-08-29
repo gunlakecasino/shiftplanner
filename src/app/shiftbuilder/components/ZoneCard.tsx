@@ -23,6 +23,7 @@ import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { CardTaskZone } from "./CardTaskZone";
 import { ShiftCard as PackageShiftCard } from "../redesign/components/ShiftCard";
+import { useIpadDesk } from "@/lib/shiftbuilder/useIpadDesk";
 
 export interface ZoneCardProps {
   def: any;
@@ -184,6 +185,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
   };
   const color = getZoneColor(def.key);
+  const ipadDesk = useIpadDesk();
   const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     def.key, "zone", slotTm, isLocked,
   );
@@ -274,14 +276,15 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     name: entry.tmName,
   }));
   const packageCoverageFooter = zoneCoverageTasks.length > 0 ? (
-    <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
+    <div className={`sb-coverage-footer shrink-0 ${ipadDesk ? "sb-coverage-footer--rails" : showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
       {zoneCoverageTasks.map((task) => (
         <CoverageBar
           key={task.id}
           task={task}
           slotKey={def.key}
           onRemoveTask={packageTaskInteractionsEnabled ? onRemoveTask : undefined}
-          builderCalm={showDigitalAssists}
+          builderCalm={showDigitalAssists && !ipadDesk}
+          presentation={ipadDesk ? "rail" : undefined}
         />
       ))}
     </div>

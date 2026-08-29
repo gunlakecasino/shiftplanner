@@ -1573,7 +1573,7 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             >
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
-                <span className="sb-section-live-meta">2 rows</span>
+                <span className="sb-section-live-meta" aria-hidden="true">2 rows</span>
                 <div className="divider" />
                 <span
                   className={sectionCountClass(

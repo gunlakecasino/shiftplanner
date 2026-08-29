@@ -36,6 +36,8 @@ describe("iPad Pro responsive layout contract", () => {
     );
     expect(globalsCss).toContain("height: min(54dvh, 640px)");
     expect(globalsCss).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
+    expect(globalsCss).toContain("iPad desk — 13-inch Pro night board");
+    expect(globalsCss).toContain("sb-ipad-rr-pair");
     expect(globalsCss).not.toContain("--sb-portrait-fit");
     expect(shiftBuilderClient).not.toContain("const DESIGN_W = 1180");
   });
