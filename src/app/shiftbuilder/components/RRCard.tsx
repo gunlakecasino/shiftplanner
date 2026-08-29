@@ -403,7 +403,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const color = getRRAccent(def.num);
   const wLabel = formatCanvasRrSideLabel(def.num, "womens");
   const mLabel = formatCanvasRrSideLabel(def.num, "mens");
-  const ipadDesk = useIpadDesk();
+  const ipadDesk = useIpadDesk(); // reader — does not write html.sb-ipad-desk
 
   const wDraftName =
     isDraftMode && draftInfoW?.proposedTmName && !draftInfoW.proposedClear

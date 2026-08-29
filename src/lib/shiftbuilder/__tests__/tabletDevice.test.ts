@@ -60,6 +60,15 @@ describe("tabletDevice interaction helpers", () => {
     expect(isIpadDeskDevice()).toBe(false);
   });
 
+  it("boot script matches the 13-inch coarse MQ and never cookies", async () => {
+    const { IPAD_DESK_BOOT_SCRIPT, IPAD_DESK_MQ, IPAD_DESK_CLASS } = await import("../tabletDevice");
+    expect(IPAD_DESK_MQ).toBe("(pointer: coarse) and (min-width: 768px) and (max-width: 1420px)");
+    expect(IPAD_DESK_BOOT_SCRIPT).toContain(IPAD_DESK_MQ);
+    expect(IPAD_DESK_BOOT_SCRIPT).toContain(IPAD_DESK_CLASS);
+    expect(IPAD_DESK_BOOT_SCRIPT).not.toContain("cookie");
+    expect(IPAD_DESK_BOOT_SCRIPT).not.toContain("localStorage");
+  });
+
   it("desktop fine pointer is not coarse", async () => {
     stubMatchMedia({
       "(pointer: coarse)": false,
