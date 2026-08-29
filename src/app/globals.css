@@ -8426,6 +8426,44 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair,
   overflow: hidden;
 }
 
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair > .assignment-card,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair > .assignment-card {
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair > .assignment-card + .assignment-card,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair > .assignment-card + .assignment-card {
+  border-top: 1px solid #eef1f6 !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair > .assignment-card .sb-card-accent-stripe,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-pair > .assignment-card .sb-card-accent-stripe {
+  display: none;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-coverage-footer--chips,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-coverage-footer--chips {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap !important;
+  gap: 0;
+  padding: 0 !important;
+}
+
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-bar--chip,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-chip,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-bar--chip,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .assignment-card .sb-coverage-chip {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 0 !important;
+  min-height: 28px !important;
+  padding: 7px 10px 7px 14px !important;
+}
+
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half,
 .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-ipad-rr-half {
   min-height: 108px;

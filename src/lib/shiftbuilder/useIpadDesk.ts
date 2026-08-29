@@ -57,5 +57,6 @@ export function useIpadDesk(enabled = true): boolean {
     };
   }, [enabled]);
 
-  return enabled && on;
+  const forced = typeof document !== "undefined" && ipadDeskForced();
+  return enabled && (forced || on);
 }
