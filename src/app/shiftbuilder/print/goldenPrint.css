@@ -3,6 +3,24 @@
  * Sacred 1056×816 artboard contract; breaks flex column pins overlaps at bottom.
  */
 
+/* Dated /print/golden route — Chrome --print-to-pdf letter landscape (792×612 pt). */
+html[data-sb-print-route="1"] {
+  background: #ffffff;
+}
+
+html[data-sb-print-route="1"],
+html[data-sb-print-route="1"] body {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  background: #ffffff;
+}
+
+@page {
+  size: letter landscape;
+  margin: 0.15in;
+}
+
 body.printing-dual-mode .print-dual-container {
   display: block;
   width: 1056px;

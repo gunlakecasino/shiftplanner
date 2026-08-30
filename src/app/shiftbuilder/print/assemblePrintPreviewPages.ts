@@ -14,6 +14,7 @@ import { assembleGoldenPrintPages, type GoldenPrintPage } from "./assemblePages"
 import type { DraftAssignmentRow } from "../components/placementFitForSlot";
 
 import { renderPortraitPlannerHtmlPages } from "./renderPortraitPlannerHtml";
+import { shouldApplyLiveCanvasOverlay } from "./goldenPrintRoute";
 
 export type PrintPreviewCaptured = Map<
   number,
@@ -28,6 +29,8 @@ export async function capturePrintPreviewPages(args: {
   config: PrintConfig;
   /** Unsaved builder state for nights being printed (keyed by dayIndex). */
   liveOverlaysByDay?: LiveBoardOverlaysByDay;
+  /** When true, skip live-canvas overlay (Dyno / dated print URL). */
+  hydrateFromNightCoreOnly?: boolean;
   /** Optional draft overlay for the active night print. */
   draftAssignments?: Record<string, DraftAssignmentRow>;
   isDraftMode?: boolean;
@@ -38,6 +41,7 @@ export async function capturePrintPreviewPages(args: {
     activeDays,
     config,
     liveOverlaysByDay,
+    hydrateFromNightCoreOnly,
     draftAssignments,
     isDraftMode,
     onProgress,
@@ -62,7 +66,11 @@ export async function capturePrintPreviewPages(args: {
     let snapshot = await buildPrintDaySnapshot(def, dayIdx, {
       includePlacementTrails: printVariant === "planning" || Boolean(dayConf.printPlanner),
     });
-    const liveOverlay = liveOverlaysByDay?.get(dayIdx);
+    const liveOverlay = shouldApplyLiveCanvasOverlay({
+      hydrateFromNightCoreOnly,
+    })
+      ? liveOverlaysByDay?.get(dayIdx)
+      : undefined;
     if (liveOverlay) {
       snapshot = applyLiveBoardToPrintSnapshot(snapshot, liveOverlay);
     }

@@ -11,6 +11,14 @@ import type { GoldenPrintPage } from "./assemblePages";
 
 export type GoldenPrintSessionMode = "print" | "export";
 
+export type GoldenPrintSessionOptions = {
+  /**
+   * print mode target. PCC uses an isolated iframe; the dated /print/golden
+   * route mounts on the document so Chrome --print-to-pdf sees Golden pages.
+   */
+  target?: "iframe" | "document";
+};
+
 export type GoldenPrintSession = {
   container: HTMLDivElement;
   pages: GoldenPrintPage[];
@@ -608,15 +616,73 @@ function mountGoldenExportDomSession(
 }
 
 /**
+ * Mount Golden pages on the document for Chrome --print-to-pdf.
+ * Same print-mode CSS (@page letter landscape) as the iframe path,
+ * but the artboards stay in the top-level document.
+ */
+function mountGoldenDocumentPrintSession(
+  pages: GoldenPrintPage[],
+  config: PrintConfig,
+): GoldenPrintSession {
+  ensureGoldenPrintBundleStyles();
+
+  const container = document.createElement("div");
+  container.className = "print-dual-container";
+  container.setAttribute("data-sb-golden-print", "1");
+  container.innerHTML = buildWrappedPagesHtml(pages);
+  document.body.appendChild(container);
+
+  prepareMountedArtboards(container, pages);
+
+  const styleEl = injectSessionStyles(config, "print");
+
+  document.documentElement.classList.add("printing-dual-mode");
+  document.body.classList.add("printing-dual-mode");
+  document.documentElement.style.backgroundColor = "#ffffff";
+  document.body.style.backgroundColor = "#ffffff";
+
+  const hiddenBodyChildren: { el: HTMLElement; prevDisplay: string }[] = [];
+  Array.from(document.body.children).forEach((child) => {
+    const el = child as HTMLElement;
+    if (el !== container && el.tagName !== "SCRIPT" && el.tagName !== "STYLE") {
+      hiddenBodyChildren.push({ el, prevDisplay: el.style.display });
+      el.style.display = "none";
+    }
+  });
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    hiddenBodyChildren.forEach(({ el, prevDisplay }) => {
+      el.style.display = prevDisplay;
+    });
+    document.documentElement.classList.remove("printing-dual-mode");
+    document.body.classList.remove("printing-dual-mode");
+    document.documentElement.style.removeProperty("background-color");
+    document.body.style.removeProperty("background-color");
+    container.remove();
+    styleEl.remove();
+  };
+
+  return { container, pages, cleanup, printFrame: null };
+}
+
+/**
  * Mount a Golden print session.
- * Print uses an isolated iframe; export rasterizes from the live DOM.
+ * Print uses an isolated iframe (PCC) or the document (headless Chrome);
+ * export rasterizes from the live DOM.
  */
 export async function mountGoldenPrintSession(
   pages: GoldenPrintPage[],
   config: PrintConfig,
   mode: GoldenPrintSessionMode,
+  options?: GoldenPrintSessionOptions,
 ): Promise<GoldenPrintSession> {
   if (mode === "print") {
+    if (options?.target === "document") {
+      return mountGoldenDocumentPrintSession(pages, config);
+    }
     return mountGoldenBrowserPrintSession(pages, config);
   }
   return mountGoldenExportDomSession(pages, config);

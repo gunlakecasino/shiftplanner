@@ -17,6 +17,8 @@ export async function generatePrintPreviewGoldenPages(args: {
   coverHTML: string | null;
   overviewHTML: string | null;
   liveOverlaysByDay?: LiveBoardOverlaysByDay;
+  /** When true, ignore live-canvas overlays and hydrate from night-core only. */
+  hydrateFromNightCoreOnly?: boolean;
   draftAssignments?: Record<string, DraftAssignmentRow>;
   isDraftMode?: boolean;
   onProgress?: (label: string) => void;
@@ -26,6 +28,7 @@ export async function generatePrintPreviewGoldenPages(args: {
     activeDays: args.activeDays,
     config: args.config,
     liveOverlaysByDay: args.liveOverlaysByDay,
+    hydrateFromNightCoreOnly: args.hydrateFromNightCoreOnly,
     draftAssignments: args.draftAssignments,
     isDraftMode: args.isDraftMode,
     onProgress: args.onProgress,

@@ -138,6 +138,13 @@ describe("guardAuthenticatedRoute", () => {
     );
   });
 
+  it("allows every surface on the dated Golden print URL", () => {
+    expect(guardAuthenticatedRoute("/sheetbuilder/print/golden", "reports")).toBeNull();
+    expect(guardAuthenticatedRoute("/shiftbuilder/print/golden", "team")).toBeNull();
+    expect(guardAuthenticatedRoute("/sheetbuilder/print/golden", "admin")).toBeNull();
+    expect(guardAuthenticatedRoute("/shiftbuilder/print/golden", "sudo")).toBeNull();
+  });
+
   it("allows sudo operators everywhere under shiftbuilder", () => {
     expect(guardAuthenticatedRoute("/shiftbuilder", "sudo")).toBeNull();
     expect(guardAuthenticatedRoute("/shiftbuilder/reports", "sudo")).toBeNull();
