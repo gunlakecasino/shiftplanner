@@ -156,6 +156,7 @@ describe("Golden print URL — auth, cache, Docker, no second renderer", () => {
     expect(routePage).toContain("unauthorized");
     expect(middleware).toContain(OPS_SESSION_COOKIE);
     expect(middleware).toContain('"/sheetbuilder/print/golden"');
+    expect(middleware).toContain("sessionLooksSigned");
     expect(layout).toContain("isGoldenPrintPathname");
     expect(layout).toContain("return <>{children}</>");
     expect(unauthorized).not.toContain("PinGate");
@@ -165,6 +166,7 @@ describe("Golden print URL — auth, cache, Docker, no second renderer", () => {
     expect(routeClient).not.toContain("searchParams.get(\"pin\")");
     expect(routeClient).not.toContain("headers");
     expect(sheetbuilderPage).toContain("shiftbuilder/print/golden/page");
+    expect(sheetbuilderPage).toContain('export const dynamic = "force-dynamic"');
   });
 
   it("stays on CF Bypass / private no-store HTML and aliases /shiftbuilder", () => {
