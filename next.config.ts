@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
 
   experimental: {
     optimizePackageImports: ['framer-motion'],
+    // unauthorized() for /print/golden when oms_ops_session is missing/invalid
+    authInterrupts: true,
   },
 
   // Enable standalone output for smaller Docker images

@@ -79,8 +79,8 @@ export async function hydrateNightForPrint(
 
   try {
     const [core, secondary] = await Promise.all([
-      fetchNightCoreData(day),
-      fetchNightSecondaryData(day),
+      fetchNightCoreData(day, { printOnly: true }),
+      fetchNightSecondaryData(day, { printOnly: true }),
     ]);
 
     if (queryClient) {

@@ -111,6 +111,15 @@ self.addEventListener("fetch", (event) => {
   // Other /_next/ paths (image optimizer, data, RSC) → let the network handle them.
   if (url.pathname.startsWith("/_next/")) return;
 
+  // Dated Golden print is a session HTML document — never cache it.
+  if (
+    url.pathname === "/sheetbuilder/print/golden" ||
+    url.pathname === "/shiftbuilder/print/golden"
+  ) {
+    event.respondWith(fetch(request, { cache: "no-store" }));
+    return;
+  }
+
   // HTML navigations → network-first so a live deploy always wins.
   if (request.mode === "navigate") {
     event.respondWith(networkFirstNavigation(request));

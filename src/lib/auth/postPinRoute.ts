@@ -53,13 +53,20 @@ function isTeamPath(pathname: string): boolean {
   return pathname.startsWith(TEAM_PREFIX);
 }
 
+function isGoldenPrintPath(pathname: string): boolean {
+  return (
+    pathname === "/sheetbuilder/print/golden" ||
+    pathname === "/shiftbuilder/print/golden"
+  );
+}
+
 /** Returns a redirect target when the operator cannot access `pathname`, else null. */
 export function guardAuthenticatedRoute(
   pathname: string,
   surface: OpsSurface,
 ): string | null {
   if (isProjectsPath(pathname)) return homeRouteForSurface(surface);
-  if (isTeamPath(pathname)) return null;
+  if (isTeamPath(pathname) || isGoldenPrintPath(pathname)) return null;
 
   if (surface === "team") {
     if (isSettingsPath(pathname) || isReportsPath(pathname) || isGravesSchedulePath(pathname)) {

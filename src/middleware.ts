@@ -46,6 +46,27 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/sheetbuilder", request.url));
   }
 
+  const isGoldenPrintPath =
+    url.pathname === "/sheetbuilder/print/golden" ||
+    url.pathname === "/shiftbuilder/print/golden";
+  if (isGoldenPrintPath) {
+    const sessionCookie = request.cookies.get("oms_ops_session")?.value ?? "";
+    const sessionParts = sessionCookie.split(".");
+    const sessionLooksSigned =
+      sessionParts.length === 2 &&
+      sessionParts[0]!.length > 8 &&
+      sessionParts[1]!.length > 8;
+    if (!sessionLooksSigned) {
+      return new NextResponse("Sign in required.", {
+        status: 401,
+        headers: {
+          "Cache-Control": "private, no-store",
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      });
+    }
+  }
+
   if (process.env.NODE_ENV === "production") {
     const devOnly =
       url.pathname.startsWith("/shiftbuilder/dev") ||
@@ -129,9 +150,15 @@ export function middleware(request: NextRequest) {
       pathname.startsWith("/sheetbuilder") ||
       pathname === "/"
     ) {
+      // Dated Golden print stays on the same CF Bypass / no-store HTML policy.
+      const printGolden =
+        pathname === "/sheetbuilder/print/golden" ||
+        pathname === "/shiftbuilder/print/golden";
       response.headers.set(
         "Cache-Control",
-        "private, no-cache, no-store, must-revalidate"
+        printGolden
+          ? "private, no-store"
+          : "private, no-cache, no-store, must-revalidate"
       );
       response.headers.set("Pragma", "no-cache");
       response.headers.set("Expires", "0");
@@ -143,9 +170,14 @@ export function middleware(request: NextRequest) {
       pathname.startsWith("/sheetbuilder") ||
       pathname === "/"
     ) {
+      const printGolden =
+        pathname === "/sheetbuilder/print/golden" ||
+        pathname === "/shiftbuilder/print/golden";
       response.headers.set(
         "Cache-Control",
-        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+        printGolden
+          ? "private, no-store"
+          : "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
       );
       response.headers.set("Pragma", "no-cache");
       response.headers.set("Expires", "0");
