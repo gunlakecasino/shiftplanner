@@ -202,22 +202,37 @@ export function reseatTmKeepSeatCoverage<T extends SeatScopedAssignment>(
  * Outgoing covering banners that belong on this seat.
  * Empty seats that are themselves covered must not also show "Covering …"
  * pointed at the incoming source (Men's 6 + Covering Restroom 7).
- * Coverage-only stubs with no incoming coverer still show their banners.
+ * Coverage-only stubs (`ownedCoverageSlots`) still show their banners.
+ * Leftover isCoverage tasks that are not seat-owned stay hidden on empty cards.
  */
 export function visibleOutgoingCoverageTasks<T extends { taskLabel: string; isCoverage?: boolean }>(
   tasks: T[],
   seatKey: string,
   coveredBy: Array<{ sourceKey?: string }> = [],
   seatEmpty = false,
+  ownedCoverageSlots?: string[],
 ): T[] {
-  const outgoing = tasks.filter((task) => task.isCoverage);
-  if (!seatEmpty || coveredBy.length === 0) return outgoing;
+  let outgoing = tasks.filter((task) => task.isCoverage);
+  if (!seatEmpty) return outgoing;
+
+  const labelToKey = buildCoverageLabelIndex();
+
+  if (ownedCoverageSlots) {
+    if (ownedCoverageSlots.length === 0) return [];
+    outgoing = outgoing.filter((task) => {
+      const target = parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey, seatKey);
+      if (!target) return false;
+      return ownedCoverageSlots.some((owned) => sameCoverageSeat(owned, target));
+    });
+  }
+
+  if (coveredBy.length === 0) return outgoing;
   const incoming = coveredBy
     .map((entry) => entry.sourceKey)
     .filter((key): key is string => !!key?.trim());
   if (!incoming.length) return outgoing;
   return outgoing.filter((task) => {
-    const target = parseCoverageTargetFromTaskLabel(task.taskLabel, new Map(), seatKey);
+    const target = parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey, seatKey);
     if (!target) return true;
     return !incoming.some((source) => sameCoverageSeat(source, target));
   });
@@ -240,6 +255,46 @@ export function clearTmKeepSeatCoverage<T extends SeatScopedAssignment>(
     delete next[seatKey];
   }
   return next;
+}
+
+/** Seat that currently holds this TM identity — never inferred from coverage. */
+export function findSeatKeyOfTm(
+  assignments: Record<string, SeatScopedAssignment | undefined | null>,
+  tmId: string | null | undefined,
+): string | null {
+  const id = String(tmId ?? "").trim();
+  if (!id) return null;
+  for (const [key, row] of Object.entries(assignments)) {
+    if (row?.tmId && String(row.tmId) === id) return key;
+  }
+  return null;
+}
+
+/**
+ * Place a TM on `toKey` without copying coverage.
+ * If that TM already occupies another seat, reseat (swap/move). Otherwise
+ * write TM identity onto the target and keep the target's banners.
+ */
+export function assignOrReseatTmKeepSeatCoverage<T extends SeatScopedAssignment>(
+  assignments: Record<string, T>,
+  toKey: string,
+  tmId: string,
+  tmName: string,
+): Record<string, T> {
+  if (!toKey || !tmId) return assignments;
+  const fromKey = findSeatKeyOfTm(assignments, tmId);
+  if (fromKey && fromKey !== toKey) {
+    return reseatTmKeepSeatCoverage(assignments, fromKey, toKey);
+  }
+  const coverage = coverageSlotsOf(assignments[toKey]);
+  return {
+    ...assignments,
+    [toKey]: {
+      ...(tmIdentityOf({ ...(assignments[toKey] ?? {}), tmId, tmName }) ?? { tmId, tmName }),
+      slotKey: toKey,
+      additionalCoverageSlots: coverage,
+    } as T,
+  };
 }
 
 /** Register every label that may appear in an "And …" coverage task. */
