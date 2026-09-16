@@ -10,6 +10,7 @@ import {
   parseCoverageTargetFromTaskLabel,
   persistSlotForCoverageSource,
   reseatTmKeepSeatCoverage,
+  clearTmKeepSeatCoverage,
 } from "./coverageHelpers";
 import { uiToDb } from "./slot-keys";
 
@@ -229,6 +230,22 @@ describe("coverage banners stay on the seat when TMs swap", () => {
       additionalCoverageSlots: [],
     });
     expect(coverageSlotsOf(after.Z3)).toEqual([]);
+  });
+
+  it("unassign leaves a coverage-only stub on the seat", () => {
+    const before = {
+      MRR6: {
+        tmId: "ada",
+        tmName: "Ada",
+        additionalCoverageSlots: ["Z6"],
+      },
+    };
+    const after = clearTmKeepSeatCoverage(before, "MRR6");
+    expect(after.MRR6).toEqual({
+      slotKey: "MRR6",
+      additionalCoverageSlots: ["Z6"],
+    });
+    expect(after.MRR6?.tmId).toBeUndefined();
   });
 });
 

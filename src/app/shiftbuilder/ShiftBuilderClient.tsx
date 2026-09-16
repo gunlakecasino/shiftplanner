@@ -8012,31 +8012,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         dateKey,
       );
 
-      // Optimistic week store for immediate table refresh
+      // Optimistic week store — reseat TMs only; coverage stays on each seat.
       const store = liveAssignmentsStore.getState();
-      const currentNightAss = { ...(store.assignmentsByNight[dateKey] || {}) };
-      if (swapPartner?.tmId) {
-        currentNightAss[fromSlot] = {
-          tmId: swapPartner.tmId,
-          tmName: swapPartner.tmName ?? swapPartner.tmId,
-        } as any;
-      } else {
-        delete currentNightAss[fromSlot];
-      }
-      currentNightAss[toSlot] = { tmId: fromTmId, tmName: fromName } as any;
+      const currentNightAss = reseatTmKeepSeatCoverage(
+        { ...(store.assignmentsByNight[dateKey] || {}) },
+        fromSlot,
+        toSlot,
+      );
       store.setAssignmentsForNight(dateKey, currentNightAss);
 
       if (isCurrentNight) {
-        const main = { ...(useShiftBuilderStore.getState().assignments ?? {}) };
-        if (swapPartner?.tmId) {
-          main[fromSlot] = {
-            tmId: swapPartner.tmId,
-            tmName: swapPartner.tmName ?? swapPartner.tmId,
-          };
-        } else {
-          delete main[fromSlot];
-        }
-        main[toSlot] = { tmId: fromTmId, tmName: fromName };
+        const main = reseatTmKeepSeatCoverage(
+          { ...(useShiftBuilderStore.getState().assignments ?? {}) },
+          fromSlot,
+          toSlot,
+        );
         useShiftBuilderStore.getState().setAssignments(main);
         setAssignments(main);
         setLiveAssignVersion((v) => v + 1);
@@ -9402,7 +9392,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
          persist failures fire. pointer-events-none on the outer so it never
          intercepts clicks meant for the canvas; individual toasts re-enable
          pointer events for their dismiss button. */}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm">
+      <div className="sb-desk-toasts fixed right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm">
         {toasts.map((t) => (
           <div
             key={t.id}

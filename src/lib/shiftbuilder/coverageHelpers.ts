@@ -193,6 +193,25 @@ export function reseatTmKeepSeatCoverage<T extends SeatScopedAssignment>(
   return next;
 }
 
+/** Clear the TM on a seat and leave a coverage-only stub when banners remain. */
+export function clearTmKeepSeatCoverage<T extends SeatScopedAssignment>(
+  assignments: Record<string, T>,
+  seatKey: string,
+): Record<string, T> {
+  if (!seatKey) return assignments;
+  const coverage = coverageSlotsOf(assignments[seatKey]);
+  const next: Record<string, T> = { ...assignments };
+  if (coverage.length) {
+    next[seatKey] = {
+      slotKey: seatKey,
+      additionalCoverageSlots: coverage,
+    } as T;
+  } else {
+    delete next[seatKey];
+  }
+  return next;
+}
+
 /** Register every label that may appear in an "And …" coverage task. */
 export function buildCoverageLabelIndex(auxDefs: AuxDef[] = []): Map<string, string> {
   const map = new Map<string, string>();

@@ -167,8 +167,8 @@ export function mapNightTasksToUiKeys(
   // Project canonical operational coverage into the task shape already consumed
   // by the live cards, covered-by index, print preview, and exported PDF.
   for (const [sourceKey, assignment] of Object.entries(assignments)) {
-    if (!assignment?.tmId && !assignment?.tmName?.trim()) continue;
-
+    // Coverage is seat-owned. Empty stubs still project their banners so a
+    // swap/unassign cannot make additional_coverage_slots look TM-keyed.
     for (const targetKey of coverageTargets(assignment)) {
       const canonical = canonicalCoverageTargetKey(targetKey, currentAuxDefs);
       if (sameCoverageSeat(sourceKey, canonical, currentAuxDefs)) continue;

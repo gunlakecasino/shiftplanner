@@ -180,6 +180,16 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
     expect(coveredBy.WRR7).toBeUndefined();
   });
 
+  it("projects coverage from an empty seat stub so banners stay seat-owned", () => {
+    const assignments = {
+      MRR6: { additionalCoverageSlots: ["Z6"] },
+    };
+    const mapped = mapNightTasksToUiKeys([], [], assignments);
+    expect(mapped.MRR6).toMatchObject([
+      { taskLabel: "And Zone 6", isCoverage: true },
+    ]);
+  });
+
   it("keeps zone-to-zone coverage projection unchanged", () => {
     const assignments = {
       Z3: { tmId: "kathy", tmName: "Kathy", additionalCoverageSlots: ["Z4"] },

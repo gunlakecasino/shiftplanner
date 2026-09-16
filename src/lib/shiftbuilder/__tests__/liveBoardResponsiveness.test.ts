@@ -327,6 +327,13 @@ describe("P0 unstocky — poll reconcile + stable placement keys", () => {
     expect(assignmentPlacementEqual(current.Z2, incoming.Z2)).toBe(false);
   });
 
+  it("treats seat coverage as part of placement identity", () => {
+    const sameTm = { tmId: "tm-1", tmName: "Ada", additionalCoverageSlots: ["Z2"] };
+    const movedCoverage = { tmId: "tm-1", tmName: "Ada", additionalCoverageSlots: ["Z4"] };
+    expect(assignmentPlacementEqual(sameTm, { ...sameTm })).toBe(true);
+    expect(assignmentPlacementEqual(sameTm, movedCoverage)).toBe(false);
+  });
+
   it("uses the same identity key for assigned and draft of the same TM", () => {
     expect(placementIdentityKey({ kind: "assigned", tmId: "tm-1", tmName: "Ada" })).toBe("tm:tm-1");
     expect(
@@ -338,5 +345,16 @@ describe("P0 unstocky — poll reconcile + stable placement keys", () => {
     expect(useShiftData).toContain("reconcileBoardAssignments");
     expect(useShiftData).toContain("pulseBoardPollHairline");
     expect(useShiftData).toContain("Same-day poll / refetch");
+  });
+
+  it("preserves additional_coverage_slots on persist swap/unassign", () => {
+    const opsMutations = readFileSync(
+      resolve(process.cwd(), "src/lib/shiftbuilder/opsMutations.server.ts"),
+      "utf8",
+    );
+    expect(opsMutations).toContain("additional_coverage_slots: preservedCoverage");
+    expect(opsMutations).toContain("additional_coverage_slots: coverageByKey.get(k) ?? []");
+    expect(opsMutations).toContain("keptCoverageRowId");
+    expect(shiftBuilderClient).toContain("reseatTmKeepSeatCoverage(");
   });
 });

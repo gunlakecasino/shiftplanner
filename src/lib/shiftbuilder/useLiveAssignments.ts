@@ -62,6 +62,7 @@ import {
   resolveEffectiveBreakGroup,
   slotDefaultBreakMapFromRecord,
 } from "@/lib/shiftbuilder/breakGroupResolve";
+import { clearTmKeepSeatCoverage } from "@/lib/shiftbuilder/coverageHelpers";
 
 // ============================================================================
 // Types
@@ -195,7 +196,8 @@ export function useLiveAssignments(selectedDay: DayDef) {
           if (!old) return old;
           const nextAssignments = { ...(old.assignments || {}) };
           if (patch.tmId === null || patch.tmId === undefined) {
-            delete nextAssignments[params.uiKey];
+            const cleared = clearTmKeepSeatCoverage(nextAssignments, params.uiKey);
+            return { ...old, assignments: cleared };
           } else {
             nextAssignments[params.uiKey] = {
               ...nextAssignments[params.uiKey],
@@ -210,7 +212,10 @@ export function useLiveAssignments(selectedDay: DayDef) {
 
         // Zustand mirror (liveAssignmentsStore for cross-client / listeners)
         if (patch.tmId === null) {
-          liveAssignmentsStore.getState().removeAssignment(dateKey, params.uiKey);
+          liveAssignmentsStore.getState().setAssignmentsForNight(
+            dateKey,
+            clearTmKeepSeatCoverage({ ...previousStoreState }, params.uiKey),
+          );
         } else {
           liveAssignmentsStore.getState().patchAssignment(dateKey, params.uiKey, patch as any);
         }
@@ -221,13 +226,9 @@ export function useLiveAssignments(selectedDay: DayDef) {
         try {
           const mainStore = useShiftBuilderStore.getState();
           if (patch.tmId === null || patch.tmId === undefined) {
-            mainStore.setAssignments((prev: any) => {
-              const copy = { ...prev };
-              // When deleting, we intentionally drop the whole entry (including breakGroup).
-              // A future re-assign will get a fresh break group.
-              delete copy[params.uiKey];
-              return copy;
-            });
+            mainStore.setAssignments((prev: any) =>
+              clearTmKeepSeatCoverage(prev, params.uiKey),
+            );
           } else {
             mainStore.setAssignments((prev: any) => ({
               ...prev,
