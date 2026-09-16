@@ -35,7 +35,7 @@ const LEGACY_REMAP_ORDER: Array<{ legacyKey: string; role: AuxRole; nth: number 
 ];
 
 const DB_AUX_SLOT_RE =
-  /^(admin|z9_sr|trash_\d+|support_\d+|oasis_\d+|job_coach|step_up|aux_\d+)$/;
+  /^(admin|z9_sr|trash_\d+|support_\d+|oasis_\d+|job_coach(?:_\d+)?|step_up|aux_\d+)$/;
 
 function nextAuxKey(existing: AuxDef[]): string {
   let n = existing.length + 1;
@@ -54,7 +54,7 @@ function blankSlot(key: string): AuxDef {
 function roleFromDbSlotKey(slotKey: string): AuxRole | null {
   if (slotKey === "admin") return "admin";
   if (slotKey === "z9_sr") return "z9sr";
-  if (slotKey === "job_coach") return "job_coach";
+  if (slotKey === "job_coach" || /^job_coach_\d+$/.test(slotKey)) return "job_coach";
   if (slotKey === "step_up") return "step_up";
   if (/^trash_\d+$/.test(slotKey)) return "trash";
   if (/^support_\d+$/.test(slotKey)) return "support";
@@ -192,7 +192,11 @@ export function roleNthFromAssignmentKey(
   if (k === "ADM" || k === "ADMIN" || k === "admin") return { role: "admin", nth: 0 };
   if (k === "Z9SR" || k === "z9_sr") return { role: "z9sr", nth: 0 };
   if (k === "STEP" || k === "step_up" || k === "STEPUP") return { role: "step_up", nth: 0 };
+  // Legacy singleton `job_coach` / `JC` is the first Job Coach seat.
+  // Numbered seats (job_coach_2 / JC2, …) are independent — same family as oasis_N.
   if (k === "JC" || k === "job_coach") return { role: "job_coach", nth: 0 };
+  let jc = k.match(/^(?:JC|job_coach_)(\d+)$/i);
+  if (jc) return { role: "job_coach", nth: Math.max(0, parseInt(jc[1], 10) - 1) };
 
   let m = k.match(/^(?:SP|SUP|support_)(\d+)$/i);
   if (m) return { role: "support", nth: Math.max(0, parseInt(m[1], 10) - 1) };
@@ -429,7 +433,10 @@ export function trailKeyFromDbSlotAndLayout(
           return "STEP";
         }
         if (shell.role === "job_coach" || inferAuxRoleFromLabel(shell.label || "") === "job_coach") {
-          return "JC";
+          const nth = rawDefs
+            .filter((x) => x.role === "job_coach")
+            .findIndex((x) => x.key === shell.key);
+          return nth > 0 ? `JC${nth + 1}` : "JC";
         }
         if (shell.role && shell.role !== "blank") {
           const nth = NUMBERED_AUX_ROLES.has(shell.role)
@@ -457,7 +464,8 @@ export function trailKeyFromDbSlotAndLayout(
           return "STEP";
         }
         if (d.role === "job_coach" || inferAuxRoleFromLabel(d.label) === "job_coach") {
-          return "JC";
+          const nth = defs.filter((x) => x.role === "job_coach").findIndex((x) => x.key === d.key);
+          return nth > 0 ? `JC${nth + 1}` : "JC";
         }
         const nth = NUMBERED_AUX_ROLES.has(d.role)
           ? defs.filter((x) => x.role === d.role).findIndex((x) => x.key === d.key)
@@ -477,6 +485,11 @@ export function trailKeyFromDbSlotAndLayout(
   void rrSide;
   if (slotKey === "step_up") return "STEP";
   if (slotKey === "job_coach") return "JC";
+  const jobCoachN = slotKey.match(/^job_coach_(\d+)$/);
+  if (jobCoachN) {
+    const n = parseInt(jobCoachN[1], 10);
+    return n <= 1 ? "JC" : `JC${n}`;
+  }
   if (slotKey === "admin") return "ADMIN";
   if (slotKey === "z9_sr") return "Z9SR";
   const zone = slotKey.match(/^zone_(\d+)$/);
@@ -508,8 +521,17 @@ export function auxUiKeyToDb(uiKey: string, auxDefs: AuxDef[]): DbSlot | null {
       return { slot_key: "admin", slot_type: "aux", rr_side: null };
     case "z9sr":
       return { slot_key: "z9_sr", slot_type: "aux", rr_side: null };
-    case "job_coach":
-      return { slot_key: "job_coach", slot_type: "aux", rr_side: null };
+    case "job_coach": {
+      // First seat keeps the legacy singleton key so existing nights still load.
+      // Additional Job Coach cards get job_coach_2, job_coach_3, … — independent seats.
+      const n =
+        auxDefs.filter((d) => d.role === "job_coach").findIndex((d) => d.key === uiKey) + 1;
+      return {
+        slot_key: n <= 1 ? "job_coach" : `job_coach_${n}`,
+        slot_type: "aux",
+        rr_side: null,
+      };
+    }
     case "step_up":
       return { slot_key: "step_up", slot_type: "aux", rr_side: null };
     case "trash":

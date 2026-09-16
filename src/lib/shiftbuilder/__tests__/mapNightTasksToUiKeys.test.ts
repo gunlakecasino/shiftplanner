@@ -59,6 +59,26 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
     expect(mapped.STEP).toBeUndefined();
   });
 
+  it("maps two Job Coach DB keys onto two AUX shells", () => {
+    const twoJc: AuxDef[] = [
+      { key: "AUX1", role: "admin", label: "ADMIN", locations: [] },
+      { key: "AUX2", role: "z9sr", label: "Z9 SR", locations: [] },
+      { key: "AUX3", role: "job_coach", label: "JOB COACH", locations: [] },
+      { key: "AUX4", role: "job_coach", label: "JOB COACH", locations: [] },
+    ];
+    const mapped = mapNightTasksToUiKeys(
+      [
+        task({ slotKey: "job_coach", taskLabel: "Coach A" }),
+        task({ slotKey: "job_coach_2", taskLabel: "Coach B" }),
+      ],
+      twoJc,
+    );
+    expect(mapped.AUX3?.map((t) => t.taskLabel)).toEqual(["Coach A"]);
+    expect(mapped.AUX4?.map((t) => t.taskLabel)).toEqual(["Coach B"]);
+    expect(mapped.JC).toBeUndefined();
+    expect(mapped.JC2).toBeUndefined();
+  });
+
   it("maps zone tasks without requiring auxDefs", () => {
     const mapped = mapNightTasksToUiKeys(
       [task({ slotKey: "zone_3", slotType: "zone", taskLabel: "Zone task" })],
@@ -158,6 +178,16 @@ describe("mapNightTasksToUiKeys (flex AUX print parity)", () => {
       { tmName: "Gary", sourceKey: "MRR6", isSynthetic: true },
     ]);
     expect(coveredBy.WRR7).toBeUndefined();
+  });
+
+  it("projects coverage from an empty seat stub so banners stay seat-owned", () => {
+    const assignments = {
+      MRR6: { additionalCoverageSlots: ["Z6"] },
+    };
+    const mapped = mapNightTasksToUiKeys([], [], assignments);
+    expect(mapped.MRR6).toMatchObject([
+      { taskLabel: "And Zone 6", isCoverage: true },
+    ]);
   });
 
   it("keeps zone-to-zone coverage projection unchanged", () => {

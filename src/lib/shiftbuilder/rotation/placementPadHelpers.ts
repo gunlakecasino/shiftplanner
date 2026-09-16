@@ -283,7 +283,17 @@ export function formatCardPlacementTrailLabel(
   // Canonical aux identity (DB → UI history keys + legacy + short codes + collapsed labels).
   if (resolved === "Z9SR" || resolved === "z9_sr") return "Z9SR";
   if (resolved === "ADM" || resolved === "ADMIN" || resolved === "admin") return "ADMIN";
-  if (resolved === "JC" || resolved === "job_coach" || resolved === "JOBCOACH") return "JC";
+  if (
+    resolved === "JC" ||
+    resolved === "job_coach" ||
+    resolved === "JOBCOACH" ||
+    /^JC\d+$/i.test(resolved) ||
+    /^job_coach_\d+$/i.test(resolved)
+  ) {
+    const numbered = resolved.match(/^(?:JC|job_coach_)(\d+)$/i);
+    if (numbered && parseInt(numbered[1], 10) > 1) return `JC${numbered[1]}`;
+    return "JC";
+  }
   if (
     resolved === "STEP" ||
     resolved === "step_up" ||
@@ -369,7 +379,12 @@ export function trailLabelMatchesSlotKey(trailLabel: string, slotKey: string): b
   if (oasis && placementRepeatKeysMatch(`OAS${oasis[1]}`, slotKey)) return true;
 
   // Single-instance aux
-  if (/^JC$/i.test(trailLabel) && /^(JC|job_coach)$/i.test(slotKey)) return true;
+  if (
+    /^(JC\d*)$/i.test(trailLabel) &&
+    /^(JC\d*|job_coach(?:_\d+)?)$/i.test(slotKey)
+  ) {
+    return true;
+  }
   if (/^STEP$/i.test(trailLabel) && /^(STEP|step_up)$/i.test(slotKey)) return true;
 
   return false;

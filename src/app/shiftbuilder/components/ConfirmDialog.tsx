@@ -4,6 +4,13 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
+import {
+  DESK_CONTROL_DANGER,
+  DESK_CONTROL_GHOST,
+  DESK_CONTROL_PRIMARY,
+  DESK_DIALOG,
+  DESK_OVERLAY,
+} from "./deskChrome";
 
 export type ConfirmToneOptions = {
   title?: string;
@@ -109,12 +116,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       {children}
       {state && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-[10060] flex items-center justify-center p-4 transition-opacity duration-150"
+          className={`fixed inset-0 z-[10060] flex items-center justify-center p-4 ${DESK_OVERLAY}`}
           style={{
-            background: "rgba(0,0,0,0.4)",
-            backdropFilter: "blur(2px)",
-            WebkitBackdropFilter: "blur(2px)",
             opacity: closing ? 0 : 1,
+            transition: "opacity 150ms var(--sb-spring-snappy, ease)",
           }}
           onMouseDown={() => settle(false)}
           role="presentation"
@@ -127,13 +132,9 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             aria-labelledby="sb-confirm-title"
             onMouseDown={(e) => e.stopPropagation()}
             className={cn(
-              "w-full max-w-[380px] rounded-2xl border border-black/10 bg-white p-6 shadow-[0_12px_48px_-12px_rgba(0,0,0,0.3),0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] outline-none",
+              `${DESK_DIALOG} max-w-[380px] p-6 outline-none`,
               closing ? "sb-modal-exit" : "sb-modal-enter",
             )}
-            style={{
-              // Velvet / board-card cohesion for critical optimizer commit actions
-              background: "#fff",
-            }}
           >
             {state.title ? (
               <>
@@ -172,7 +173,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 ref={cancelRef}
                 type="button"
                 onClick={() => settle(false)}
-                className="sb-interactive flex-1 rounded-2xl border border-neutral-200 py-2.5 text-[13px] font-semibold text-neutral-700 transition-transform transition-opacity hover:bg-neutral-50 active:scale-[0.985]"
+                className={`sb-interactive sb-desk-control--block ${DESK_CONTROL_GHOST}`}
               >
                 {state.cancelLabel ?? "Cancel"}
               </button>
@@ -180,10 +181,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 type="button"
                 onClick={() => settle(true)}
                 className={cn(
-                  "sb-interactive flex-1 rounded-2xl py-2.5 text-[13px] font-extrabold text-white transition-transform transition-opacity active:scale-[0.985]",
-                  state.tone === "danger"
-                    ? "bg-[#FF3B30] hover:bg-[#E0342A]"
-                    : "bg-[#007AFF] hover:bg-[#0063CC] shadow-[0_1px_0_rgba(255,255,255,0.3)_inset,0_4px_14px_-6px_rgba(0,122,255,0.6)]",
+                  "sb-interactive sb-desk-control--block",
+                  state.tone === "danger" ? DESK_CONTROL_DANGER : DESK_CONTROL_PRIMARY,
                 )}
               >
                 {state.confirmLabel ?? "Apply to Live"}

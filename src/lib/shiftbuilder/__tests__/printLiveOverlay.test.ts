@@ -54,6 +54,29 @@ describe("applyLiveBoardToPrintSnapshot", () => {
     });
   });
 
+  it("keeps persisted seat coverage when live overlay only patches the TM", () => {
+    const snapshot = snapshotWithGage();
+    snapshot.assignments.Z1 = {
+      tmId: "tm_a",
+      tmName: "Ada",
+      additionalCoverageSlots: ["Z2"],
+    };
+
+    const result = applyLiveBoardToPrintSnapshot(snapshot, {
+      assignments: {
+        Z1: { tmId: "tm_b", tmName: "Bea" },
+      },
+      auxDefs: [],
+      tasksBySlot: {},
+    });
+
+    expect(result.assignments.Z1).toMatchObject({
+      tmId: "tm_b",
+      tmName: "Bea",
+      additionalCoverageSlots: ["Z2"],
+    });
+  });
+
   it("repairs dash names in the overlap print model when a TM is assigned", () => {
     const snapshot = snapshotWithGage();
     snapshot.assignments["OL-PM-2"] = {

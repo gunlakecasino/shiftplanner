@@ -875,14 +875,16 @@ body {
 
 .builder-workspace {
   /* Assignment card design tokens — builder only (print/preview unchanged). */
-  --sb-card-radius: 10px;
+  --sb-card-radius: 20px;
+  --sb-control-radius: 8px;
+  --sb-chip-radius: 6px;
   --sb-name-size-zone: 22px;
   --sb-name-size-rr: 18px;
   --sb-name-size-aux: 18px;
   --sb-task-size: 9px;
   --sb-invite-min-h-zone: 44px;
   --sb-invite-min-h-rr: 32px;
-  --sb-invite-min-h-aux: 28px;
+  --sb-invite-min-h-aux: 44px;
   --sb-grid-gap: clamp(6px, 0.9vw, 14px);
 
   width: 100%;
@@ -2696,13 +2698,19 @@ body.sb-roster-open .sb-stage-host {
   100% { transform: scale(1); }
 }
 .assignment-card.sb-dnd-settle,
-.sb-assignment-card.sb-dnd-settle {
+.sb-assignment-card.sb-dnd-settle,
+.assignment-card.sb-card-assign-pulse,
+.sb-assignment-card.sb-card-assign-pulse {
   animation: sb-dnd-settle-kf var(--sb-motion-move) var(--sb-spring-snappy) both;
 }
 .assignment-card.sb-dnd-settle .sb-card-accent-stripe,
 .assignment-card.sb-dnd-settle > :first-child,
 .sb-assignment-card.sb-dnd-settle .sb-card-accent-stripe,
-.sb-assignment-card.sb-dnd-settle > :first-child {
+.sb-assignment-card.sb-dnd-settle > :first-child,
+.assignment-card.sb-card-assign-pulse .sb-card-accent-stripe,
+.assignment-card.sb-card-assign-pulse > :first-child,
+.sb-assignment-card.sb-card-assign-pulse .sb-card-accent-stripe,
+.sb-assignment-card.sb-card-assign-pulse > :first-child {
   filter: brightness(1.11);
   transition: filter 120ms var(--sb-spring-snappy);
 }
@@ -2726,13 +2734,19 @@ body.sb-roster-open .sb-stage-host {
 
 @media (prefers-reduced-motion: reduce) {
   .assignment-card.sb-dnd-settle,
-  .sb-assignment-card.sb-dnd-settle {
+  .sb-assignment-card.sb-dnd-settle,
+  .assignment-card.sb-card-assign-pulse,
+  .sb-assignment-card.sb-card-assign-pulse {
     animation: none;
   }
   .assignment-card.sb-dnd-settle .sb-card-accent-stripe,
   .assignment-card.sb-dnd-settle > :first-child,
   .sb-assignment-card.sb-dnd-settle .sb-card-accent-stripe,
-  .sb-assignment-card.sb-dnd-settle > :first-child {
+  .sb-assignment-card.sb-dnd-settle > :first-child,
+  .assignment-card.sb-card-assign-pulse .sb-card-accent-stripe,
+  .assignment-card.sb-card-assign-pulse > :first-child,
+  .sb-assignment-card.sb-card-assign-pulse .sb-card-accent-stripe,
+  .sb-assignment-card.sb-card-assign-pulse > :first-child {
     filter: none;
     transition: none;
   }
@@ -4592,13 +4606,13 @@ button,
 
 /* SheetBuilder roster drawer — same pale workspace language as the auxiliary rail. */
 .sb-roster-shell.sb-sheetbuilder-roster-shell {
-  --sb-roster-accent: #635bff;
+  --sb-roster-accent: #007AFF;
   bottom: 12px !important;
   height: auto !important;
   max-height: none !important;
-  border: 1px solid #dfe3ea !important;
+  border: 1px solid #E6EAF0 !important;
   border-radius: 16px !important;
-  background: linear-gradient(180deg, #f7f7fb 0%, #f2f3f8 100%) !important;
+  background: #F4F6FA !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
     0 18px 48px -30px rgba(15, 23, 42, 0.72),
@@ -4624,8 +4638,8 @@ button,
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: linear-gradient(145deg, #7357ff 0%, #4338ca 100%);
-  box-shadow: 0 6px 14px -9px rgba(67, 56, 202, 0.9);
+  background: #EEF1F6;
+  box-shadow: none;
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-header__kicker {
@@ -4675,7 +4689,7 @@ button,
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-stat--pct {
-  color: #4f46e5;
+  color: #334155;
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-progress {
@@ -4684,7 +4698,7 @@ button,
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-progress__fill {
-  background: linear-gradient(90deg, #16c784 0%, #635bff 100%);
+  background: #007AFF;
   box-shadow: none;
 }
 
@@ -4702,8 +4716,8 @@ button,
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-search:focus {
-  border-color: color-mix(in srgb, #635bff 42%, #dfe3ea);
-  box-shadow: 0 0 0 3px color-mix(in srgb, #635bff 12%, transparent);
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-segment {
@@ -4719,11 +4733,11 @@ button,
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-segment__btn--active {
-  color: #4338ca;
+  color: #0F172A;
   background: #ffffff;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.06),
-    0 0 0 1px rgba(99, 91, 255, 0.12);
+    0 0 0 1px #E6EAF0;
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-body {
@@ -4757,7 +4771,7 @@ button,
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-section__label--placed {
-  color: #4338ca;
+  color: #15803d;
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-section__count {
@@ -4783,8 +4797,9 @@ button,
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-row:not(.sb-roster-row--placed):not(.sb-roster-row--dragging):hover {
-  border-color: color-mix(in srgb, #635bff 28%, #dfe3ea) !important;
-  box-shadow: 0 6px 16px -13px rgba(67, 56, 202, 0.58);
+  border-color: var(--sb-card-line, #E6EAF0) !important;
+  background: #F8FAFC;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .sb-roster-shell.sb-sheetbuilder-roster-shell .sb-roster-row--scheduled {
@@ -5581,6 +5596,10 @@ button,
 
 .sb-night-action-pill--split {
   overflow: hidden;
+}
+
+.sb-night-action-pill--apply {
+  flex: 0 0 auto;
 }
 
 .sb-night-action-pill:disabled,
@@ -6592,8 +6611,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   }
 
   .sb-sheetbuilder-topbar button,
-  .sb-sheetbuilder-topbar a[role="menuitem"],
-  .sb-help-fab {
+  .sb-sheetbuilder-topbar a[role="menuitem"] {
     min-width: 44px !important;
     min-height: 44px !important;
     touch-action: manipulation;
@@ -7035,6 +7053,9 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   --sb-desk: #F4F6FA;
   --sb-card-paper: #F7F8FB;
   --sb-card-line: #E6EAF0;
+  --sb-card-radius: 20px;
+  --sb-control-radius: 8px;
+  --sb-chip-radius: 6px;
   --ios-background-primary: #F4F6FA;
 }
 
@@ -7762,25 +7783,6 @@ body.sb-tablet-dock-open .sb-canvas-veil--active {
   opacity: 0.78;
 }
 
-.sb-help-fab {
-  top: calc(env(safe-area-inset-top, 0px) + 11px);
-  width: 32px;
-  height: 32px;
-  border: 1px solid #E6EAF0;
-  background: #FFFFFF;
-  color: #64748B;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.sb-help-fab:hover {
-  transform: none;
-  background: #F4F6FA;
-  box-shadow: none;
-}
 
 #ops-status-bar {
   font-size: 8px !important;
@@ -8551,7 +8553,8 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage 
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid h3,
 .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid .sb-tm-primary-name,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name {
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-aux-grid .sb-tm-primary-name {
   font-size: 21px !important;
   font-weight: 800 !important;
   line-height: 1.18 !important;
@@ -8617,5 +8620,151 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-zone-grid,
   .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-rr-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ==========================================================================
+   Desk cohesion — one product language (paper, not glass).
+   Shared controls / overlays / seat states. Golden print untouched.
+   ========================================================================== */
+
+.sb-desk-overlay {
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.sb-desk-dialog {
+  width: 100%;
+  max-width: 28rem;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 40px -24px rgba(15, 23, 42, 0.28), 0 1px 2px rgba(15, 23, 42, 0.06);
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+}
+
+.sb-desk-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--sb-control-radius, 8px);
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-family: var(--font-ui, var(--font-inter-tight), system-ui);
+  color: #334155;
+  background: transparent;
+  transition:
+    background var(--sb-motion-instant) var(--sb-spring-snappy),
+    color var(--sb-motion-instant) var(--sb-spring-snappy),
+    opacity var(--sb-motion-instant) var(--sb-spring-snappy),
+    transform var(--sb-motion-instant) var(--sb-spring-snappy),
+    border-color var(--sb-motion-instant) var(--sb-spring-snappy);
+}
+
+.sb-desk-control:hover:not(:disabled) {
+  background: #F4F6FA;
+}
+
+.sb-desk-control:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.sb-desk-control:focus-visible {
+  outline: 2px solid #94A3B8;
+  outline-offset: 2px;
+}
+
+.sb-desk-control:disabled {
+  opacity: 0.45;
+}
+
+.sb-desk-control--ghost {
+  border-color: #E6EAF0;
+  background: #ffffff;
+}
+
+.sb-desk-control--primary {
+  color: #ffffff;
+  background: #007AFF;
+  border-color: #007AFF;
+}
+
+.sb-desk-control--primary:hover:not(:disabled) {
+  background: #0066D6;
+}
+
+.sb-desk-control--danger {
+  color: #ffffff;
+  background: #FF3B30;
+  border-color: #FF3B30;
+}
+
+.sb-desk-control--danger:hover:not(:disabled) {
+  background: #E0342A;
+}
+
+.sb-desk-control--block {
+  flex: 1 1 0;
+  min-height: 40px;
+}
+
+.assignment-card.sb-card-selected,
+.sb-assignment-card.sb-card-selected {
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.16);
+}
+
+.assignment-card.sb-card-peer-dimmed,
+.sb-assignment-card.sb-card-peer-dimmed,
+.sb-rr-pair.sb-card-peer-dimmed {
+  opacity: 0.42;
+  transition: opacity var(--sb-motion-quick) var(--sb-spring-gentle);
+}
+
+/* Collision map: footer owns the bottom strip (Capture left).
+   Draft pill docks center, raised above the footer.
+   Desk toasts + Sonner stay bottom-right on the same raised band.
+   They must not share the pill's center x. */
+.sb-draft-pill {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.25rem);
+  background: #ffffff;
+  border: 1px solid var(--sb-gold-border);
+  box-shadow: 0 8px 24px -16px rgba(15, 23, 42, 0.28);
+}
+
+.sb-desk-toasts {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.25rem);
+}
+
+.sb-draft-pill-btn {
+  transition:
+    background var(--sb-motion-instant) var(--sb-spring-snappy),
+    opacity var(--sb-motion-instant) var(--sb-spring-snappy),
+    transform var(--sb-motion-instant) var(--sb-spring-snappy);
+}
+
+.sb-draft-pill-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.sb-draft-pill-btn:focus-visible {
+  outline: 2px solid #94A3B8;
+  outline-offset: 2px;
+}
+
+.sb-loading-card {
+  border-radius: var(--sb-card-radius, 20px);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-desk-control,
+  .sb-draft-pill-btn,
+  .assignment-card.sb-card-peer-dimmed,
+  .sb-assignment-card.sb-card-peer-dimmed {
+    transition-duration: 0ms;
   }
 }

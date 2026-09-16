@@ -5,24 +5,22 @@ import React from "react";
 import Link from "next/link";
 import { GraveCoverGuideTutorial } from "./GraveCoverGuideTutorial";
 import { useTheme } from "../hooks/useTheme";
-import "./shiftBuilderHelpButton.css";
 
+export const SB_OPEN_HELP_EVENT = "sb-open-help";
+
+/** Tutorial host only — Help lives in FloatingNav More, not a topbar FAB. */
 export default function ShiftBuilderHelpButton() {
   const { isDark } = useTheme();
   const [tutorialOpen, setTutorialOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    const open = () => setTutorialOpen(true);
+    window.addEventListener(SB_OPEN_HELP_EVENT, open);
+    return () => window.removeEventListener(SB_OPEN_HELP_EVENT, open);
+  }, []);
+
   return (
     <>
-      <button
-        type="button"
-        className="sb-help-fab no-print"
-        aria-label="Open SheetBuilder help"
-        title="Help — interactive tutorial & floor guide"
-        onClick={() => setTutorialOpen(true)}
-      >
-        ?
-      </button>
-
       <GraveCoverGuideTutorial
         open={tutorialOpen}
         isDark={isDark}
@@ -30,7 +28,6 @@ export default function ShiftBuilderHelpButton() {
         onFinish={() => setTutorialOpen(false)}
       />
 
-      {/* Screen-reader path to full help page (non-visual) */}
       <Link href="/sheetbuilder/help" className="sr-only">
         SheetBuilder help and floor guide
       </Link>

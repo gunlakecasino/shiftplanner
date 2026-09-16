@@ -8,6 +8,8 @@ export interface BuilderPinnedFooterProps {
   pageLabel: string;
   isDark?: boolean;
   onOpenSettings?: () => void;
+  /** Quiet bottom-left entry — not a toast-corner FAB. */
+  onCaptureDesk?: () => void;
 }
 
 /**
@@ -19,6 +21,7 @@ export function BuilderPinnedFooter({
   pageLabel,
   isDark = false,
   onOpenSettings,
+  onCaptureDesk,
 }: BuilderPinnedFooterProps) {
   const versionLongPressRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,6 +50,17 @@ export function BuilderPinnedFooter({
       }}
     >
       <div className="sb-builder-pinned-footer__brand min-w-0 truncate">
+        {onCaptureDesk ? (
+          <button
+            type="button"
+            className="mr-2 align-baseline font-semibold tracking-[0.02em] opacity-70 hover:opacity-100"
+            style={{ color: isDark ? "#E5E5E7" : "#6B7280" }}
+            onClick={onCaptureDesk}
+            aria-label="Capture desk"
+          >
+            Capture
+          </button>
+        ) : null}
         <span className="font-bold tracking-[1px]" style={{ color: isDark ? "#E5E5E7" : "#1C1C1E" }}>
           SBS
         </span>

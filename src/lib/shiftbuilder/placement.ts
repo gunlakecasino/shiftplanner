@@ -76,7 +76,8 @@ import {
  * Aux card roles.
  * - admin / z9sr: always-present core shells
  * - trash / support / oasis: numbered 1–2 (TSH / SUP / OAS)
- * - job_coach / step_up: single-instance (JC / STEP)
+ * - job_coach: independent seats (first persists as job_coach, extras job_coach_2+)
+ * - step_up: single-instance (STEP)
  */
 export type AuxRole =
   | "blank"

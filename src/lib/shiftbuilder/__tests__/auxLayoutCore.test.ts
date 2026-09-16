@@ -97,6 +97,56 @@ describe("applyAuxRole + auxUiKeyToDb (Oasis / Trash / Support / JC / STEP)", ()
     expect(auxUiKeyToDb("AUX8", defs)?.slot_key).toBe("step_up");
   });
 
+  it("maps two Job Coach shells to independent DB seats (no shared job_coach slot)", () => {
+    let defs = defaultAuxDefsForNewNight();
+    defs = [
+      ...defs,
+      { key: "AUX7", role: "blank" as const, label: "", locations: [] },
+      { key: "AUX8", role: "blank" as const, label: "", locations: [] },
+    ];
+    defs = applyAuxRole(defs, "AUX7", "job_coach");
+    defs = applyAuxRole(defs, "AUX8", "job_coach");
+
+    expect(defs.find((d) => d.key === "AUX7")?.label).toBe("JOB COACH");
+    expect(defs.find((d) => d.key === "AUX8")?.label).toBe("JOB COACH");
+
+    expect(auxUiKeyToDb("AUX7", defs)?.slot_key).toBe("job_coach");
+    expect(auxUiKeyToDb("AUX8", defs)?.slot_key).toBe("job_coach_2");
+    expect(uiToDb("AUX7", defs).slot_key).toBe("job_coach");
+    expect(uiToDb("AUX8", defs).slot_key).toBe("job_coach_2");
+    expect(uiToDb("AUX7", defs).slot_key).not.toBe(uiToDb("AUX8", defs).slot_key);
+
+    expect(roleNthFromAssignmentKey("JC")).toEqual({ role: "job_coach", nth: 0 });
+    expect(roleNthFromAssignmentKey("job_coach")).toEqual({ role: "job_coach", nth: 0 });
+    expect(roleNthFromAssignmentKey("job_coach_2")).toEqual({ role: "job_coach", nth: 1 });
+    expect(roleNthFromAssignmentKey("JC2")).toEqual({ role: "job_coach", nth: 1 });
+
+    expect(dbToUi("job_coach", "aux", null)).toBe("JC");
+    expect(dbToUi("job_coach_2", "aux", null)).toBe("JC2");
+
+    const remapped = remapAssignmentsToAuxKeys(
+      {
+        JC: { tmId: "tm_a", tmName: "Ada" },
+        JC2: { tmId: "tm_b", tmName: "Bo" },
+      },
+      defs,
+    );
+    expect(remapped.AUX7?.tmId).toBe("tm_a");
+    expect(remapped.AUX8?.tmId).toBe("tm_b");
+    expect(remapped.JC).toBeUndefined();
+    expect(remapped.JC2).toBeUndefined();
+
+    const remappedDb = remapAssignmentsToAuxKeys(
+      {
+        job_coach: { tmId: "tm_a", tmName: "Ada" },
+        job_coach_2: { tmId: "tm_b", tmName: "Bo" },
+      },
+      defs,
+    );
+    expect(remappedDb.AUX7?.tmId).toBe("tm_a");
+    expect(remappedDb.AUX8?.tmId).toBe("tm_b");
+  });
+
   it("round-trips new aux DB keys through uiToDb / dbToUi", () => {
     expect(dbToUi("oasis_1", "aux", null)).toBe("OAS1");
     expect(dbToUi("oasis_2", "aux", null)).toBe("OAS2");

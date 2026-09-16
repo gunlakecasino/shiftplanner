@@ -87,6 +87,67 @@ export interface AuxCardProps {
   cardVector?: import("@/lib/shiftbuilder/cardVectors").CardVector | null;
 }
 
+function shallowObjectEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  const aRec = a as Record<string, unknown>;
+  const bRec = b as Record<string, unknown>;
+  const aKeys = Object.keys(aRec);
+  const bKeys = Object.keys(bRec);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (!Object.is(aRec[key], bRec[key])) return false;
+  }
+  return true;
+}
+
+function shallowArrayEqual<T>(
+  a: T[] | undefined,
+  b: T[] | undefined,
+  itemEqual: (x: T, y: T) => boolean,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return a === b;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!itemEqual(a[i], b[i])) return false;
+  }
+  return true;
+}
+
+function auxCardPropsAreEqual(prev: Readonly<AuxCardProps>, next: Readonly<AuxCardProps>): boolean {
+  if (prev.def !== next.def) return false;
+
+  const slotKey = next.def.key;
+  if (!shallowObjectEqual(prev.assignments?.[slotKey], next.assignments?.[slotKey])) return false;
+  if (!shallowArrayEqual(prev.selectedTasks[slotKey], next.selectedTasks[slotKey], Object.is)) return false;
+  if (!shallowObjectEqual(prev.draftInfo, next.draftInfo)) return false;
+  if (!shallowObjectEqual(prev.fitChip, next.fitChip)) return false;
+  if (!shallowArrayEqual(prev.placementTrail, next.placementTrail, Object.is)) return false;
+  if (!shallowArrayEqual(prev.coveredBy, next.coveredBy, shallowObjectEqual)) return false;
+
+  const nextTmId = (next.assignments?.[slotKey] as { tmId?: string } | undefined)?.tmId;
+  const prevHasConflict = nextTmId ? (prev.conflictingTms?.has(nextTmId) ?? false) : false;
+  const nextHasConflict = nextTmId ? (next.conflictingTms?.has(nextTmId) ?? false) : false;
+  if (prevHasConflict !== nextHasConflict) return false;
+  if (!shallowArrayEqual(
+    nextTmId ? prev.tmConflictSlots?.[nextTmId] : undefined,
+    nextTmId ? next.tmConflictSlots?.[nextTmId] : undefined,
+    Object.is,
+  )) return false;
+
+  const narrowedKeys = new Set([
+    "def", "assignments", "selectedTasks", "draftInfo", "fitChip",
+    "placementTrail", "coveredBy", "conflictingTms", "tmConflictSlots",
+  ]);
+  const allKeys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    if (narrowedKeys.has(key)) continue;
+    if (!Object.is((prev as any)[key], (next as any)[key])) return false;
+  }
+  return true;
+}
+
 const AuxCard: React.FC<AuxCardProps> = React.memo(({
   def,
   assignments,
@@ -412,7 +473,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
       {...(!isLocked && !(isUnsetBlank && !hasTM) ? attributes : {})}
       data-slot-key={def.key}
       data-aux-role={role}
-      className={`assignment-card sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 rounded-2xl ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${(isUnsetBlank && !hasTM) ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`assignment-card sb-desk-seat sb-assignment-card sb-refined-card relative overflow-hidden flex flex-col h-full min-h-0 ${isOver ? "drop-target-active" : ""} ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty && isConfigured ? "empty sb-card-empty" : ""} ${(isUnsetBlank && !hasTM) ? "sb-aux-blank" : ""} ${isDimmed ? "sb-weekly-dim" : ""} ${isFocused ? "sb-weekly-highlight" : ""} ${isTodayKiosk && isConfigured ? "sb-today-kiosk-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{
         ["--card-accent" as string]: color,
         ...(borderColor && { border: `2px solid ${borderColor}`, boxShadow: `0 0 0 1px ${borderColor}33` }),
@@ -498,22 +559,17 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         >
           <SlotAssignmentBody
             state={assignmentState}
-            scale="aux"
+            scale="zone"
             showDigitalAssists={showDigitalAssists}
             isDuplicate={isDuplicate}
             otherSlotsForTm={otherSlotsForTm}
-            inviteSize="aux"
+            inviteSize="zone"
             criticalRepeat={isCriticalRepeatFit(fitChip)}
             placementTrail={placementTrail}
             placementTrailMatchSlotKey={def.key}
             onSwapCoverageSides={
               showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
                 ? () => onSwapCoverageSides(def.key, coveredBy)
-                : undefined
-            }
-            nameSizeOverride={
-              hasTM
-                ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)
                 : undefined
             }
             onUnassignedClick={(e) => handleAssignZoneClick(e, def.key, onCardClick, isLocked)}
@@ -534,7 +590,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 onOpenTasksPad={onOpenTaskTextEdit}
                 isLocked={isLocked}
                 enabled={showDigitalAssists}
-                className={`sb-card-task-zone mt-auto min-h-[28px] flex-1 overflow-visible ${!hasTM ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}
+                className="sb-card-task-zone mt-auto min-h-[28px] flex-1 overflow-visible"
               >
                 <ZoneTaskList
                   tasks={regularTasks}
@@ -545,13 +601,12 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   onSetTaskMarker={onSetTaskMarker}
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  dense
-                  textSize="text-[11px]"
+                  textSize="text-[10px]"
                   isPrintPreview={false}
                 />
               </CardTaskZone>
             ) : (
-              <div className={`sb-card-task-zone mt-auto min-h-0 flex-1 overflow-visible ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
+              <div className="sb-card-task-zone mt-auto min-h-0 flex-1 overflow-visible">
                 <ZoneTaskList
                   tasks={regularTasks}
                   hasTM={hasTM}
@@ -561,15 +616,14 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   onSetTaskMarker={onSetTaskMarker}
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  dense
-                  textSize="text-[11px]"
+                  textSize="text-[10px]"
                   isPrintPreview={!showDigitalAssists}
                 />
-              </div>
-            )}
+          </div>
+        )}
       </div>
     </div>
   );
-});
+}, auxCardPropsAreEqual);
 
 export default AuxCard;

@@ -3,11 +3,15 @@ import {
   buildCoverageLabelIndex,
   buildCoveredByIndex,
   canonicalCoverageTargetKey,
+  coverageSlotsOf,
   dedupeCoveredByEntries,
   expandCoverageToKeys,
   getSlotCoverageLabel,
   parseCoverageTargetFromTaskLabel,
   persistSlotForCoverageSource,
+  reseatTmKeepSeatCoverage,
+  clearTmKeepSeatCoverage,
+  visibleOutgoingCoverageTasks,
 } from "./coverageHelpers";
 import { uiToDb } from "./slot-keys";
 
@@ -144,6 +148,108 @@ describe("Brian 2026-08-23 — WRR6 covering WRR7 must not leak to men's", () =>
   });
 });
 
+describe("coverage banners stay on the seat when TMs swap", () => {
+  it("keeps additionalCoverageSlots on each card and does not duplicate", () => {
+    const before = {
+      Z1: {
+        tmId: "jessica",
+        tmName: "Jessica A",
+        additionalCoverageSlots: ["Z2"],
+        breakGroup: 1,
+      },
+      Z3: {
+        tmId: "kaylee",
+        tmName: "Kaylee",
+        additionalCoverageSlots: ["Z4"],
+        breakGroup: 2,
+      },
+    };
+
+    const after = reseatTmKeepSeatCoverage(before, "Z1", "Z3");
+
+    expect(after.Z1).toMatchObject({
+      tmId: "kaylee",
+      tmName: "Kaylee",
+      additionalCoverageSlots: ["Z2"],
+    });
+    expect(after.Z3).toMatchObject({
+      tmId: "jessica",
+      tmName: "Jessica A",
+      additionalCoverageSlots: ["Z4"],
+    });
+    expect(coverageSlotsOf(after.Z1)).toEqual(["Z2"]);
+    expect(coverageSlotsOf(after.Z3)).toEqual(["Z4"]);
+    expect(coverageSlotsOf(after.Z1)).not.toEqual(coverageSlotsOf(before.Z3));
+  });
+
+  it("keeps snake_case additional_coverage_slots on the seat and does not invent extras", () => {
+    const before = {
+      Z5: {
+        tmId: "ada",
+        tmName: "Ada",
+        additional_coverage_slots: ["Z6"],
+      },
+      Z8: {
+        tmId: "bea",
+        tmName: "Bea",
+      },
+    };
+
+    const after = reseatTmKeepSeatCoverage(before, "Z5", "Z8");
+
+    expect(after.Z5).toMatchObject({
+      tmId: "bea",
+      tmName: "Bea",
+      additionalCoverageSlots: ["Z6"],
+    });
+    expect(after.Z8).toMatchObject({
+      tmId: "ada",
+      tmName: "Ada",
+      additionalCoverageSlots: [],
+    });
+    expect(coverageSlotsOf(after.Z8)).toEqual([]);
+  });
+
+  it("move to an empty seat leaves source coverage on the source card", () => {
+    const before = {
+      MRR7: {
+        tmId: "gary",
+        tmName: "Gary",
+        additionalCoverageSlots: ["Z7"],
+      },
+    };
+
+    const after = reseatTmKeepSeatCoverage(before, "MRR7", "Z3");
+
+    expect(after.MRR7).toEqual({
+      slotKey: "MRR7",
+      additionalCoverageSlots: ["Z7"],
+    });
+    expect(after.Z3).toMatchObject({
+      tmId: "gary",
+      tmName: "Gary",
+      additionalCoverageSlots: [],
+    });
+    expect(coverageSlotsOf(after.Z3)).toEqual([]);
+  });
+
+  it("unassign leaves a coverage-only stub on the seat", () => {
+    const before = {
+      MRR6: {
+        tmId: "ada",
+        tmName: "Ada",
+        additionalCoverageSlots: ["Z6"],
+      },
+    };
+    const after = clearTmKeepSeatCoverage(before, "MRR6");
+    expect(after.MRR6).toEqual({
+      slotKey: "MRR6",
+      additionalCoverageSlots: ["Z6"],
+    });
+    expect(after.MRR6?.tmId).toBeUndefined();
+  });
+});
+
 describe("Z9SR / AUX2 is one seat", () => {
   const z9Layout = [{ key: "AUX2", role: "z9sr" as const, label: "Z9 SR", locations: [] }];
 
@@ -177,5 +283,38 @@ describe("Z9SR / AUX2 is one seat", () => {
         { tmName: "Sheri O", tmId: "sheri", side: "B", sourceKey: "Z3", taskLabel: "And Z9SR" },
       ]),
     ).toHaveLength(1);
+  });
+});
+
+describe("visibleOutgoingCoverageTasks", () => {
+  it("hides inverted Covering Restroom 7 on empty Men's 6 when Men's 7 is covering it", () => {
+    const tasks = [{ taskLabel: "And Restroom 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(
+        tasks,
+        "MRR6",
+        [{ sourceKey: "MRR7" }],
+        true,
+      ),
+    ).toEqual([]);
+  });
+
+  it("keeps a coverage-only stub when the empty seat is not itself covered", () => {
+    const tasks = [{ taskLabel: "And Restroom 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(tasks, "MRR6", [], true),
+    ).toEqual(tasks);
+  });
+
+  it("keeps outgoing covering on an occupied seat", () => {
+    const tasks = [{ taskLabel: "And Men's Restroom 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(
+        tasks,
+        "MRR6",
+        [{ sourceKey: "MRR7" }],
+        false,
+      ),
+    ).toEqual(tasks);
   });
 });

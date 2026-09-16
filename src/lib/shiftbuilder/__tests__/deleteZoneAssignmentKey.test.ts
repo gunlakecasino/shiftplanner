@@ -81,4 +81,19 @@ describe("flex AUX assign/delete key parity", () => {
     expect(uiToDb(trash.key, defs).slot_key).toBe("trash_1");
     expect(uiToDb(oasis.key, defs).slot_key).toBe("oasis_1");
   });
+
+  it("maps two Job Coach shells to distinct delete keys", () => {
+    let defs = defaultAuxDefsForNewNight();
+    const blanks = defs.filter((d) => d.role === "blank");
+    expect(blanks.length).toBeGreaterThanOrEqual(2);
+    defs = applyAuxRole(defs, blanks[0].key, "job_coach");
+    defs = applyAuxRole(defs, blanks[1].key, "job_coach");
+
+    const first = defs.filter((d) => d.role === "job_coach")[0]!;
+    const second = defs.filter((d) => d.role === "job_coach")[1]!;
+
+    expect(uiToDb(first.key, defs).slot_key).toBe("job_coach");
+    expect(uiToDb(second.key, defs).slot_key).toBe("job_coach_2");
+    expect(uiToDb(first.key, defs).slot_key).not.toBe(uiToDb(second.key, defs).slot_key);
+  });
 });

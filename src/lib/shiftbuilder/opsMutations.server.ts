@@ -82,7 +82,7 @@ function adminClient() {
 }
 
 function isDbSlotKey(slotKey: string): boolean {
-  return /^(zone_|rr_|aux_|support_|trash_|oasis_|overlap_|admin$|z9_sr$|job_coach$|step_up$)/.test(
+  return /^(zone_|rr_|aux_|support_|trash_|oasis_|overlap_|admin$|z9_sr$|job_coach(?:_\d+)?$|step_up$)/.test(
     slotKey,
   );
 }
@@ -164,10 +164,11 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
   // Also capture previous occupant for matrix refresh if history was missing.
   let lockValue = Boolean(isLocked);
   let previousTmId: string | null = null;
+  let preservedCoverage: string[] = [];
   {
     let existingQ = client
       .from("zone_assignments")
-      .select("is_locked, tm_id")
+      .select("is_locked, tm_id, additional_coverage_slots")
       .eq("night_id", nightId)
       .eq("slot_key", finalSlotKey)
       .eq("slot_type", finalSlotType);
@@ -177,7 +178,11 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
         : existingQ.is("rr_side", null);
     const { data: existing } = await existingQ.maybeSingle();
     if (existing) {
-      const row = existing as { is_locked?: boolean; tm_id?: string | null };
+      const row = existing as {
+        is_locked?: boolean;
+        tm_id?: string | null;
+        additional_coverage_slots?: unknown;
+      };
       if (params.isLocked === undefined) {
         lockValue =
           typeof row.is_locked === "boolean" ? Boolean(row.is_locked) : false;
@@ -185,6 +190,11 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
       if (typeof row.tm_id === "string" && row.tm_id.trim()) {
         previousTmId = row.tm_id.trim();
       }
+      preservedCoverage = Array.isArray(row.additional_coverage_slots)
+        ? row.additional_coverage_slots.filter(
+            (slot): slot is string => typeof slot === "string" && slot.trim().length > 0,
+          )
+        : [];
     } else if (params.isLocked === undefined) {
       lockValue = false;
     }
@@ -199,6 +209,7 @@ export async function upsertZoneAssignmentServer(params: UpsertAssignmentParams)
       rr_side: finalRrSide,
       is_filled: true,
       is_locked: lockValue,
+      additional_coverage_slots: preservedCoverage,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "night_id,slot_type,slot_key,rr_side" },
@@ -336,8 +347,49 @@ export async function deleteZoneAssignmentServer(params: {
     return true;
   });
 
+  // Seat-owned coverage: unassign clears TM but must not delete the banners.
+  let keptCoverageRowId: string | null = null;
+  {
+    let keepQ = client
+      .from("zone_assignments")
+      .select("id, additional_coverage_slots")
+      .eq("night_id", nightId)
+      .eq("slot_key", canonical.slot_key)
+      .eq("slot_type", canonical.slot_type);
+    keepQ =
+      canonical.rr_side != null
+        ? keepQ.eq("rr_side", canonical.rr_side)
+        : keepQ.is("rr_side", null);
+    const { data: keepRow } = await keepQ.maybeSingle();
+    const kept = Array.isArray(keepRow?.additional_coverage_slots)
+      ? keepRow.additional_coverage_slots.filter(
+          (slot): slot is string => typeof slot === "string" && slot.trim().length > 0,
+        )
+      : [];
+    if (keepRow?.id && kept.length) {
+      keptCoverageRowId = String(keepRow.id);
+      await client
+        .from("zone_assignments")
+        .update({
+          tm_id: null,
+          is_filled: false,
+          additional_coverage_slots: kept,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", keepRow.id);
+    }
+  }
+
   let totalDeleted = 0;
   for (const v of variants) {
+    if (
+      keptCoverageRowId &&
+      v.slot_key === canonical.slot_key &&
+      v.slot_type === canonical.slot_type &&
+      (v.rr_side ?? null) === (canonical.rr_side ?? null)
+    ) {
+      continue;
+    }
     let q = client
       .from("zone_assignments")
       .delete({ count: "exact" })
@@ -467,12 +519,14 @@ export async function batchApplyDraftAssignmentsServer(
   const toDelete = slots.filter((s) => s.tmId === null);
   const errors: string[] = [];
 
-  // P1: preserve is_locked on existing rows (never force false).
+  // P1: preserve is_locked and additional_coverage_slots on existing rows.
+  // Coverage is seat-owned — a TM swap/apply must not copy or drop banners.
   const lockByKey = new Map<string, boolean>();
-  if (toUpsert.length > 0) {
+  const coverageByKey = new Map<string, string[]>();
+  if (toUpsert.length > 0 || toDelete.length > 0) {
     const { data: existingRows } = await client
       .from("zone_assignments")
-      .select("slot_key, slot_type, rr_side, is_locked")
+      .select("slot_key, slot_type, rr_side, is_locked, additional_coverage_slots")
       .eq("night_id", nightId);
     for (const row of existingRows ?? []) {
       const r = row as {
@@ -480,9 +534,18 @@ export async function batchApplyDraftAssignmentsServer(
         slot_type: string;
         rr_side: string | null;
         is_locked?: boolean;
+        additional_coverage_slots?: unknown;
       };
       const k = `${r.slot_type}|${r.slot_key}|${r.rr_side ?? ""}`;
       lockByKey.set(k, Boolean(r.is_locked));
+      coverageByKey.set(
+        k,
+        Array.isArray(r.additional_coverage_slots)
+          ? r.additional_coverage_slots.filter(
+              (slot): slot is string => typeof slot === "string" && slot.trim().length > 0,
+            )
+          : [],
+      );
     }
   }
 
@@ -498,6 +561,7 @@ export async function batchApplyDraftAssignmentsServer(
         tm_id: s.tmId,
         is_filled: true,
         is_locked: lockByKey.get(k) ?? false,
+        additional_coverage_slots: coverageByKey.get(k) ?? [],
         updated_at: now,
       };
     });
@@ -510,6 +574,25 @@ export async function batchApplyDraftAssignmentsServer(
   if (toDelete.length > 0) {
     const results = await Promise.allSettled(
       toDelete.map(async (s) => {
+        const k = `${s.slotType}|${s.slotKey}|${s.rrSide ?? ""}`;
+        const keptCoverage = coverageByKey.get(k) ?? [];
+        if (keptCoverage.length) {
+          let keep = client
+            .from("zone_assignments")
+            .update({
+              tm_id: null,
+              is_filled: false,
+              additional_coverage_slots: keptCoverage,
+              updated_at: now,
+            })
+            .eq("night_id", nightId)
+            .eq("slot_key", s.slotKey)
+            .eq("slot_type", s.slotType);
+          keep = s.rrSide ? keep.eq("rr_side", s.rrSide) : keep.is("rr_side", null);
+          const { error } = await keep;
+          if (error) throw new Error(error.message);
+          return;
+        }
         let q = client
           .from("zone_assignments")
           .delete()

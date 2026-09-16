@@ -118,6 +118,7 @@ export function uiToDb(uiKey: string, auxDefs?: AuxDef[]): DbSlot {
     uiKey === "z9_sr" ||
     uiKey === "admin" ||
     uiKey === "job_coach" ||
+    /^job_coach_\d+$/.test(uiKey) ||
     uiKey === "step_up"
   ) {
     return { slot_key: uiKey, slot_type: "aux", rr_side: null };
@@ -170,6 +171,17 @@ export function uiToDb(uiKey: string, auxDefs?: AuxDef[]): DbSlot {
   m = uiKey.match(/^SUP(\d+)$/i);
   if (m) return { slot_key: `support_${m[1]}`, slot_type: "aux", rr_side: null };
 
+  // Numbered Job Coach trail keys: JC / JC1 → job_coach; JC2+ → job_coach_N.
+  m = uiKey.match(/^JC(\d+)$/i);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    return {
+      slot_key: n <= 1 ? "job_coach" : `job_coach_${n}`,
+      slot_type: "aux",
+      rr_side: null,
+    };
+  }
+
   // Generic operator-added AUX (AUX6, AUX7, …)
   m = uiKey.match(/^AUX(\d+)$/);
   if (m) return { slot_key: `aux_${m[1]}`, slot_type: "aux", rr_side: null };
@@ -214,8 +226,8 @@ export function dbToUi(slot_key: string, slot_type: string, rr_side: string | nu
   // corrupts the planner's currentDraft.
   if (/^Z\d+$/.test(slot_key)) return slot_key;                       // Z1..Z10
   if (/^[MW]RR\d+$/.test(slot_key)) return slot_key;                  // MRR1, WRR7 …
-  if (/^(Z9SR|ADM|JC|STEP)$/.test(slot_key)) return slot_key;        // named aux
-  if (/^(TR|SP|AUX|OAS|TSH|SUP)\d+$/i.test(slot_key)) return slot_key.toUpperCase();
+  if (/^(Z9SR|ADM|STEP|JC\d*)$/.test(slot_key)) return slot_key;        // named aux
+  if (/^(TR|SP|AUX|OAS|TSH|SUP|JC)\d+$/i.test(slot_key)) return slot_key.toUpperCase();
   if (/^OL-(PM|AM)-\d+$/.test(slot_key)) return slot_key;            // overlap slots
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -243,6 +255,13 @@ export function dbToUi(slot_key: string, slot_type: string, rr_side: string | nu
 
     m = slot_key.match(/^oasis_(\d+)$/);
     if (m) return `OAS${m[1]}`;
+
+    // Numbered Job Coach seats — first stays JC (legacy singleton), extras JC2+.
+    m = slot_key.match(/^job_coach_(\d+)$/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      return n <= 1 ? "JC" : `JC${n}`;
+    }
 
     // Generic operator-added aux_N → AUX{N}.
     m = slot_key.match(/^aux_(\d+)$/);
@@ -290,6 +309,11 @@ export function slotKeyToLabel(uiKey: string): string {
   if (uiKey === "Z9SR") return "Z9 SR";
   if (uiKey === "ADM") return "Admin";
   if (uiKey === "JC") return "Job Coach";
+  const jcMatch = uiKey.match(/^JC(\d+)$/i);
+  if (jcMatch) {
+    const n = parseInt(jcMatch[1], 10);
+    return n <= 1 ? "Job Coach" : `Job Coach ${n}`;
+  }
   if (uiKey === "STEP") return "Step Up";
 
   // TR/SP/OAS/TSH/SUP numbered families
@@ -348,6 +372,14 @@ export function auxDbKeyToDef(slot_key: string): { uiKey: string; label: string 
 
   if (slot_key === "job_coach") {
     return { uiKey: "JC", label: "JOB COACH" };
+  }
+  const jobCoachN = slot_key.match(/^job_coach_(\d+)$/);
+  if (jobCoachN) {
+    const n = parseInt(jobCoachN[1], 10);
+    return {
+      uiKey: n <= 1 ? "JC" : `JC${n}`,
+      label: n <= 1 ? "JOB COACH" : `JOB COACH ${n}`,
+    };
   }
   if (slot_key === "step_up") {
     return { uiKey: "STEP", label: "STEP UP" };

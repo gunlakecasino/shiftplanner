@@ -82,6 +82,7 @@ describe("SheetBuilder chrome slim (PR A)", () => {
     expect(floatingNav).toContain("Graves Schedule");
     expect(floatingNav).toContain("Refresh Day");
     expect(floatingNav).toContain("Clear Day");
+    expect(floatingNav).toContain("Capture desk");
     expect(floatingNav).not.toContain(">Optimize Week<");
     expect(floatingNav).not.toContain("Grave Cover Guide");
     expect(floatingNav).not.toContain("Weekly View");
@@ -178,11 +179,19 @@ describe("SheetBuilder night actions (PR B)", () => {
     expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
+    expect(floatingNav).toContain("sb-night-action-pill--apply");
     expect(floatingNav).not.toContain("Running…");
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).toContain("aria-label=\"Night actions\"");
+  });
+
+  it("keeps Apply in the primary night-action cluster when Draft is on", () => {
+    expect(floatingNav).toContain("showDraftTools && isDraftMode && onSaveAllDraft");
+    expect(floatingNav).not.toContain("isDraftMode && draftSlotCount > 0 && onSaveAllDraft");
+    expect(floatingNav).not.toContain("sb-night-action-pill--split");
+    expect(globalsCss).toContain(".sb-night-action-pill--apply");
   });
 
   it("routes Apply through onSaveAllDraft only", () => {
@@ -196,6 +205,7 @@ describe("SheetBuilder night actions (PR B)", () => {
     expect(floatingNav).toContain("Maintenance");
     expect(floatingNav).toContain("Clear Day");
     expect(floatingNav).toContain("Refresh Day");
+    expect(floatingNav).toContain("Capture desk");
     expect(floatingNav).toContain("Graves Schedule");
     expect(floatingNav).toContain("Publish Day");
     expect(floatingNav).toContain("View Print Preview");
@@ -588,6 +598,10 @@ describe("SheetBuilder P0 unstocky motion", () => {
     resolve(process.cwd(), "src/app/shiftbuilder/version.ts"),
     "utf8",
   );
+  const useShiftData = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/hooks/useShiftData.ts"),
+    "utf8",
+  );
 
   it("ships motion tokens and does not use transition:all on live cards", () => {
     expect(globalsCss).toContain("--sb-motion-instant: 100ms");
@@ -610,13 +624,21 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(chrome).not.toContain("initial={{ opacity: 0, y: 6, scale: 0.93 }}");
   });
 
-  it("day-switch paper is ≤220ms shared-axis, not a 1.75s canvas sweep", () => {
-    expect(veil).toContain("export const DAY_CONTENT_VEIL_MS = 200");
+  it("day-switch paper is opacity-only ≤400ms, not a 1.75s launch splash", () => {
+    expect(veil).toContain("export const DAY_CONTENT_VEIL_MS = 80");
+    expect(veil).toContain("export const DAY_CONTENT_SAFETY_CAP_MS = 400");
     expect(veil).not.toContain("1750");
-    expect(authGate).toContain("translateX(10px)");
+    expect(authGate).not.toContain("translateX(10px)");
     expect(authGate).not.toContain("filter: blur(12px)");
     expect(authGate).not.toContain("sb-day-sweep 1.5s");
     expect(authGate).toContain("content: none");
+    expect(authGate).toContain("opacity: 0.78");
+    expect(shiftBuilderClient).toContain("const showCanvasVeil = boardBackgroundSync");
+    expect(shiftBuilderClient).not.toContain("isPending && hasBoardPayload");
+    expect(shiftBuilderClient).toContain("const [, startDayTransition] = useTransition()");
+    expect(useShiftData).toContain("queryColdLoading && hydratedDayKey == null");
+    expect(useShiftData).not.toContain("hydratedDayKey !== selectedDateKey");
+    expect(useShiftData).not.toContain("stableRefs.current.assignments = {}");
   });
 
   it("does not put Engine back in the header and bumps the patch version", () => {
@@ -733,6 +755,7 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
     expect(chrome).not.toContain("ASSIGN TM");
     expect(chrome).toContain("formatCanvasTrailChip");
     expect(chrome).toContain("formatCanvasRepeatReason");
+    expect(chrome).toContain("formatCanvasRepeatMark");
     expect(chrome).toContain("sb-critical-repeat-mark");
     expect(chrome).toContain("Repeat");
     expect(chrome).not.toContain("rounded-full font-black");
@@ -843,13 +866,18 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(coverageBar).not.toContain("coverageBarBg");
     expect(coverageBar).not.toMatch(/useRail[\s\S]{0,400}#ffffff/);
     expect(pride).toContain("export function formatCoveredByRail");
+    expect(pride).toContain("export function formatCoveredByRailTitle");
+    expect(pride).toContain("Covered ·");
+    expect(pride).not.toContain("Covered by ${name} ·");
     expect(zoneCard).toContain("formatCoveredByRail");
     expect(zoneCard).toContain("CoveragePaperRail");
-    expect(zoneCard).toContain("coverage={ipadDesk ? undefined");
+    expect(zoneCard).toContain("coverage={showDigitalAssists ? undefined");
+    expect(zoneCard).toContain('presentation={showDigitalAssists ? "rail" : undefined}');
     expect(rrCard).toContain("formatCoveredByRail");
     expect(rrCard).toContain("CoveragePaperRail");
     expect(rrCard).toContain("incomingRails");
-    expect(rrCard).toContain("coveredBy.length > 0 && !pairHalf");
+    expect(rrCard).toContain("visibleOutgoingCoverageTasks");
+    expect(rrCard).toContain("coveredBy.length > 0 && !showDigitalAssists");
   });
 });
 

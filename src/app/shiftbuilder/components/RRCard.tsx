@@ -21,8 +21,8 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
-import { formatCanvasRrSideLabel, formatCoveredByRail } from "@/lib/shiftbuilder/canvasPrideLabels";
-import { getSlotAccentColor } from "@/lib/shiftbuilder/coverageHelpers";
+import { formatCanvasRrSideLabel, formatCoveredByRail, formatCoveredByRailTitle } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { getSlotAccentColor, visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
@@ -186,7 +186,7 @@ const RRSide: React.FC<{
       tmId: currentTmId,
       isLocked: a.isLocked,
     };
-  } else if (coveredBy.length > 0 && !pairHalf) {
+  } else if (coveredBy.length > 0 && !showDigitalAssists) {
     assignmentState = { kind: "covered", coveredBy };
   } else {
     assignmentState = { kind: "unassigned" };
@@ -317,8 +317,8 @@ function RRSideShell({
   /** iPad pair: this is a half inside one card, not its own card. */
   pairHalf?: boolean;
 }) {
-  const coveragePresentation = pairHalf ? "rail" : undefined;
-  const incomingRails = pairHalf ? coveredBy : [];
+  const coveragePresentation = showDigitalAssists ? "rail" : undefined;
+  const incomingRails = showDigitalAssists ? coveredBy : [];
   const showCoverageFooter = incomingRails.length > 0 || coverageTasks.length > 0;
   return (
     <div
@@ -353,11 +353,12 @@ function RRSideShell({
         {body}
       </div>
       {showCoverageFooter ? (
-        <div className={`sb-coverage-footer shrink-0 ${pairHalf ? "sb-coverage-footer--rails" : showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
+        <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--rails" : ""}`}>
           {incomingRails.map((entry) => (
             <CoveragePaperRail
               key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
               label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
+              title={formatCoveredByRailTitle(entry.tmName, entry.sourceKey)}
               accent={getSlotAccentColor(entry.sourceKey)}
             />
           ))}
@@ -367,7 +368,7 @@ function RRSideShell({
               task={t}
               slotKey={slotKey}
               onRemoveTask={onRemoveTask}
-              builderCalm={showDigitalAssists && !pairHalf}
+              builderCalm={showDigitalAssists}
               presentation={coveragePresentation}
             />
           ))}
@@ -436,8 +437,18 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
   const wTasks = selectedTasks[wKey] || [];
   const mRegular = visibleDeskSlotTasks(mTasks);
   const wRegular = visibleDeskSlotTasks(wTasks);
-  const wCoverageTasks = wTasks.filter((t) => t.isCoverage);
-  const mCoverageTasks = mTasks.filter((t) => t.isCoverage);
+  const wCoverageTasks = visibleOutgoingCoverageTasks(
+    wTasks,
+    wKey,
+    coveredByIndex[wKey] || [],
+    wEmpty,
+  );
+  const mCoverageTasks = visibleOutgoingCoverageTasks(
+    mTasks,
+    mKey,
+    coveredByIndex[mKey] || [],
+    mEmpty,
+  );
 
   const wCoveredBy = coveredByIndex[wKey] || [];
   const mCoveredBy = coveredByIndex[mKey] || [];

@@ -98,13 +98,17 @@ export function canonicalizeAuxSlotKeyForTrail(
 
   // Already-stable trail / DB ids
   const upper = ui.toUpperCase();
-  if (/^(STEP|JC|ADMIN|Z9SR|SUP\d+|TSH\d+|OAS\d+)$/i.test(ui)) {
+  if (/^(STEP|JC\d*|ADMIN|Z9SR|SUP\d+|TSH\d+|OAS\d+)$/i.test(ui)) {
     return upper;
   }
   if (/^SP(\d+)$/i.test(ui)) return upper.replace(/^SP/, "SUP");
   if (/^TR(\d+)$/i.test(ui)) return upper.replace(/^TR/, "TSH");
   if (ui === "step_up" || upper === "STEPUP") return "STEP";
-  if (ui === "job_coach") return "JC";
+  if (ui === "job_coach" || /^job_coach_\d+$/i.test(ui)) {
+    const numbered = ui.match(/^job_coach_(\d+)$/i);
+    if (numbered && parseInt(numbered[1], 10) > 1) return `JC${numbered[1]}`;
+    return "JC";
+  }
   if (ui === "admin" || upper === "ADM") return "ADMIN";
   if (ui === "z9_sr") return "Z9SR";
 
@@ -149,6 +153,10 @@ export function normalizeHistoryUiKey(ui: string): string {
   const compact = t.replace(/\s+/g, "").toUpperCase();
   if (compact === "STEPUP" || compact === "STEP_UP" || t === "step_up") return "STEP";
   if (compact === "JOBCOACH" || compact === "JOB_COACH" || t === "job_coach") return "JC";
+  const jobCoachDb = t.match(/^job_coach_(\d+)$/i);
+  if (jobCoachDb) return parseInt(jobCoachDb[1], 10) <= 1 ? "JC" : `JC${jobCoachDb[1]}`;
+  const jcN = t.match(/^JC(\d+)$/i);
+  if (jcN) return parseInt(jcN[1], 10) <= 1 ? "JC" : `JC${jcN[1]}`;
   if (t === "z9_sr" || compact === "Z9SR") return "Z9SR";
   if (t === "admin" || compact === "ADMIN" || compact === "ADM") return "ADMIN";
   if (compact === "STEP" || compact === "JC") return compact;

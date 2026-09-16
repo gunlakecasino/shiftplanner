@@ -181,6 +181,8 @@ import {
   cancelNightBoardQueries,
 } from "@/lib/shiftbuilder/liveCache";
 import { pulseDropTarget } from "@/lib/shiftbuilder/boardMotion";
+import { recordDeskCaptureAction } from "@/lib/shiftbuilder/deskCapture";
+import { CaptureDeskDialog } from "./components/CaptureDeskDialog";
 import {
   GRAVES_DEFAULT_SCHEDULE_CHANGED_EVENT,
   invalidateNightCoreQueries,
@@ -362,6 +364,8 @@ import {
   getSlotCoverageLabel,
   parseCoverageTargetFromTaskLabel,
   persistSlotForCoverageSource,
+  reseatTmKeepSeatCoverage,
+  clearTmKeepSeatCoverage,
 } from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
@@ -537,7 +541,7 @@ function AuthedShiftBuilder() {
   });
 
   // === React 19 Transitions for fast day switching (hoisted early to avoid TDZ) ===
-  const [isPending, startDayTransition] = useTransition();
+  const [, startDayTransition] = useTransition();
   const [, startHeavyTransition] = useTransition();
   const deferredDayIndex = useDeferredValue(selectedDayIndex);
 
@@ -2019,7 +2023,8 @@ function AuthedShiftBuilder() {
   const boardInteractionLocked = isCurrentNightLocked || showUnpublishedNight;
   const boardColdLoading = shiftData.boardColdLoading;
   const boardBackgroundSync = shiftData.boardBackgroundSync;
-  const showCanvasVeil = boardBackgroundSync || (isPending && hasBoardPayload);
+  // Day-switch isPending must not paint a canvas splash — paper veil is enough.
+  const showCanvasVeil = boardBackgroundSync;
 
   // liveAssignVersion is still managed locally in the orchestrator for the many call sites that do
   // setLiveAssignVersion((v) => v + 1) after optimistic writes / drags / applies. The hook also tracks
@@ -2591,6 +2596,17 @@ function AuthedShiftBuilder() {
       targetNightId?: string | null;
     }) => {
       const activeNightId = params.targetNightId ?? nightId ?? queryNightId;
+      recordDeskCaptureAction({
+        message: [
+          params.action,
+          params.slotKey,
+          params.newTmName,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        slotKey: params.slotKey,
+        action: params.action,
+      });
       if (!activeNightId) return;
       logDeploymentChange({
         nightId: activeNightId,
@@ -2706,6 +2722,12 @@ function AuthedShiftBuilder() {
     const freshIsDraft = useShiftBuilderStore.getState().isDraftMode ?? false;
     if (freshIsDraft) {
       upsertDraftSlot(slotKey, { kind: "assign", tmId, tmName });
+      recordDeskCaptureAction({
+        message: `Assigned ${tmName} to ${slotKey} (draft)`,
+        slotKey,
+        action: "assign",
+      });
+      pulseDropTarget(slotKey);
       return;
     }
 
@@ -2753,6 +2775,7 @@ function AuthedShiftBuilder() {
       newTmId: tmId,
       newTmName: tmName,
     });
+    pulseDropTarget(slotKey);
   };
 
   const unassign = (slotKey: string, options?: { offerUndo?: boolean }) => {
@@ -2769,6 +2792,11 @@ function AuthedShiftBuilder() {
     const freshIsDraft = useShiftBuilderStore.getState().isDraftMode ?? false;
     if (freshIsDraft) {
       upsertDraftSlot(slotKey, { kind: "clear" });
+      recordDeskCaptureAction({
+        message: `Unassigned from ${slotKey} (draft)`,
+        slotKey,
+        action: "unassign",
+      });
       return;
     }
 
@@ -2808,11 +2836,7 @@ function AuthedShiftBuilder() {
       });
     } else {
       // Fallback (legacy direct path)
-      setAssignments((prev: any) => {
-        const copy = { ...prev };
-        delete copy[slotKey];
-        return copy;
-      });
+      setAssignments((prev: any) => clearTmKeepSeatCoverage(prev, slotKey));
 
       (async () => {
         let nid = targetNightId;
@@ -5702,34 +5726,24 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
               ? { tmId: effectiveTo.tmId, tmName: effectiveTo.tmName ?? effectiveTo.tmId }
               : null,
           );
+          recordDeskCaptureAction({
+            message: `Moved ${fromKey} → ${toKey} (draft)`,
+            slotKey: toKey,
+            action: "assign",
+          });
           pulseDropTarget(toKey);
           return;
         }
 
-        // We keep a minimal local update only for the history/undo snapshot.
-        // The real visual path is the main store (below). This reduces fighting layers.
-        const movingSnap = movingFromMain;
-        const displacedSnap = displacedFromMain;
         // Snapshot for rollback if the server rejects the write (validation, 401, etc.).
         const preDragAssignments = { ...mainAssignments };
 
         // Primary visual update: directly mutate the store the board/cards actually read.
-        // This makes the move feel instant even if live layer has any internal delay.
+        // Coverage banners stay on the card/slot — only TM identity reseats.
         try {
-          useShiftBuilderStore.getState().setAssignments((prev: any) => {
-            const next = { ...prev };
-            // Clear source
-            if (displacedSnap) {
-              next[fromKey] = { ...displacedSnap, slotKey: fromKey };
-            } else {
-              delete next[fromKey];
-            }
-            // Place moving TM in target
-            if (movingSnap) {
-              next[toKey] = { ...movingSnap, slotKey: toKey };
-            }
-            return next;
-          });
+          useShiftBuilderStore.getState().setAssignments((prev: any) =>
+            reseatTmKeepSeatCoverage(prev, fromKey, toKey),
+          );
         } catch (e) {
           console.warn("[drag] direct store patch failed", e);
         }
@@ -5739,6 +5753,11 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
         mirrorMainAssignmentsToLiveStore(captureDate);
         setLiveAssignVersion((v) => v + 1);
+        recordDeskCaptureAction({
+          message: `Moved ${fromKey} → ${toKey}`,
+          slotKey: toKey,
+          action: "assign",
+        });
         pulseDropTarget(toKey);
 
         // Single background persist path (no parallel legacy double-write — races
@@ -7991,31 +8010,21 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         dateKey,
       );
 
-      // Optimistic week store for immediate table refresh
+      // Optimistic week store — reseat TMs only; coverage stays on each seat.
       const store = liveAssignmentsStore.getState();
-      const currentNightAss = { ...(store.assignmentsByNight[dateKey] || {}) };
-      if (swapPartner?.tmId) {
-        currentNightAss[fromSlot] = {
-          tmId: swapPartner.tmId,
-          tmName: swapPartner.tmName ?? swapPartner.tmId,
-        } as any;
-      } else {
-        delete currentNightAss[fromSlot];
-      }
-      currentNightAss[toSlot] = { tmId: fromTmId, tmName: fromName } as any;
+      const currentNightAss = reseatTmKeepSeatCoverage(
+        { ...(store.assignmentsByNight[dateKey] || {}) },
+        fromSlot,
+        toSlot,
+      );
       store.setAssignmentsForNight(dateKey, currentNightAss);
 
       if (isCurrentNight) {
-        const main = { ...(useShiftBuilderStore.getState().assignments ?? {}) };
-        if (swapPartner?.tmId) {
-          main[fromSlot] = {
-            tmId: swapPartner.tmId,
-            tmName: swapPartner.tmName ?? swapPartner.tmId,
-          };
-        } else {
-          delete main[fromSlot];
-        }
-        main[toSlot] = { tmId: fromTmId, tmName: fromName };
+        const main = reseatTmKeepSeatCoverage(
+          { ...(useShiftBuilderStore.getState().assignments ?? {}) },
+          fromSlot,
+          toSlot,
+        );
         useShiftBuilderStore.getState().setAssignments(main);
         setAssignments(main);
         setLiveAssignVersion((v) => v + 1);
@@ -8042,6 +8051,8 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   ]);
 
   const [cheatsheetOpen, setCheatsheetOpen] = React.useState(false);
+  const [captureDeskOpen, setCaptureDeskOpen] = React.useState(false);
+  const openCaptureDesk = React.useCallback(() => setCaptureDeskOpen(true), []);
   useDeskKeyboard({
     cheatsheetOpen,
     setCheatsheetOpen,
@@ -8202,6 +8213,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         draftApplyConfirming={draftApplyConfirming}
         onDiscardDraft={stableDiscardDraft}
         permissions={permissions}
+        onCaptureDesk={openCaptureDesk}
       />
 
       <RunDayPlacementsModal
@@ -8593,6 +8605,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
                 pageLabel={builderPageLabel}
                 isDark={isDark}
                 onOpenSettings={canAccessSudo ? stableOpenSettings : undefined}
+                onCaptureDesk={openCaptureDesk}
               />
             </div>
           )}
@@ -9377,7 +9390,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
          persist failures fire. pointer-events-none on the outer so it never
          intercepts clicks meant for the canvas; individual toasts re-enable
          pointer events for their dismiss button. */}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm">
+      <div className="sb-desk-toasts fixed right-4 z-[100] flex flex-col gap-2 pointer-events-none max-w-sm">
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -9455,6 +9468,16 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           advisorText={provenanceKey && /advisor/i.test(provenanceKey) ? weekAdvisorText : undefined}
         />
       )}
+
+      <CaptureDeskDialog
+        open={captureDeskOpen}
+        onClose={() => setCaptureDeskOpen(false)}
+        nightId={nightId ?? queryNightId ?? null}
+        nightDate={formatLocalDateISO(selectedDay.date)}
+        isDraftMode={isDraftMode}
+        assignments={padAssignments}
+        auxDefs={auxDefs}
+      />
 
       <OpsStatusBar />
 

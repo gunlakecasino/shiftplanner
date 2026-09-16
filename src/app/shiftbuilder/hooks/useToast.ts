@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { recordDeskCaptureError } from "@/lib/shiftbuilder/deskCapture";
 
 export type ToastKind = "error" | "info" | "success";
 export interface ToastItem { id: number; message: string; kind: ToastKind; }
@@ -17,6 +18,7 @@ export function useToast() {
   const toastIdRef = useRef(0);
 
   const showToast = useCallback((message: string, kind: ToastKind = "error") => {
+    if (kind === "error") recordDeskCaptureError(message);
     const id = ++toastIdRef.current;
     setToasts((prev) => [...prev, { id, message, kind }]);
     setTimeout(() => {

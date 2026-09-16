@@ -41,10 +41,15 @@ function mergeLiveAssignments(
         ? savedAssignment.tmName
         : liveAssignment.tmName;
 
+    const savedCoverage =
+      savedAssignment?.additionalCoverageSlots ??
+      savedAssignment?.additional_coverage_slots ??
+      [];
     merged[slotKey] = {
       ...savedAssignment,
       ...liveAssignment,
       tmName,
+      additionalCoverageSlots: Array.isArray(savedCoverage) ? savedCoverage : [],
     };
   }
 

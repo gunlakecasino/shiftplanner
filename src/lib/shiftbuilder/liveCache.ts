@@ -41,6 +41,7 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { QueryClient } from "@tanstack/react-query";
 import { formatLocalDateISO } from "@/lib/shiftbuilder/dateUtils";
+import { coverageSlotsOf } from "@/lib/shiftbuilder/coverageHelpers";
 import { useShiftBuilderStore } from "@/app/shiftbuilder/store/useShiftBuilderStore"; // main board store (what ShiftBuilderBoard subscribes to)
 
 /**
@@ -120,7 +121,13 @@ type BoardAssignmentRow = {
   tmName?: string | null;
   isLocked?: boolean;
   breakGroup?: number;
+  additionalCoverageSlots?: string[] | null;
+  additional_coverage_slots?: string[] | null;
 };
+
+function coverageKey(row?: BoardAssignmentRow | null): string {
+  return coverageSlotsOf(row).slice().sort().join("|");
+}
 
 /** Placement identity — poll/refetch is a visual no-op when these match. */
 export function assignmentPlacementEqual(
@@ -133,7 +140,8 @@ export function assignmentPlacementEqual(
     (a.tmId ?? null) === (b.tmId ?? null) &&
     (a.tmName ?? null) === (b.tmName ?? null) &&
     !!a.isLocked === !!b.isLocked &&
-    (a.breakGroup ?? 0) === (b.breakGroup ?? 0)
+    (a.breakGroup ?? 0) === (b.breakGroup ?? 0) &&
+    coverageKey(a) === coverageKey(b)
   );
 }
 

@@ -30,6 +30,8 @@ import {
   CalendarDays,
   RefreshCw,
   ClipboardList,
+  Camera,
+  CircleHelp,
 } from "lucide-react";
 
 const APP_BASE_PATH = "/sheetbuilder";
@@ -138,6 +140,10 @@ export interface FloatingNavProps {
   publishWeekBusy?: boolean;
   top?: number;
   permissions?: ShiftBuilderPermissions;
+  /** Desk capture — More menu, not a toast-corner FAB. */
+  onCaptureDesk?: () => void;
+  /** Floor help / tutorial — More menu, not a topbar FAB. */
+  onOpenHelp?: () => void;
 }
 
 const MONTHS = MONTH_LONG;
@@ -238,6 +244,8 @@ export default function FloatingNav(props: FloatingNavProps) {
     publishDayBusy = false,
     top = 0,
     permissions,
+    onCaptureDesk,
+    onOpenHelp,
   } = props;
 
   const canEditAssignments = permissions?.canEditAssignments ?? false;
@@ -614,66 +622,62 @@ export default function FloatingNav(props: FloatingNavProps) {
             style={nightActionClusterStyle()}
           >
             {showDraftTools && onToggleDraftMode && (
-              isDraftMode && draftSlotCount > 0 && onSaveAllDraft ? (
-                <div
-                  className="sb-night-action-pill sb-night-action-pill--draft sb-night-action-pill--split"
-                  style={{ display: "inline-flex", alignItems: "center", height: 28 }}
-                >
-                  <button
-                    type="button"
-                    className="sb-night-action-pill__segment sb-interactive"
-                    onClick={onToggleDraftMode}
-                    title="Draft mode on — edits stay provisional"
-                    aria-pressed
-                    aria-label={`Draft mode on — ${draftSlotCount} change${draftSlotCount === 1 ? "" : "s"}`}
-                    style={nightActionSegmentStyle({
-                      color: "var(--sb-gold-ink)",
-                      background: "var(--sb-gold-surface)",
-                    })}
-                  >
-                    <span>Draft</span>
-                    <span className="tabular-nums opacity-70">{draftSlotCount}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="sb-night-action-pill__apply sb-interactive"
-                    onClick={onSaveAllDraft}
-                    disabled={draftApplyBusy || draftApplyConfirming}
-                    aria-busy={draftApplyBusy || draftApplyConfirming}
-                    aria-haspopup="dialog"
-                    aria-expanded={draftApplyConfirming || undefined}
-                    title={APPLY_TO_LIVE_OPEN_CONFIRM}
-                    aria-label={`Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board — confirm required`}
-                    style={nightActionSegmentStyle({
-                      color: "var(--sb-gold-ink)",
-                      fontWeight: 650,
-                    })}
-                  >
-                    {draftApplyBusy ? APPLY_TO_LIVE_BUSY_LABEL : APPLY_TO_LIVE_CONFIRM_LABEL}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="sb-night-action-pill sb-night-action-pill--draft sb-interactive"
-                  style={nightActionSegmentStyle(
-                    isDraftMode
-                      ? { color: "var(--sb-gold-ink)", background: "var(--sb-gold-surface)" }
-                      : undefined,
-                  )}
-                  onClick={onToggleDraftMode}
-                  aria-pressed={isDraftMode}
-                  title={
-                    isDraftMode
-                      ? "Draft mode on — no unapplied changes"
-                      : "Enter Draft mode"
-                  }
-                  aria-label={isDraftMode ? "Draft mode on" : "Enter Draft mode"}
-                >
-                  <span>Draft</span>
-                </button>
-              )
+              <button
+                type="button"
+                className="sb-night-action-pill sb-night-action-pill--draft sb-interactive"
+                style={nightActionSegmentStyle(
+                  isDraftMode
+                    ? { color: "var(--sb-gold-ink)", background: "var(--sb-gold-surface)" }
+                    : undefined,
+                )}
+                onClick={onToggleDraftMode}
+                aria-pressed={isDraftMode}
+                title={
+                  isDraftMode
+                    ? draftSlotCount > 0
+                      ? `Draft mode on — ${draftSlotCount} change${draftSlotCount === 1 ? "" : "s"}`
+                      : "Draft mode on — no unapplied changes"
+                    : "Enter Draft mode"
+                }
+                aria-label={
+                  isDraftMode
+                    ? draftSlotCount > 0
+                      ? `Draft mode on — ${draftSlotCount} change${draftSlotCount === 1 ? "" : "s"}`
+                      : "Draft mode on"
+                    : "Enter Draft mode"
+                }
+              >
+                <span>Draft</span>
+                {isDraftMode && draftSlotCount > 0 ? (
+                  <span className="tabular-nums opacity-70">{draftSlotCount}</span>
+                ) : null}
+              </button>
             )}
+
+            {showDraftTools && isDraftMode && onSaveAllDraft ? (
+              <button
+                type="button"
+                className="sb-night-action-pill sb-night-action-pill--apply sb-interactive"
+                onClick={onSaveAllDraft}
+                disabled={draftSlotCount < 1 || draftApplyBusy || draftApplyConfirming}
+                aria-busy={draftApplyBusy || draftApplyConfirming}
+                aria-haspopup="dialog"
+                aria-expanded={draftApplyConfirming || undefined}
+                title={APPLY_TO_LIVE_OPEN_CONFIRM}
+                aria-label={
+                  draftSlotCount < 1
+                    ? `${APPLY_TO_LIVE_CONFIRM_LABEL} — no draft changes yet`
+                    : `Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board — confirm required`
+                }
+                style={nightActionSegmentStyle({
+                  color: "var(--sb-gold-ink)",
+                  fontWeight: 650,
+                  background: draftSlotCount > 0 ? "var(--sb-gold-surface)" : undefined,
+                })}
+              >
+                {draftApplyBusy ? APPLY_TO_LIVE_BUSY_LABEL : APPLY_TO_LIVE_CONFIRM_LABEL}
+              </button>
+            ) : null}
 
             {onPrint && (
               <button
@@ -840,6 +844,31 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {onCaptureDesk && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onCaptureDesk();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Camera size={14} />
+                    Capture desk
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={menuItemClass}
+                  onClick={() => {
+                    if (onOpenHelp) onOpenHelp();
+                    else window.dispatchEvent(new Event("sb-open-help"));
+                    setMoreOpen(false);
+                  }}
+                >
+                  <CircleHelp size={14} />
+                  Help
+                </button>
                 {onViewChange && (
                   <button
                     type="button"

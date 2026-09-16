@@ -100,6 +100,7 @@ export function mapNightTasksToUiKeys(
         uiKey === "ADM" ||
         uiKey === "Z9SR" ||
         uiKey === "JC" ||
+        /^JC\d+$/i.test(uiKey) ||
         uiKey === "STEP" ||
         /^(TR|TSH|SP|SUP|OAS)\d+$/i.test(uiKey)
       ) {
@@ -108,8 +109,9 @@ export function mapNightTasksToUiKeys(
           match = currentAuxDefs.find((d) => d.role === "admin");
         } else if (uiKey === "Z9SR") {
           match = currentAuxDefs.find((d) => d.role === "z9sr");
-        } else if (uiKey === "JC") {
-          match = currentAuxDefs.find((d) => d.role === "job_coach");
+        } else if (uiKey === "JC" || /^JC\d+$/i.test(uiKey)) {
+          const n = uiKey === "JC" ? 1 : parseInt(uiKey.replace(/^JC/i, ""), 10);
+          match = currentAuxDefs.filter((d) => d.role === "job_coach")[Math.max(0, n - 1)];
         } else if (uiKey === "STEP") {
           match = currentAuxDefs.find((d) => d.role === "step_up");
         } else {
@@ -165,8 +167,8 @@ export function mapNightTasksToUiKeys(
   // Project canonical operational coverage into the task shape already consumed
   // by the live cards, covered-by index, print preview, and exported PDF.
   for (const [sourceKey, assignment] of Object.entries(assignments)) {
-    if (!assignment?.tmId && !assignment?.tmName?.trim()) continue;
-
+    // Coverage is seat-owned. Empty stubs still project their banners so a
+    // swap/unassign cannot make additional_coverage_slots look TM-keyed.
     for (const targetKey of coverageTargets(assignment)) {
       const canonical = canonicalCoverageTargetKey(targetKey, currentAuxDefs);
       if (sameCoverageSeat(sourceKey, canonical, currentAuxDefs)) continue;
@@ -213,6 +215,13 @@ function roleShellFromDbSlotKey(
   }
   if (slotKey === "job_coach") {
     return auxDefs.find((d) => d.role === "job_coach")?.key ?? null;
+  }
+  const jobCoachN = slotKey.match(/^job_coach_(\d+)$/);
+  if (jobCoachN) {
+    return (
+      auxDefs.filter((d) => d.role === "job_coach")[parseInt(jobCoachN[1], 10) - 1]?.key ??
+      null
+    );
   }
   if (slotKey === "step_up") {
     return auxDefs.find((d) => d.role === "step_up")?.key ?? null;

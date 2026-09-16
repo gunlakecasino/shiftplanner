@@ -3,6 +3,8 @@ import {
   coverageChipTone,
   formatCanvasCoverageChip,
   formatCoveredByRail,
+  formatCoveredByRailTitle,
+  formatCanvasRepeatMark,
   formatCanvasRepeatReason,
   formatCanvasRrSideLabel,
   formatCanvasTrailChip,
@@ -81,6 +83,13 @@ describe("formatCanvasCoverageChip", () => {
     expect(formatCanvasCoverageChip("And Men's Restroom 10")).toBe(
       "Covering Men's 10",
     );
+    expect(formatCanvasCoverageChip("And Restroom 7", "MRR6")).toBe(
+      "Covering Men's 7",
+    );
+    expect(formatCanvasCoverageChip("And Restroom 7", "WRR6")).toBe(
+      "Covering Women's 7",
+    );
+    expect(formatCanvasCoverageChip("And Men's 7")).toBe("Covering Men's 7");
   });
 
   it("does not prefix Covering onto a label that already says Covering", () => {
@@ -98,17 +107,19 @@ describe("formatCanvasCoverageChip", () => {
 });
 
 describe("formatCoveredByRail", () => {
-  it("uses the same place language as outgoing Covering chips", () => {
-    expect(formatCoveredByRail("Brian", "WRR6")).toBe("Covered by Brian · Women's 6");
-    expect(formatCoveredByRail("JT", "Z5")).toBe("Covered by JT · Zone 5");
-    expect(formatCoveredByRail("Ana", "MRR1")).toBe("Covered by Ana · Men's 1+2");
+  it("names the source seat, not a second assignment", () => {
+    expect(formatCoveredByRail("Brian", "WRR6")).toBe("Covered · Women's 6");
+    expect(formatCoveredByRail("JT", "Z5")).toBe("Covered · Zone 5");
+    expect(formatCoveredByRail("Ana", "MRR1")).toBe("Covered · Men's 1+2");
+    expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/Brian/);
   });
 
   it("does not leak AND / + leftovers or a second banner family", () => {
     expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/\bAND\b|\+/);
     expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/^Covering /);
-    expect(formatCoveredByRail("", "Z4")).toBe("Covered by TM · Zone 4");
-    expect(formatCoveredByRail("Lee")).toBe("Covered by Lee");
+    expect(formatCoveredByRail("", "Z4")).toBe("Covered · Zone 4");
+    expect(formatCoveredByRail("Lee")).toBe("Covered");
+    expect(formatCoveredByRailTitle("Lee", "Z4")).toBe("Covered · Zone 4 — Lee");
   });
 });
 
@@ -142,5 +153,14 @@ describe("formatCanvasRepeatReason", () => {
     expect(formatCanvasRepeatReason("Z4")).toBe(
       "Same zone as a recent night: Zone 4",
     );
+  });
+});
+
+describe("formatCanvasRepeatMark", () => {
+  it("names the current seat, not a prior trail chip", () => {
+    expect(formatCanvasRepeatMark("MRR10")).toBe("Repeat Men's 10");
+    expect(formatCanvasRepeatMark("MRR6")).toBe("Repeat Men's 6");
+    expect(formatCanvasRepeatMark("Z4")).toBe("Repeat Zone 4");
+    expect(formatCanvasRepeatMark()).toBe("Repeat");
   });
 });

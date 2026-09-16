@@ -1264,7 +1264,10 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     const roleFromTrail =
       key === "STEP" || key === "step_up"
         ? "step_up"
-        : key === "JC" || key === "job_coach"
+        : key === "JC" ||
+            key === "job_coach" ||
+            /^JC\d+$/i.test(key) ||
+            /^job_coach_\d+$/i.test(key)
           ? "job_coach"
           : key === "ADMIN" || key === "ADM"
             ? "admin"

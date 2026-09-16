@@ -86,7 +86,9 @@ export function slotFamilyForKey(slotKey: string): SlotFamily {
     u === "ADM" ||
     u === "ADMIN" ||
     u === "JC" ||
+    /^JC\d+$/.test(u) ||
     u === "JOB_COACH" ||
+    /^JOB_COACH_\d+$/.test(u) ||
     u === "STEP" ||
     u === "STEP_UP" ||
     /^(TR|TSH|SP|SUP|OAS|AUX)\d+$/.test(u) ||

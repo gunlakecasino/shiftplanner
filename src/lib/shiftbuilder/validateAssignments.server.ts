@@ -55,7 +55,7 @@ function invalidStar(reason: string): ValidationResult {
 
 /** Detect DB-shaped keys written by batch_apply (zone_1, rr_6, overlap_pm_1, …). */
 function looksLikeDbSlotKey(slotKey: string): boolean {
-  return /^(zone_|rr_|aux_|support_|trash_|oasis_|overlap_|admin$|z9_sr$|job_coach$|step_up$)/i.test(
+  return /^(zone_|rr_|aux_|support_|trash_|oasis_|overlap_|admin$|z9_sr$|job_coach(?:_\d+)?$|step_up$)/i.test(
     slotKey,
   );
 }

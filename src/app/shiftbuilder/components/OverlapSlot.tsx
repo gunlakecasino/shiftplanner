@@ -142,13 +142,11 @@ const OverlapSlot: React.FC<OverlapSlotProps> = React.memo(({
       {...(!isLocked ? attributes : {})}
       data-slot-key={slotKey}
       aria-label={`${overlapSlotLabel(slotKey)} overlap assignment`}
-      className={`assignment-card sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[64px] flex flex-col overflow-hidden rounded-xl ${
+      className={`assignment-card sb-desk-seat sb-assignment-card sb-refined-card sb-overlap-zone-card relative h-full min-h-[64px] flex flex-col overflow-hidden ${
         isOver ? "drop-target-active" : ""
       } ${dragFitClass} ${isDragging ? "sb-dragging" : ""} ${isEmpty ? "empty sb-card-empty" : ""} ${
         isDimmed ? "sb-weekly-dim" : ""
-      } ${isFocused ? "sb-weekly-highlight" : ""} ${
-        showDigitalAssists ? "hover:shadow-[0_0_0_1px_rgba(0,122,255,0.12)] transition-shadow" : ""
-      }`}
+      } ${isFocused ? "sb-weekly-highlight" : ""}`}
       style={{ ["--card-accent" as string]: accent, fontFamily: helv }}
     >
       <CardAccentStripe color={accent} />
