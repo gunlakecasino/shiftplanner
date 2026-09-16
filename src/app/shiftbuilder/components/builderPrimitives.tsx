@@ -37,7 +37,7 @@ export function BuilderSkeletonCard({
   const accent = BUILDER_LOADING_ACCENTS[index % BUILDER_LOADING_ACCENTS.length];
   return (
     <div
-      className={`sb-loading-card relative overflow-hidden rounded-xl p-3 flex flex-col gap-2 ${className}`.trim()}
+      className={`sb-loading-card relative overflow-hidden p-3 flex flex-col gap-2 ${className}`.trim()}
       style={minHeight != null ? { minHeight } : undefined}
       aria-hidden="true"
     >

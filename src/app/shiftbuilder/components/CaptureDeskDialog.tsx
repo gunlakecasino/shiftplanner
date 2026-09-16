@@ -7,6 +7,13 @@ import {
   downloadDeskCaptureJson,
   type DeskCaptureSnapshot,
 } from "@/lib/shiftbuilder/deskCapture";
+import {
+  DESK_CONTROL,
+  DESK_CONTROL_GHOST,
+  DESK_CONTROL_PRIMARY,
+  DESK_DIALOG,
+  DESK_OVERLAY,
+} from "./deskChrome";
 
 export type CaptureDeskDialogProps = {
   open: boolean;
@@ -101,8 +108,7 @@ export function CaptureDeskDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4"
-      style={{ background: "rgba(15, 23, 42, 0.28)" }}
+      className={`fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 ${DESK_OVERLAY}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -111,8 +117,7 @@ export function CaptureDeskDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-md rounded-lg bg-white shadow-lg border border-black/8 p-4"
-        style={{ fontFamily: "var(--font-ui, system-ui)" }}
+        className={`${DESK_DIALOG} p-4`}
       >
         <h2 id={titleId} className="text-[15px] font-semibold text-[#1C1C1E] mb-1">
           Capture desk
@@ -141,21 +146,21 @@ export function CaptureDeskDialog({
         <div className="mt-3 flex items-center justify-end gap-2">
           <button
             type="button"
-            className="h-8 px-3 rounded-md text-[12px] font-semibold text-[#334155]"
+            className={DESK_CONTROL}
             onClick={onClose}
           >
             Cancel
           </button>
           <button
             type="button"
-            className="h-8 px-3 rounded-md text-[12px] font-semibold text-[#334155] border border-black/8"
+            className={DESK_CONTROL_GHOST}
             onClick={handleDownload}
           >
             Download JSON
           </button>
           <button
             type="button"
-            className="h-8 px-3 rounded-md text-[12px] font-semibold text-white bg-[#007AFF]"
+            className={DESK_CONTROL_PRIMARY}
             onClick={() => void handleSubmit()}
           >
             Capture
