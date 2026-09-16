@@ -265,7 +265,7 @@ describe("SheetBuilder live undo toast (PR C)", () => {
 describe("SheetBuilder modern lightweight desk", () => {
   it("uses cool gray canvas, white cards, and keeps covering as inset chips", () => {
     expect(globalsCss).toContain("Modern lightweight desk — live board cards only");
-    expect(globalsCss).toContain("--sb-card-paper: #F7F8FB");
+    expect(globalsCss).toContain("--sb-card-paper: #FFFFFF");
     expect(globalsCss).toContain("--sb-paper: #F4F6FA");
     expect(globalsCss).toContain("--sb-substrate-2: #EEF1F6");
     expect(globalsCss).toContain("Dock open — keep the cool desk");
@@ -329,7 +329,7 @@ describe("SheetBuilder sit 2026-08-25 desk cleanliness", () => {
     expect(sitCss).toContain(".sb-desk-card-rail");
     expect(sitCss).toContain("content: none !important");
     expect(sitCss).toContain("white-space: normal !important");
-    expect(sitCss).toContain("--sb-card-paper, #F7F8FB");
+    expect(sitCss).toContain("--sb-card-paper, #FFFFFF");
     expect(sitCss).not.toContain("#F4EFE6");
     expect(sitCss).not.toContain("backdrop-filter: blur");
 

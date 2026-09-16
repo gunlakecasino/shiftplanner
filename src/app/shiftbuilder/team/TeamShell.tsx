@@ -102,9 +102,9 @@ export function TeamShell() {
 
   return (
     <div
-      className="sb-team-shell min-h-screen bg-[#F8F8F9] text-[#1C1C1E]"
+      className="sb-team-shell min-h-screen bg-[#F4F6FA] text-[#1C1C1E]"
       data-sb-route-ready=""
-      style={{ fontFamily: "var(--font-atkinson, system-ui, sans-serif)" }}
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui, sans-serif)" }}
     >
       <header className="flex items-center justify-between border-b border-neutral-200/80 bg-white/70 px-6 py-2.5 text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500 backdrop-blur">
         <div className="flex items-center gap-3">
@@ -121,7 +121,7 @@ export function TeamShell() {
       <div className="mx-auto w-full max-w-[1180px] px-6 pb-16 pt-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#B89708]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748B]">
               OMS · Team
             </p>
             <h1 className="mt-1 text-[26px] font-bold tracking-[-0.4px]">Team</h1>
@@ -154,14 +154,14 @@ export function TeamShell() {
                 title={tab.description}
                 className={`sb-interactive inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] font-semibold transition-colors ${
                   isActive
-                    ? "border-[#B89708]/40 bg-[#B89708]/10 text-[#8B6910]"
+                    ? "border-[#1C1C1E]/20 bg-[#1C1C1E] text-white"
                     : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
                 }`}
               >
                 <Icon
                   size={15}
                   strokeWidth={2.1}
-                  style={{ color: isActive ? "#B89708" : "#9CA3AF" }}
+                  style={{ color: isActive ? "#FFFFFF" : "#9CA3AF" }}
                 />
                 {tab.label}
               </button>

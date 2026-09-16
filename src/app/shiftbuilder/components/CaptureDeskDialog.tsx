@@ -132,7 +132,7 @@ export function CaptureDeskDialog({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="What went wrong?"
-          className="w-full resize-none rounded-md border border-black/10 px-2.5 py-2 text-[13px] text-[#1C1C1E] outline-none focus:border-[#007AFF]"
+          className="w-full resize-none rounded-md border border-black/10 bg-[#F4F6FA] px-2.5 py-2 text-[13px] text-[#1C1C1E] outline-none focus:border-[#1C1C1E] focus:bg-white"
         />
         {status ? (
           <p className="mt-2 text-[12px] text-[#6B7280]" role="status">
