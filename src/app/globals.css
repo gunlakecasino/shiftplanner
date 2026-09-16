@@ -8961,6 +8961,12 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   overflow: hidden !important;
 }
 
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band.sb-coverage-footer--empty,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer--band.sb-coverage-footer--empty {
+  min-height: 28px !important;
+  background: #F4F6FA !important;
+}
+
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row {
   display: flex !important;
