@@ -10,15 +10,13 @@ import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
-import CoverageBar, { CoveragePaperRail } from "./CoverageBar";
+import CoverageBar, { SeatCoverageFooter } from "./CoverageBar";
 import { assignmentShowsSkeleton, TmPlacementTrail, type SlotAssignmentState } from "./assignmentCardChrome";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
-import { formatCoveredByRail, formatCoveredByRailTitle } from "@/lib/shiftbuilder/canvasPrideLabels";
 import {
   formatCoveragePositionLabel,
-  getSlotAccentColor,
   visibleOutgoingCoverageTasks,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
@@ -281,29 +279,22 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     label: formatCoveragePositionLabel(def.key, entry.side, coveredBy.length),
     name: entry.tmName,
   }));
-  const showCoverageFooter =
-    (showDigitalAssists && (coveredBy.length > 0 || zoneCoverageTasks.length > 0)) ||
-    (!showDigitalAssists && zoneCoverageTasks.length > 0);
-  const packageCoverageFooter = showCoverageFooter ? (
-    <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--rails" : ""}`}>
-      {showDigitalAssists
-        ? coveredBy.map((entry) => (
-            <CoveragePaperRail
-              key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
-              label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
-              title={formatCoveredByRailTitle(entry.tmName, entry.sourceKey)}
-              accent={getSlotAccentColor(entry.sourceKey)}
-            />
-          ))
-        : null}
+  const packageCoverageFooter = showDigitalAssists ? (
+    <SeatCoverageFooter
+      slotKey={def.key}
+      outgoingTasks={zoneCoverageTasks}
+      coveredBy={coveredBy}
+      onRemoveTask={packageTaskInteractionsEnabled ? onRemoveTask : undefined}
+      reserved
+    />
+  ) : zoneCoverageTasks.length > 0 ? (
+    <div className="sb-coverage-footer shrink-0">
       {zoneCoverageTasks.map((task) => (
         <CoverageBar
           key={task.id}
           task={task}
           slotKey={def.key}
           onRemoveTask={packageTaskInteractionsEnabled ? onRemoveTask : undefined}
-          builderCalm={showDigitalAssists}
-          presentation={showDigitalAssists ? "rail" : undefined}
         />
       ))}
     </div>

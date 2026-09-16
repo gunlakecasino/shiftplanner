@@ -8,7 +8,7 @@ import {
 } from "@/lib/shiftbuilder/constants";
 import { useSlotDnd } from "@/lib/shiftbuilder/useSlotDnd";
 import { handleSpotlightMove } from "@/lib/shiftbuilder/spotlightMove";
-import CoverageBar, { CoveragePaperRail } from "./CoverageBar";
+import CoverageBar, { SeatCoverageFooter } from "./CoverageBar";
 import TaskRow from "./TaskRow";
 import { taskLabelColorClass, taskLabelSizeClass, TASK_LABEL_SIZE_PX } from "@/lib/shiftbuilder/taskTextStyle";
 import { isCriticalRepeatFit, PlacementFitChip } from "./PlacementFitChip";
@@ -21,8 +21,8 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
-import { formatCanvasRrSideLabel, formatCoveredByRail, formatCoveredByRailTitle } from "@/lib/shiftbuilder/canvasPrideLabels";
-import { getSlotAccentColor, visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
+import { formatCanvasRrSideLabel } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
@@ -317,9 +317,9 @@ function RRSideShell({
   /** iPad pair: this is a half inside one card, not its own card. */
   pairHalf?: boolean;
 }) {
-  const coveragePresentation = showDigitalAssists ? "rail" : undefined;
   const incomingRails = showDigitalAssists ? coveredBy : [];
-  const showCoverageFooter = incomingRails.length > 0 || coverageTasks.length > 0;
+  const showCoverageFooter =
+    showDigitalAssists || incomingRails.length > 0 || coverageTasks.length > 0;
   return (
     <div
       className={`${pairHalf ? "sb-ipad-rr-half" : "assignment-card sb-assignment-card sb-refined-card"} relative overflow-hidden flex flex-col flex-1 ${pairHalf ? "" : "rounded-2xl"} h-full min-h-0 ${isEmpty ? "empty sb-card-empty" : ""}`}
@@ -353,26 +353,26 @@ function RRSideShell({
         {body}
       </div>
       {showCoverageFooter ? (
-        <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--rails" : ""}`}>
-          {incomingRails.map((entry) => (
-            <CoveragePaperRail
-              key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
-              label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
-              title={formatCoveredByRailTitle(entry.tmName, entry.sourceKey)}
-              accent={getSlotAccentColor(entry.sourceKey)}
-            />
-          ))}
-          {coverageTasks.map((t) => (
-            <CoverageBar
-              key={t.id}
-              task={t}
-              slotKey={slotKey}
-              onRemoveTask={onRemoveTask}
-              builderCalm={showDigitalAssists}
-              presentation={coveragePresentation}
-            />
-          ))}
-        </div>
+        showDigitalAssists ? (
+          <SeatCoverageFooter
+            slotKey={slotKey}
+            outgoingTasks={coverageTasks}
+            coveredBy={incomingRails}
+            onRemoveTask={onRemoveTask}
+            reserved
+          />
+        ) : (
+          <div className="sb-coverage-footer shrink-0">
+            {coverageTasks.map((t) => (
+              <CoverageBar
+                key={t.id}
+                task={t}
+                slotKey={slotKey}
+                onRemoveTask={onRemoveTask}
+              />
+            ))}
+          </div>
+        )
       ) : null}
     </div>
   );
@@ -490,7 +490,7 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
             onContextMenu: longPress.onContextMenu,
           }
         : {})}
-      className={`sb-rr-pair relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${ipadDesk ? "sb-ipad-rr-pair assignment-card" : ""} ${bothEmpty ? "empty" : ""} ${isTodayKiosk ? "sb-today-kiosk-card assignment-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
+      className={`sb-rr-pair sb-desk-seat relative overflow-hidden flex flex-col gap-1 h-full min-h-0 ${ipadDesk ? "sb-ipad-rr-pair assignment-card" : ""} ${bothEmpty ? "empty" : ""} ${isTodayKiosk ? "sb-today-kiosk-card assignment-card" : ""} ${isPeerDimmed ? "sb-card-peer-dimmed" : ""} ${isCardSelected ? "sb-card-selected" : ""} ${isAssignPulse ? "sb-card-assign-pulse" : ""}`}
       style={{ ["--card-accent" as string]: color }}
     >
       {ipadDesk ? <CardAccentStripe color={color} /> : null}

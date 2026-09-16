@@ -107,4 +107,46 @@ describe("SheetBuilder desk cohesion", () => {
     expect(authCss).toContain("border-radius: var(--sb-card-radius, 20px)");
     expect(authCss).toContain(".sb-auth-primary:active:not(:disabled)");
   });
+
+  it("uses one reserved coverage footer band across Zone / RR / Aux", () => {
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    const rrCard = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/RRCard.tsx"),
+      "utf8",
+    );
+    expect(coverageBar).toContain("export function SeatCoverageFooter");
+    expect(zoneCard).toContain("SeatCoverageFooter");
+    expect(auxCard).toContain("SeatCoverageFooter");
+    expect(rrCard).toContain("SeatCoverageFooter");
+    expect(globalsCss).toContain(".sb-coverage-footer--band");
+    expect(globalsCss).toContain("width: 8px !important");
+    expect(globalsCss).toContain("--sb-card-paper: #FFFFFF");
+    expect(globalsCss).toContain("background: #1C1C1E");
+  });
+
+  it("quiets topbar Unpublished and labels Zones / Breaks sheets", () => {
+    const nav = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/FloatingNav.tsx"),
+      "utf8",
+    );
+    expect(nav).toContain("sb-sheet-view-pill");
+    expect(nav).toMatch(/>\s*Zones\s*</);
+    expect(nav).toMatch(/>\s*Breaks\s*</);
+    expect(nav).not.toContain("sb-help-fab");
+    expect(nav).toContain("sb-topbar-publish");
+    expect(nav).toContain('background: draftSlotCount > 0 ? "#1C1C1E"');
+  });
+
+  it("keeps Team search as an icon, not a colliding search ligature", () => {
+    const teamTab = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/sudo/TeamTab.tsx"),
+      "utf8",
+    );
+    expect(teamTab).toContain('<MsIcon name="search" size={14} />');
+    expect(teamTab).not.toContain(">search</span>");
+    expect(teamTab).toContain('htmlFor="sb-team-roster-search"');
+  });
 });

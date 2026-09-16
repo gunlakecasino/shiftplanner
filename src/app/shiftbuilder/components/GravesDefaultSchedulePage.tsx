@@ -525,8 +525,8 @@ export function GravesDefaultSchedulePage({ embedded = false }: { embedded?: boo
 
   return (
     <div
-      className={embedded ? "h-full min-h-0 bg-transparent text-[#1C1C1E]" : "min-h-screen bg-[#F8F8F9] text-[#1C1C1E]"}
-      style={{ fontFamily: "var(--font-atkinson, system-ui, sans-serif)" }}
+      className={embedded ? "h-full min-h-0 bg-transparent text-[#1C1C1E]" : "min-h-screen bg-[#F4F6FA] text-[#1C1C1E]"}
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui, sans-serif)" }}
     >
       <header
         className={

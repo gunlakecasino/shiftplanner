@@ -7051,7 +7051,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   --sb-substrate: #EEF1F6;
   --sb-substrate-2: #EEF1F6;
   --sb-desk: #F4F6FA;
-  --sb-card-paper: #F7F8FB;
+  --sb-card-paper: #FFFFFF;
   --sb-card-line: #E6EAF0;
   --sb-card-radius: 20px;
   --sb-control-radius: 8px;
@@ -7886,7 +7886,7 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card > .w-\[7px\] {
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-refined-card {
-  background: var(--sb-card-paper, #F7F8FB) !important;
+  background: var(--sb-card-paper, #FFFFFF) !important;
 }
 
 .sb-desk-card-rail,
@@ -7899,12 +7899,12 @@ body.sb-pad-flyout-open .sb-builder-stage .sb-desk-card > .w-\[7px\] {
   left: 0 !important;
   right: auto !important;
   z-index: 3;
-  width: 7px !important;
+  width: 8px !important;
   height: 100% !important;
   min-height: 100% !important;
   max-height: none !important;
   align-self: stretch !important;
-  flex: 0 0 7px;
+  flex: 0 0 8px;
   border-radius: 20px 0 0 20px !important;
   pointer-events: none;
 }
@@ -8271,6 +8271,32 @@ img.sb-drop-zone-disc {
   margin-top: auto;
   padding: 12px 0 10px !important;
   gap: 0;
+}
+
+/* Reserved covering slot — one skin for Zone / RR / Aux. Soft rail-tint band, not candy pills. */
+.sb-coverage-footer--band {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 100%;
+  min-height: 32px;
+  margin-top: auto;
+  padding: 0 !important;
+  gap: 0;
+  background: color-mix(in srgb, var(--card-accent, #94A3B8) 10%, #F4F6FA);
+}
+
+.sb-coverage-footer--band.sb-coverage-footer--empty {
+  min-height: 28px;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band .sb-coverage-bar--chip,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band .sb-coverage-chip {
+  width: 100% !important;
+  max-width: none !important;
+  border-radius: 0 !important;
+  padding: 6px 10px 6px 14px !important;
 }
 
 .sb-coverage-footer--rails > .sb-coverage-rail + .sb-coverage-rail {
@@ -8689,12 +8715,12 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
 
 .sb-desk-control--primary {
   color: #ffffff;
-  background: #007AFF;
-  border-color: #007AFF;
+  background: #1C1C1E;
+  border-color: #1C1C1E;
 }
 
 .sb-desk-control--primary:hover:not(:disabled) {
-  background: #0066D6;
+  background: #111113;
 }
 
 .sb-desk-control--danger {

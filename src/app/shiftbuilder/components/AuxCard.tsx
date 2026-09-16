@@ -33,6 +33,8 @@ import {
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
 import { CardVectorMark } from "./CardVectorMark";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
+import { SeatCoverageFooter } from "./CoverageBar";
+import { visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
 import {
   placeFixedPopover,
   readViewportHeight,
@@ -421,6 +423,12 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   );
 
   const regularTasks = visibleDeskSlotTasks(selectedTasks[def.key]);
+  const auxCoverageTasks = visibleOutgoingCoverageTasks(
+    selectedTasks[def.key] || [],
+    def.key,
+    coveredBy,
+    isEmpty || (!hasTM && coveredBy.length > 0),
+  );
 
   let assignmentState: SlotAssignmentState;
   if (assignmentShowsSkeleton(loading, hasTM, assignments)) {
@@ -446,6 +454,10 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
   }
 
   const headerAccent = (isUnsetBlank && !hasTM) ? "#9CA3AF" : color;
+  const bodyAssignmentState: SlotAssignmentState =
+    showDigitalAssists && assignmentState.kind === "covered"
+      ? { kind: "unassigned" }
+      : assignmentState;
 
   return (
     <div
@@ -558,7 +570,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
         >
           <SlotAssignmentBody
-            state={assignmentState}
+            state={bodyAssignmentState}
             scale="zone"
             showDigitalAssists={showDigitalAssists}
             isDuplicate={isDuplicate}
@@ -622,6 +634,15 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
           </div>
         )}
       </div>
+      {showDigitalAssists ? (
+        <SeatCoverageFooter
+          slotKey={def.key}
+          outgoingTasks={auxCoverageTasks}
+          coveredBy={coveredBy}
+          onRemoveTask={!isLocked && !isViewOnly ? onRemoveTask : undefined}
+          reserved
+        />
+      ) : null}
     </div>
   );
 }, auxCardPropsAreEqual);

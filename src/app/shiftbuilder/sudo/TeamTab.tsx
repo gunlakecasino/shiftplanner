@@ -165,17 +165,26 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
         {/* Filter bar */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
-            <span className={cn("ms absolute left-2.5 top-1/2 -translate-y-1/2", isDark ? "text-zinc-500" : "text-[#6C6C72]")} style={{ fontSize: 14 }}>search</span>
+            <span
+              className={cn("absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none", isDark ? "text-zinc-500" : "text-[#6C6C72]")}
+              aria-hidden="true"
+            >
+              <MsIcon name="search" size={14} />
+            </span>
+            <label htmlFor="sb-team-roster-search" className="sr-only">
+              Search team
+            </label>
             <input
-              type="text"
+              id="sb-team-roster-search"
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search name, pool (Graves/PM/AM), or tm_id…"
               className={cn(
                 "w-full pl-8 pr-3 py-1.5 rounded-lg text-[12px] focus:outline-none transition-colors",
                 isDark
-                  ? "bg-[#1C1C1E] border border-[#3A3A3C] text-[#F2F2F4] placeholder:text-zinc-600 focus:border-[#B89708]/60"
-                  : "bg-white border border-[#E5E5E7] text-[#1C1C1E] placeholder:text-[#9CA3AF] focus:border-[#B89708]/60"
+                  ? "bg-[#1C1C1E] border border-[#3A3A3C] text-[#F2F2F4] placeholder:text-zinc-600 focus:border-[#1C1C1E]"
+                  : "bg-white border border-[#E5E5E7] text-[#1C1C1E] placeholder:text-[#9CA3AF] focus:border-[#1C1C1E]"
               )}
             />
           </div>
@@ -229,7 +238,7 @@ export function TeamTab({ onDataChanged, isDark = false }: TeamTabProps = {}) {
                 flash("err", err instanceof Error ? err.message : String(err));
               }
             }}
-            className="sb-interactive px-3 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[11px] font-medium inline-flex items-center gap-1.5"
+            className="sb-interactive px-3 py-1.5 rounded-lg bg-[#1C1C1E] hover:bg-[#111113] text-white text-[11px] font-medium inline-flex items-center gap-1.5"
           >
             <MsIcon name="person_add" size={12} /> new TM
           </button>
@@ -568,7 +577,7 @@ function TMEditDrawer({
             <button
               onClick={save}
               disabled={saving}
-              className="sb-interactive px-5 py-1.5 rounded-lg bg-[#B89708] hover:bg-[#A07F07] text-white text-[12px] font-medium inline-flex items-center gap-2 shadow-sm"
+              className="sb-interactive px-5 py-1.5 rounded-lg bg-[#1C1C1E] hover:bg-[#111113] text-white text-[12px] font-medium inline-flex items-center gap-2 shadow-sm"
             >
               {saving ? (
                 <BuilderBusyLabel>Saving</BuilderBusyLabel>

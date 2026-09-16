@@ -11,7 +11,13 @@ import {
 import {
   coverageChipTone,
   formatCanvasCoverageChip,
+  formatCoveredByRail,
+  formatCoveredByRailTitle,
 } from "@/lib/shiftbuilder/canvasPrideLabels";
+import {
+  getSlotAccentColor,
+  type CoveredByEntry,
+} from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
  * Quiet paper rail for the iPad night desk.
@@ -228,5 +234,58 @@ const CoverageBar = React.memo(function CoverageBar({
     </div>
   );
 });
+
+/**
+ * One coverage skin for Zone / RR / Aux — reserved full-width footer band.
+ * Live desk always paints rails (soft rail-tint). Print keeps Golden banners.
+ * Visual slot only: does not change coverage ownership or Apply wiring.
+ */
+export function SeatCoverageFooter({
+  slotKey,
+  outgoingTasks,
+  coveredBy = [],
+  onRemoveTask,
+  reserved = false,
+}: {
+  slotKey: string;
+  outgoingTasks: NightSlotTask[];
+  coveredBy?: CoveredByEntry[];
+  onRemoveTask?: (
+    slotKey: string,
+    taskLabel: string,
+    taskId?: string | null,
+  ) => void;
+  /** Keep the footer band even when this seat has no covering chip. */
+  reserved?: boolean;
+}) {
+  const hasChips = coveredBy.length > 0 || outgoingTasks.length > 0;
+  if (!reserved && !hasChips) return null;
+
+  return (
+    <div
+      className={`sb-coverage-footer sb-coverage-footer--band sb-coverage-footer--rails shrink-0${hasChips ? "" : " sb-coverage-footer--empty"}`}
+      data-coverage-slot={slotKey}
+    >
+      {coveredBy.map((entry) => (
+        <CoveragePaperRail
+          key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
+          label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
+          title={formatCoveredByRailTitle(entry.tmName, entry.sourceKey)}
+          accent={getSlotAccentColor(entry.sourceKey)}
+        />
+      ))}
+      {outgoingTasks.map((task) => (
+        <CoverageBar
+          key={task.id}
+          task={task}
+          slotKey={slotKey}
+          onRemoveTask={onRemoveTask}
+          builderCalm
+          presentation="rail"
+        />
+      ))}
+    </div>
+  );
+}
 
 export default CoverageBar;

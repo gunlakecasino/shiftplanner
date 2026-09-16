@@ -159,7 +159,7 @@ export function PrintCommandCenter({ activeDay, onClose }: PrintCommandCenterPro
             <button
               disabled={sheetCount === 0}
               className="flex items-center gap-1.5 text-[12px] font-bold text-white px-4 py-2 rounded-xl transition-all"
-              style={{ backgroundColor: sheetCount > 0 ? "#2563EB" : "#d1d5db", cursor: sheetCount > 0 ? "pointer" : "not-allowed" }}
+              style={{ backgroundColor: sheetCount > 0 ? "#1C1C1E" : "#d1d5db", cursor: sheetCount > 0 ? "pointer" : "not-allowed" }}
             >
               <Printer size={13} />
               Print{sheetCount > 0 ? ` ${sheetCount}` : ""}

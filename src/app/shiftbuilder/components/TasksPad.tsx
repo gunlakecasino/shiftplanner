@@ -22,7 +22,7 @@ import { padDockPresence, padFlyoutPresence, padOriginFromHost, queryPadHostRect
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 import { usePortalPlacementStyle, type PlacementPadAnchor } from "./PlacementPad";
 import { TASK_COLOR_SPHERES } from "./TaskRow";
-import { TaskMarkerLabel } from "./TaskMarkerLabel";
+import { FormattedTaskLabel } from "./FormattedTaskLabel";
 import { resolveTaskAppearanceColor } from "@/lib/shiftbuilder/taskMarkerStyle";
 import { getSlotMeta } from "./MarkerPad";
 import {
@@ -417,7 +417,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
     [
       "sb-interactive flex h-7 w-7 items-center justify-center rounded-lg border transition-transform transition-opacity active:scale-[0.96]",
       active
-        ? "border-[#007AFF]/35 bg-[#007AFF]/[0.12] text-[#007AFF]"
+        ? "border-[#1C1C1E]/25 bg-[#1C1C1E]/[0.08] text-[#1C1C1E]"
         : "border-transparent bg-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700",
     ].join(" ");
 
@@ -428,7 +428,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
           ? "rounded-none shadow-none border-0"
           : ""
       }`}
-      style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
+      style={{ fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui, sans-serif)" }}
     >
       {/* Compact header + task chips */}
       <div className={`shrink-0 ${isDock ? "px-3 pt-2 pb-1.5" : "px-3 pt-2.5 pb-2"}`}>
@@ -450,7 +450,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                 {slotMeta.label}
               </span>
               {hasChanges ? (
-                <span className="text-[9px] font-semibold text-[#007AFF] shrink-0">· unsaved</span>
+                <span className="text-[9px] font-semibold text-[#1C1C1E] shrink-0">· unsaved</span>
               ) : null}
             </div>
           </div>
@@ -476,7 +476,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                 onClick={() => selectExistingTask(t.id)}
                 className={`sb-interactive shrink-0 max-w-[120px] truncate text-[10px] px-2 py-1 rounded-full font-semibold transition-transform transition-opacity ${
                   active
-                    ? "bg-[#007AFF] text-white"
+                    ? "bg-[#1C1C1E] text-white"
                     : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200/90"
                 }`}
                 title={t.taskLabel}
@@ -491,8 +491,8 @@ const TasksPad: React.FC<TasksPadProps> = ({
               onClick={beginAddTask}
               className={`sb-interactive shrink-0 inline-flex items-center gap-0.5 text-[10px] px-2 py-1 rounded-full font-semibold ${
                 isAddingNew
-                  ? "bg-[#007AFF] text-white"
-                  : "border border-dashed border-[#007AFF]/45 text-[#007AFF] hover:bg-[#007AFF]/[0.06]"
+                  ? "bg-[#1C1C1E] text-white"
+                  : "border border-dashed border-[#1C1C1E]/35 text-[#1C1C1E] hover:bg-[#1C1C1E]/[0.06]"
               }`}
             >
               <Plus size={11} strokeWidth={2.5} />
@@ -517,7 +517,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
               suppressContentEditableWarning
               onInput={handleEditorInput}
               onBlur={handleEditorBlur}
-              className="w-full min-h-[44px] max-h-[88px] overflow-y-auto rounded-xl border border-black/[0.07] bg-neutral-50 px-2.5 py-2 text-[13px] font-semibold text-gray-900 leading-snug focus:outline-none focus:border-[#007AFF]/45 focus:ring-2 focus:ring-[#007AFF]/12 focus:bg-white whitespace-pre-wrap break-words"
+              className="w-full min-h-[44px] max-h-[88px] overflow-y-auto rounded-xl border border-black/[0.07] bg-neutral-50 px-2.5 py-2 text-[13px] font-semibold text-gray-900 leading-snug focus:outline-none focus:border-[#1C1C1E]/40 focus:ring-2 focus:ring-[#1C1C1E]/10 focus:bg-white whitespace-pre-wrap break-words"
               style={{
                 fontSize: textStyleDraft?.fontSizePx ?? TASK_LABEL_SIZE_PX.default,
                 fontWeight: textStyleDraft?.fontWeight === "bold" ? 700 : 600,
@@ -530,7 +530,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
               data-placeholder="Task text…"
             />
 
-            {/* Single compact toolbar: type · ink · marker */}
+            {/* Compact toolbar — one sans ramp; marker wash is not the typeface */}
             <div className="rounded-xl border border-black/[0.06] bg-neutral-50/90 px-1.5 py-1.5 space-y-1.5">
               <div className="flex flex-wrap items-center gap-0.5">
                 <button type="button" className={toolBtn(textStyleDraft?.fontWeight === "bold")} onClick={() => applyFormat({ fontWeight: "bold" })} title="Bold" aria-pressed={textStyleDraft?.fontWeight === "bold"}>
@@ -553,7 +553,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                     onClick={() => applyFormat({ fontSizePx: sz })}
                     className={`sb-interactive h-7 min-w-[26px] px-1 rounded-lg text-[10px] font-bold ${
                       textStyleDraft?.fontSizePx === sz
-                        ? "bg-[#007AFF]/[0.12] text-[#007AFF]"
+                        ? "bg-[#1C1C1E]/[0.08] text-[#1C1C1E]"
                         : "text-neutral-500 hover:bg-neutral-100"
                     }`}
                     aria-pressed={textStyleDraft?.fontSizePx === sz}
@@ -591,7 +591,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                   type="button"
                   onClick={() => setColorDraft(null)}
                   className={`sb-interactive w-6 h-6 rounded-full bg-white border text-[11px] leading-none text-neutral-400 flex items-center justify-center ${
-                    !colorDraft ? "border-[#007AFF] text-[#007AFF]" : "border-black/10"
+                    !colorDraft ? "border-[#1C1C1E] text-[#1C1C1E]" : "border-black/10"
                   }`}
                   title="No color"
                   aria-pressed={!colorDraft}
@@ -609,7 +609,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                       onClick={() => setMarkerType(m.id)}
                       className={`sb-interactive h-7 px-1.5 rounded-lg inline-flex items-center gap-1 text-[9px] font-semibold ${
                         active
-                          ? "bg-[#007AFF]/[0.12] text-[#007AFF]"
+                          ? "bg-[#1C1C1E]/[0.08] text-[#1C1C1E]"
                           : "text-neutral-500 hover:bg-neutral-100"
                       }`}
                       title={m.label}
@@ -628,12 +628,14 @@ const TasksPad: React.FC<TasksPadProps> = ({
               <span className="text-[9px] font-semibold uppercase tracking-wide text-neutral-400 shrink-0">
                 Card
               </span>
-              <TaskMarkerLabel
+              <FormattedTaskLabel
                 label={labelDraft.trim() || "—"}
-                color={colorDraft}
-                markerType={markerType}
                 textStyle={textStyleDraft}
                 className="inline-block font-semibold text-[12px] min-w-0 truncate"
+                baseStyle={{
+                  fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui, sans-serif)",
+                  color: colorDraft || "#111827",
+                }}
               />
             </div>
           </div>
@@ -670,7 +672,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
                 whileTap={hasChanges && !saving ? premiumTap : {}}
                 className={`sb-interactive rounded-xl text-[12px] font-bold px-3.5 h-8 ${
                   hasChanges && !saving
-                    ? "text-white bg-[#007AFF] shadow-sm shadow-[#007AFF]/30"
+                    ? "text-white bg-[#1C1C1E] shadow-sm shadow-black/20"
                     : "bg-neutral-200 text-neutral-400 cursor-default"
                 }`}
               >
@@ -681,7 +683,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
         </div>
       ) : (
         <div className="px-4 py-6 text-center text-[12px] text-neutral-500">
-          Tap <span className="font-semibold text-[#007AFF]">+ Add</span> to create a task.
+          Tap <span className="font-semibold text-[#1C1C1E]">+ Add</span> to create a task.
         </div>
       )}
     </div>
@@ -717,7 +719,7 @@ const TasksPad: React.FC<TasksPadProps> = ({
           : usePortal && portalStyle
             ? { ...portalStyle, zIndex: 210, width: 312, maxHeight: "min(420px, 70vh)" }
             : { width: 312, maxHeight: "min(420px, 70vh)" }),
-        fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+        fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui, sans-serif)",
       }}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}

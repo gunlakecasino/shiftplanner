@@ -1442,7 +1442,7 @@ function PackagePrintCommandCenterShell({
               onClick={handlePrint}
               disabled={isPrinting || pageCount === 0}
               className="flex items-center gap-1.5 text-[12px] font-bold text-white px-4 py-2 rounded-xl transition-transform transition-opacity disabled:text-white"
-              style={{ backgroundColor: pageCount > 0 ? "#2563EB" : "#d1d5db", cursor: pageCount > 0 && !isPrinting ? "pointer" : "not-allowed" }}
+              style={{ backgroundColor: pageCount > 0 ? "#1C1C1E" : "#d1d5db", cursor: pageCount > 0 && !isPrinting ? "pointer" : "not-allowed" }}
             >
               <Printer size={13} />
               Print{pageCount > 0 ? ` ${pageCount}` : ""}
