@@ -8994,28 +8994,38 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   overflow: hidden !important;
 }
 
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail {
   width: auto !important;
-  max-width: 100% !important;
-  flex: 0 1 auto !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
   background: #EEF1F6 !important;
   color: #334155 !important;
   border-radius: 8px !important;
   padding: 5px 10px 5px 12px !important;
 }
 
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-bar-label,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-rail__label,
+html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-rail__label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-bar-label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-rail__label,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-rail__label {
-  flex: 0 1 auto !important;
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  max-width: none !important;
   font-size: 12px !important;
   font-weight: 650 !important;
   letter-spacing: 0 !important;
   color: #334155 !important;
   white-space: nowrap !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   text-overflow: clip !important;
 }
 

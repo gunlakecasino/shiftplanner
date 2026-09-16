@@ -222,8 +222,10 @@ describe("SheetBuilder desk cohesion", () => {
       /\.sb-coverage-footer__row[\s\S]{0,220}flex-wrap: nowrap/,
     );
     expect(globalsCss).toMatch(
-      /\.sb-coverage-footer__row \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,320}width: auto !important/,
+      /\.sb-coverage-footer__row \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,400}width: auto !important/,
     );
+    expect(globalsCss).toContain("flex: 0 0 auto !important");
+    expect(globalsCss).toContain("html.sb-ipad-desk");
     expect(globalsCss).toContain("text-overflow: clip !important");
     expect(globalsCss).toContain("align-self: start !important");
     expect(globalsCss).toMatch(
