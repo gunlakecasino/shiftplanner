@@ -190,7 +190,7 @@ export type CardNameScale = "zone" | "rr" | "aux";
 const NAME_SIZE_BUILDER: Record<CardNameScale, number> = {
   zone: 17, /* 192-wide Golden/desk density — Jessica / Silvia / Darlene must fit */
   rr: 17,
-  aux: 16,
+  aux: 17,
 };
 
 const NAME_SIZE_PRINT: Record<CardNameScale, number> = {
@@ -213,7 +213,7 @@ const INVITE_CONFIG: Record<
 > = {
   zone: { labelSize: 12, padding: "py-1" },
   rr: { labelSize: 11, padding: "py-0.5" },
-  aux: { labelSize: 11, padding: "py-0.5" },
+  aux: { labelSize: 12, padding: "py-1" },
 };
 
 export function coverageBodyPadding(

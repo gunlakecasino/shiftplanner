@@ -632,7 +632,10 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(authGate).not.toContain("filter: blur(12px)");
     expect(authGate).not.toContain("sb-day-sweep 1.5s");
     expect(authGate).toContain("content: none");
-    expect(authGate).toContain("opacity: 0.45");
+    expect(authGate).toContain("opacity: 0.78");
+    expect(shiftBuilderClient).toContain("const showCanvasVeil = boardBackgroundSync");
+    expect(shiftBuilderClient).not.toContain("isPending && hasBoardPayload");
+    expect(shiftBuilderClient).toContain("const [, startDayTransition] = useTransition()");
     expect(useShiftData).toContain("queryColdLoading && hydratedDayKey == null");
     expect(useShiftData).not.toContain("hydratedDayKey !== selectedDateKey");
     expect(useShiftData).not.toContain("stableRefs.current.assignments = {}");
@@ -863,6 +866,9 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(coverageBar).not.toContain("coverageBarBg");
     expect(coverageBar).not.toMatch(/useRail[\s\S]{0,400}#ffffff/);
     expect(pride).toContain("export function formatCoveredByRail");
+    expect(pride).toContain("export function formatCoveredByRailTitle");
+    expect(pride).toContain("Covered ·");
+    expect(pride).not.toContain("Covered by ${name} ·");
     expect(zoneCard).toContain("formatCoveredByRail");
     expect(zoneCard).toContain("CoveragePaperRail");
     expect(zoneCard).toContain("coverage={showDigitalAssists ? undefined");

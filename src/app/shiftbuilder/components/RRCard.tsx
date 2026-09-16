@@ -21,7 +21,7 @@ import {
   type SlotAssignmentState,
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
-import { formatCanvasRrSideLabel, formatCoveredByRail } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { formatCanvasRrSideLabel, formatCoveredByRail, formatCoveredByRailTitle } from "@/lib/shiftbuilder/canvasPrideLabels";
 import { getSlotAccentColor, visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
@@ -358,6 +358,7 @@ function RRSideShell({
             <CoveragePaperRail
               key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
               label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
+              title={formatCoveredByRailTitle(entry.tmName, entry.sourceKey)}
               accent={getSlotAccentColor(entry.sourceKey)}
             />
           ))}

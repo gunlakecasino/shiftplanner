@@ -3,6 +3,7 @@ import {
   coverageChipTone,
   formatCanvasCoverageChip,
   formatCoveredByRail,
+  formatCoveredByRailTitle,
   formatCanvasRepeatMark,
   formatCanvasRepeatReason,
   formatCanvasRrSideLabel,
@@ -106,17 +107,19 @@ describe("formatCanvasCoverageChip", () => {
 });
 
 describe("formatCoveredByRail", () => {
-  it("uses the same place language as outgoing Covering chips", () => {
-    expect(formatCoveredByRail("Brian", "WRR6")).toBe("Covered by Brian · Women's 6");
-    expect(formatCoveredByRail("JT", "Z5")).toBe("Covered by JT · Zone 5");
-    expect(formatCoveredByRail("Ana", "MRR1")).toBe("Covered by Ana · Men's 1+2");
+  it("names the source seat, not a second assignment", () => {
+    expect(formatCoveredByRail("Brian", "WRR6")).toBe("Covered · Women's 6");
+    expect(formatCoveredByRail("JT", "Z5")).toBe("Covered · Zone 5");
+    expect(formatCoveredByRail("Ana", "MRR1")).toBe("Covered · Men's 1+2");
+    expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/Brian/);
   });
 
   it("does not leak AND / + leftovers or a second banner family", () => {
     expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/\bAND\b|\+/);
     expect(formatCoveredByRail("Brian", "WRR6")).not.toMatch(/^Covering /);
-    expect(formatCoveredByRail("", "Z4")).toBe("Covered by TM · Zone 4");
-    expect(formatCoveredByRail("Lee")).toBe("Covered by Lee");
+    expect(formatCoveredByRail("", "Z4")).toBe("Covered · Zone 4");
+    expect(formatCoveredByRail("Lee")).toBe("Covered");
+    expect(formatCoveredByRailTitle("Lee", "Z4")).toBe("Covered · Zone 4 — Lee");
   });
 });
 

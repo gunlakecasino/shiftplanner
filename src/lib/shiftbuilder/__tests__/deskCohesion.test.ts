@@ -46,6 +46,10 @@ describe("SheetBuilder desk cohesion", () => {
     expect(overlapSlot).toContain("sb-desk-seat");
     expect(zoneCard).not.toContain("rounded-xl");
     expect(auxCard).not.toContain("rounded-2xl");
+    expect(auxCard).toContain('inviteSize="zone"');
+    expect(auxCard).toContain('scale="zone"');
+    expect(auxCard).not.toContain("nameSizeOverride");
+    expect(globalsCss).toContain("--sb-invite-min-h-aux: 44px");
     expect(overlapSlot).not.toContain("rounded-xl");
   });
 

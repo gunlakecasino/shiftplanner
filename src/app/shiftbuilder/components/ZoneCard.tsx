@@ -15,7 +15,7 @@ import { assignmentShowsSkeleton, TmPlacementTrail, type SlotAssignmentState } f
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
-import { formatCoveredByRail } from "@/lib/shiftbuilder/canvasPrideLabels";
+import { formatCoveredByRail, formatCoveredByRailTitle } from "@/lib/shiftbuilder/canvasPrideLabels";
 import {
   formatCoveragePositionLabel,
   getSlotAccentColor,
@@ -291,6 +291,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
             <CoveragePaperRail
               key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
               label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
+              title={formatCoveredByRailTitle(entry.tmName, entry.sourceKey)}
               accent={getSlotAccentColor(entry.sourceKey)}
             />
           ))

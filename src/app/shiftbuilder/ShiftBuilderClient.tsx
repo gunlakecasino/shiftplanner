@@ -541,7 +541,7 @@ function AuthedShiftBuilder() {
   });
 
   // === React 19 Transitions for fast day switching (hoisted early to avoid TDZ) ===
-  const [isPending, startDayTransition] = useTransition();
+  const [, startDayTransition] = useTransition();
   const [, startHeavyTransition] = useTransition();
   const deferredDayIndex = useDeferredValue(selectedDayIndex);
 
@@ -2023,7 +2023,8 @@ function AuthedShiftBuilder() {
   const boardInteractionLocked = isCurrentNightLocked || showUnpublishedNight;
   const boardColdLoading = shiftData.boardColdLoading;
   const boardBackgroundSync = shiftData.boardBackgroundSync;
-  const showCanvasVeil = boardBackgroundSync || (isPending && hasBoardPayload);
+  // Day-switch isPending must not paint a canvas splash — paper veil is enough.
+  const showCanvasVeil = boardBackgroundSync;
 
   // liveAssignVersion is still managed locally in the orchestrator for the many call sites that do
   // setLiveAssignVersion((v) => v + 1) after optimistic writes / drags / applies. The hook also tracks

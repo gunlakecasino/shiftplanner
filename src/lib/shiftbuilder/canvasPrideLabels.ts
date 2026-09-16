@@ -188,17 +188,24 @@ export function coverageChipTone(accent: string): CoverageChipTone {
 }
 
 /**
- * Incoming covered-by rail — same family as outgoing "Covering …".
- * One line: "Covered by Name · Women's 6". Print/engine do not import this.
+ * Incoming covered-by rail — seat coverage, not a second assignment.
+ * Visible line names the source seat only. Coverer name stays on the
+ * source card. Print/engine do not import this.
  */
-export function formatCoveredByRail(tmName: string, sourceKey?: string): string {
-  const name = (tmName || "TM").trim() || "TM";
-  if (!sourceKey?.trim()) return `Covered by ${name}`;
+export function formatCoveredByRail(_tmName: string, sourceKey?: string): string {
+  if (!sourceKey?.trim()) return "Covered";
   const covering = formatCanvasCoverageChip(
     `AND ${formatCanvasTrailChip(sourceKey).label}`,
   );
   const place = covering.replace(/^Covering\s+/, "").trim();
-  return place ? `Covered by ${name} · ${place}` : `Covered by ${name}`;
+  return place ? `Covered · ${place}` : "Covered";
+}
+
+/** Hover/title only — who is covering, without putting their name on the seat. */
+export function formatCoveredByRailTitle(tmName: string, sourceKey?: string): string {
+  const name = (tmName || "TM").trim() || "TM";
+  const line = formatCoveredByRail(name, sourceKey);
+  return `${line} — ${name}`;
 }
 
 /** Coverage footer copy — "And Zone 9" / "+ ZONE 6" → "Covering Zone 9". */

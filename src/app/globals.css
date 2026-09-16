@@ -884,7 +884,7 @@ body {
   --sb-task-size: 9px;
   --sb-invite-min-h-zone: 44px;
   --sb-invite-min-h-rr: 32px;
-  --sb-invite-min-h-aux: 28px;
+  --sb-invite-min-h-aux: 44px;
   --sb-grid-gap: clamp(6px, 0.9vw, 14px);
 
   width: 100%;
@@ -8553,7 +8553,8 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage 
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid h3,
 .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-zone-grid .sb-tm-primary-name,
-.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name {
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-grid .sb-tm-primary-name,
+.sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-aux-grid .sb-tm-primary-name {
   font-size: 21px !important;
   font-weight: 800 !important;
   line-height: 1.18 !important;

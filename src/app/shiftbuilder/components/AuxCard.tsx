@@ -559,22 +559,17 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         >
           <SlotAssignmentBody
             state={assignmentState}
-            scale="aux"
+            scale="zone"
             showDigitalAssists={showDigitalAssists}
             isDuplicate={isDuplicate}
             otherSlotsForTm={otherSlotsForTm}
-            inviteSize="aux"
+            inviteSize="zone"
             criticalRepeat={isCriticalRepeatFit(fitChip)}
             placementTrail={placementTrail}
             placementTrailMatchSlotKey={def.key}
             onSwapCoverageSides={
               showDigitalAssists && coveredBy.length === 2 && onSwapCoverageSides
                 ? () => onSwapCoverageSides(def.key, coveredBy)
-                : undefined
-            }
-            nameSizeOverride={
-              hasTM
-                ? (regularTasks.length > 0 ? 16 : showDigitalAssists ? 20 : 18)
                 : undefined
             }
             onUnassignedClick={(e) => handleAssignZoneClick(e, def.key, onCardClick, isLocked)}
@@ -595,7 +590,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                 onOpenTasksPad={onOpenTaskTextEdit}
                 isLocked={isLocked}
                 enabled={showDigitalAssists}
-                className={`sb-card-task-zone mt-auto min-h-[28px] flex-1 overflow-visible ${!hasTM ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}
+                className="sb-card-task-zone mt-auto min-h-[28px] flex-1 overflow-visible"
               >
                 <ZoneTaskList
                   tasks={regularTasks}
@@ -606,13 +601,12 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   onSetTaskMarker={onSetTaskMarker}
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  dense
-                  textSize="text-[11px]"
+                  textSize="text-[10px]"
                   isPrintPreview={false}
                 />
               </CardTaskZone>
             ) : (
-              <div className={`sb-card-task-zone mt-auto min-h-0 flex-1 overflow-visible ${!hasTM && showDigitalAssists ? "bg-[color-mix(in_srgb,var(--ios-background-secondary)_30%,transparent)] rounded-b-[3px] px-0.5 py-0.5 -mx-0.5" : ""}`}>
+              <div className="sb-card-task-zone mt-auto min-h-0 flex-1 overflow-visible">
                 <ZoneTaskList
                   tasks={regularTasks}
                   hasTM={hasTM}
@@ -622,8 +616,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
                   onSetTaskMarker={onSetTaskMarker}
                   onEditTask={onEditTask}
                   onOpenTaskTextEdit={onOpenTaskTextEdit}
-                  dense
-                  textSize="text-[11px]"
+                  textSize="text-[10px]"
                   isPrintPreview={!showDigitalAssists}
                 />
           </div>

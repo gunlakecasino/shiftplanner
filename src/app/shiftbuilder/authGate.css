@@ -627,9 +627,9 @@
 }
 
 .sb-day-content-veil .sb-builder-card-grid .assignment-card > :not(:first-child) {
-  opacity: 0.45;
+  opacity: 0.78;
   transform: none;
-  transition: opacity var(--sb-motion-quick, 170ms) ease;
+  transition: opacity var(--sb-motion-instant, 100ms) ease;
   pointer-events: none;
 }
 
