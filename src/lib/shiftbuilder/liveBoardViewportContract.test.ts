@@ -869,12 +869,12 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(pride).toContain("export function formatCoveredByRailTitle");
     expect(pride).toContain("Covered ·");
     expect(pride).not.toContain("Covered by ${name} ·");
-    expect(zoneCard).toContain("formatCoveredByRail");
-    expect(zoneCard).toContain("CoveragePaperRail");
+    expect(coverageBar).toContain("export function SeatCoverageFooter");
+    expect(coverageBar).toContain("formatCoveredByRail");
+    expect(coverageBar).toContain('presentation="rail"');
+    expect(zoneCard).toContain("SeatCoverageFooter");
     expect(zoneCard).toContain("coverage={showDigitalAssists ? undefined");
-    expect(zoneCard).toContain('presentation={showDigitalAssists ? "rail" : undefined}');
-    expect(rrCard).toContain("formatCoveredByRail");
-    expect(rrCard).toContain("CoveragePaperRail");
+    expect(rrCard).toContain("SeatCoverageFooter");
     expect(rrCard).toContain("incomingRails");
     expect(rrCard).toContain("visibleOutgoingCoverageTasks");
     expect(rrCard).toContain("coveredBy.length > 0 && !showDigitalAssists");

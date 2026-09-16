@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { DndContext } from "@dnd-kit/core";
 import ZoneCard from "@/app/shiftbuilder/components/ZoneCard";
 import RRCard from "@/app/shiftbuilder/components/RRCard";
+import AuxCard from "@/app/shiftbuilder/components/AuxCard";
 import { IPAD_DESK_FORCE_ATTR, IPAD_DESK_FORCE_VALUE } from "@/lib/shiftbuilder/tabletDevice";
 import { IpadDeskProvider } from "@/lib/shiftbuilder/useIpadDesk";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
@@ -117,6 +118,8 @@ function IpadDeskFixtureInner() {
             <section className="sb-builder-section mb-5">
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
+                <div className="divider" />
+                <span className="count">3 / 4 FILLED</span>
               </div>
               <div className="sb-zone-grid" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
                 {ZONE_DEFS.map((def) => (
@@ -138,6 +141,8 @@ function IpadDeskFixtureInner() {
             <section className="sb-builder-section">
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
+                <div className="divider" />
+                <span className="count">8 / 10 FILLED</span>
               </div>
               <div className="sb-rr-grid" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
                 {RR_DEFS.map((def) => (
@@ -154,6 +159,37 @@ function IpadDeskFixtureInner() {
                     />
                   </div>
                 ))}
+              </div>
+            </section>
+            <section className="sb-builder-section mt-5">
+              <div className="sheet-section-header">
+                <span className="label">AUXILIARY</span>
+                <div className="divider" />
+                <span className="count">1 / 2 FILLED</span>
+              </div>
+              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(2, minmax(0, 220px))" }}>
+                <div className="sb-day-card-host" data-slot-key="admin" style={{ minHeight: 176 }}>
+                  <AuxCard
+                    def={{ key: "admin", role: "admin", label: "ADMIN", locations: [] }}
+                    assignments={{ admin: { tmId: "tm_cookie", tmName: "Cookie" } }}
+                    selectedTasks={{}}
+                    coveredBy={[]}
+                    onCardClick={() => {}}
+                    showDigitalAssists
+                    showTaskBadge
+                  />
+                </div>
+                <div className="sb-day-card-host" data-slot-key="job_coach" style={{ minHeight: 176 }}>
+                  <AuxCard
+                    def={{ key: "job_coach", role: "job_coach", label: "JOB COACH", locations: [] }}
+                    assignments={{}}
+                    selectedTasks={{}}
+                    coveredBy={[]}
+                    onCardClick={() => {}}
+                    showDigitalAssists
+                    showTaskBadge
+                  />
+                </div>
               </div>
             </section>
           </div>

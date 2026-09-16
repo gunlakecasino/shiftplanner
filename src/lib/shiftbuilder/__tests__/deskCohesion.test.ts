@@ -133,8 +133,8 @@ describe("SheetBuilder desk cohesion", () => {
       "utf8",
     );
     expect(nav).toContain("sb-sheet-view-pill");
-    expect(nav).toContain(">Zones<");
-    expect(nav).toContain(">Breaks<");
+    expect(nav).toMatch(/>\s*Zones\s*</);
+    expect(nav).toMatch(/>\s*Breaks\s*</);
     expect(nav).not.toContain("sb-help-fab");
     expect(nav).toContain("sb-topbar-publish");
     expect(nav).toContain('background: draftSlotCount > 0 ? "#1C1C1E"');
