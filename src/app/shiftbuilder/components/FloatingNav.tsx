@@ -611,6 +611,55 @@ export default function FloatingNav(props: FloatingNavProps) {
           </button>
         </div>
 
+        {onViewChange ? (
+          <div
+            className="sb-sheet-view-pills flex items-center gap-1 shrink-0 mx-1"
+            role="tablist"
+            aria-label="Sheet"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={currentView === "deployment"}
+              className="sb-sheet-view-pill sb-interactive"
+              style={{
+                fontSize: 12,
+                fontWeight: currentView === "deployment" ? 650 : 500,
+                color: currentView === "deployment" ? chromeText : mutedChromeText,
+                background: "transparent",
+                border: 0,
+                padding: "4px 8px",
+                borderRadius: 0,
+                boxShadow: currentView === "deployment" ? "inset 0 -1.5px 0 #1C1C1E" : "none",
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              }}
+              onClick={() => onViewChange("deployment")}
+            >
+              Zones
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={currentView === "breaks"}
+              className="sb-sheet-view-pill sb-interactive"
+              style={{
+                fontSize: 12,
+                fontWeight: currentView === "breaks" ? 650 : 500,
+                color: currentView === "breaks" ? chromeText : mutedChromeText,
+                background: "transparent",
+                border: 0,
+                padding: "4px 8px",
+                borderRadius: 0,
+                boxShadow: currentView === "breaks" ? "inset 0 -1.5px 0 #1C1C1E" : "none",
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              }}
+              onClick={() => onViewChange("breaks")}
+            >
+              Breaks
+            </button>
+          </div>
+        ) : null}
+
         <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
 
         {/* RIGHT — night actions (seen) + roster + more */}
@@ -670,9 +719,9 @@ export default function FloatingNav(props: FloatingNavProps) {
                     : `Apply ${draftSlotCount} draft change${draftSlotCount === 1 ? "" : "s"} to the live board — confirm required`
                 }
                 style={nightActionSegmentStyle({
-                  color: "var(--sb-gold-ink)",
+                  color: draftSlotCount > 0 ? "#FFFFFF" : "#334155",
                   fontWeight: 650,
-                  background: draftSlotCount > 0 ? "var(--sb-gold-surface)" : undefined,
+                  background: draftSlotCount > 0 ? "#1C1C1E" : undefined,
                 })}
               >
                 {draftApplyBusy ? APPLY_TO_LIVE_BUSY_LABEL : APPLY_TO_LIVE_CONFIRM_LABEL}
@@ -732,8 +781,17 @@ export default function FloatingNav(props: FloatingNavProps) {
           {showPublishControls ? (
             <button
               type="button"
-              className="sb-topbar-publish icon-btn sb-interactive flex items-center rounded-full px-2 py-1"
-              style={{ fontSize: 11, fontWeight: 550, color: mutedChromeText, letterSpacing: "0.01em" }}
+              className="sb-topbar-publish sb-interactive"
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                color: mutedChromeText,
+                letterSpacing: "0.01em",
+                background: "transparent",
+                border: 0,
+                padding: "0 4px",
+                borderRadius: 0,
+              }}
               onClick={onToggleDayPublished}
               disabled={!canPublishDay || publishDayBusy}
               aria-busy={publishDayBusy}
@@ -743,8 +801,8 @@ export default function FloatingNav(props: FloatingNavProps) {
             </button>
           ) : (
             <span
-              className="sb-topbar-publish flex items-center rounded-full px-2 py-1 text-[11px] font-medium tracking-normal opacity-80"
-              style={{ color: mutedChromeText }}
+              className="sb-topbar-publish"
+              style={{ fontSize: 11, fontWeight: 500, color: mutedChromeText, letterSpacing: "0.01em" }}
               title={
                 isDayPublished
                   ? "Published night"

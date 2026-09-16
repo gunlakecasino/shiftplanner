@@ -62,16 +62,16 @@ function sectionCountClass(filled: number, isTodayBoard: boolean): string {
   return `count ${tone}${today}`;
 }
 
-/** Builder empty sections whisper "0 open"; print keeps Golden FILLED copy. */
+/** One noun + FILLED count. Live empty sections still whisper "0 open". */
 function sectionFillCopy(
   filled: number,
   total: number,
   isPrint: boolean,
   compact = false,
 ): string {
-  if (isPrint) return `${filled} / ${total} FILLED`;
-  if (filled === 0) return "0 open";
-  return compact ? `${filled}/${total}` : `${filled} / ${total}`;
+  if (filled === 0 && !isPrint) return "0 open";
+  if (compact) return `${filled}/${total} FILLED`;
+  return `${filled} / ${total} FILLED`;
 }
 
 function isPadActiveHost(
@@ -1449,7 +1449,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             >
               <div className="sheet-section-header">
                 <span className="label">ZONES</span>
-                <span className="sb-section-live-meta">5 zones</span>
                 <div className="divider" />
                 <span
                   className={sectionCountClass(
@@ -1578,7 +1577,6 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
             >
               <div className="sheet-section-header">
                 <span className="label">RESTROOMS</span>
-                <span className="sb-section-live-meta" aria-hidden="true">2 rows</span>
                 <div className="divider" />
                 <span
                   className={sectionCountClass(
