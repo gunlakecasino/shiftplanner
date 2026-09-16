@@ -366,7 +366,9 @@ import {
   persistSlotForCoverageSource,
   reseatTmKeepSeatCoverage,
   clearTmKeepSeatCoverage,
+  findSeatKeyOfTm,
 } from "@/lib/shiftbuilder/coverageHelpers";
+import { markAssignedDragEnded } from "@/lib/shiftbuilder/deskGestureGuard";
 
 /**
  * CoverageBar — rendered at the very bottom of a zone or RR card to show
@@ -2706,6 +2708,110 @@ function AuthedShiftBuilder() {
     return true;
   };
 
+  const persistReseatMove = (
+    fromKey: string,
+    toKey: string,
+    movingTmId: string | null,
+    displacedTmId: string | null,
+    captureDate: Date,
+    captureDayName: string,
+    preDragAssignments: Record<string, any>,
+  ) => {
+    beginLiveBoardSettle();
+    void (async () => {
+      const dateKey = formatLocalDateISO(captureDate);
+      const rollbackDrag = (reason: string) => {
+        if (getBoardAssignmentsDayKey() === dateKey) {
+          useShiftBuilderStore.getState().setAssignments(preDragAssignments);
+          setAssignments({ ...preDragAssignments });
+          mirrorMainAssignmentsToLiveStore(captureDate);
+          setLiveAssignVersion((v) => v + 1);
+        } else {
+          liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, preDragAssignments);
+        }
+        const qc = currentNight.queryClient;
+        if (qc) {
+          patchNightCoreAssignmentsCache(qc, dateKey, preDragAssignments);
+        }
+        console.error("[drag] background persist failed", reason);
+        showToast(`Couldn't save move ${fromKey} → ${toKey}: ${reason}`, "error");
+      };
+
+      try {
+        const {
+          upsertZoneAssignment,
+          deleteZoneAssignment,
+          batchApplyDraftAssignments,
+        } = await import("@/lib/shiftbuilder/data");
+        const nid = nightId || (await resolveNightIdForDate(captureDate, captureDayName));
+        if (!nid) {
+          rollbackDrag("no night context yet — try again");
+          return;
+        }
+
+        if (displacedTmId) {
+          const target = uiToDb(toKey);
+          const source = uiToDb(fromKey);
+          await batchApplyDraftAssignments(
+            nid,
+            [
+              {
+                slotKey: target.slot_key,
+                slotType: target.slot_type,
+                rrSide: target.rr_side,
+                tmId: movingTmId,
+              },
+              {
+                slotKey: source.slot_key,
+                slotType: source.slot_type,
+                rrSide: source.rr_side,
+                tmId: displacedTmId,
+              },
+            ],
+            dateKey,
+          );
+        } else {
+          if (movingTmId) {
+            const { slot_key, slot_type, rr_side } = uiToDb(toKey);
+            await upsertZoneAssignment({
+              nightId: nid,
+              slotKey: slot_key,
+              slotType: slot_type,
+              rrSide: rr_side,
+              tmId: movingTmId,
+            });
+          }
+          const fromMapped = uiToDb(fromKey);
+          await deleteZoneAssignment({
+            nightId: nid,
+            uiKey: fromKey,
+            slotType: fromMapped.slot_type,
+            rrSide: fromMapped.rr_side,
+            dbSlotKey: fromMapped.slot_key,
+          });
+        }
+
+        const qc = currentNight.queryClient;
+        if (qc && getBoardAssignmentsDayKey() === dateKey) {
+          patchNightCoreAssignmentsCache(
+            qc,
+            dateKey,
+            useShiftBuilderStore.getState().assignments ?? {},
+          );
+        }
+        setLastSavedAt(new Date());
+        if (displacedTmId) {
+          offerPersistedHistoryUndoToastRef.current("Swapped");
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        rollbackDrag(msg || "unknown error");
+      } finally {
+        endLiveBoardSettle();
+      }
+    })();
+  };
+
   const assign = (slotKey: string, tmId: string, tmName: string) => {
     if (!requireEdit()) return;
     if (isCurrentNightLocked) {
@@ -2720,14 +2826,76 @@ function AuthedShiftBuilder() {
     }
 
     const freshIsDraft = useShiftBuilderStore.getState().isDraftMode ?? false;
+    const boardForReseat = freshIsDraft
+      ? padAssignments
+      : (useShiftBuilderStore.getState().assignments || assignments);
+    const fromKey = findSeatKeyOfTm(boardForReseat, tmId);
+
     if (freshIsDraft) {
-      upsertDraftSlot(slotKey, { kind: "assign", tmId, tmName });
+      if (fromKey && fromKey !== slotKey) {
+        const effectiveTo = boardForReseat[slotKey];
+        applyDraftMoveOrSwap(
+          fromKey,
+          slotKey,
+          { tmId, tmName },
+          effectiveTo?.tmId
+            ? { tmId: effectiveTo.tmId, tmName: effectiveTo.tmName ?? effectiveTo.tmId }
+            : null,
+        );
+      } else {
+        upsertDraftSlot(slotKey, { kind: "assign", tmId, tmName });
+      }
       recordDeskCaptureAction({
         message: `Assigned ${tmName} to ${slotKey} (draft)`,
         slotKey,
         action: "assign",
       });
       pulseDropTarget(slotKey);
+      return;
+    }
+
+    if (fromKey && fromKey !== slotKey) {
+      const before = { assignments: { ...assignments }, auxDefs: [...auxDefs] };
+      pendingHistoryRef.current = { description: `Moved assignment from ${fromKey} to ${slotKey}`, before };
+      const captureDate = selectedDay.date;
+      const captureDayName = selectedDay.name;
+      const mainAssignments = useShiftBuilderStore.getState().assignments || {};
+      const displacedTmId: string | null = mainAssignments[slotKey]?.tmId ?? null;
+      const preDragAssignments = { ...mainAssignments };
+      try {
+        useShiftBuilderStore.getState().setAssignments((prev: any) =>
+          reseatTmKeepSeatCoverage(prev, fromKey, slotKey),
+        );
+      } catch (e) {
+        console.warn("[assign] reseat store patch failed", e);
+      }
+      setAssignments({ ...useShiftBuilderStore.getState().assignments });
+      mirrorMainAssignmentsToLiveStore(captureDate);
+      setLiveAssignVersion((v) => v + 1);
+      recordDeskCaptureAction({
+        message: `Moved ${fromKey} → ${slotKey}`,
+        slotKey,
+        action: "assign",
+      });
+      pulseDropTarget(slotKey);
+      persistReseatMove(
+        fromKey,
+        slotKey,
+        tmId,
+        displacedTmId,
+        captureDate,
+        captureDayName,
+        preDragAssignments,
+      );
+      logBuilderChange({
+        action: "assign",
+        slotKey,
+        targetNightId: nightId,
+        previousTmId: mainAssignments[slotKey]?.tmId ?? null,
+        previousTmName: mainAssignments[slotKey]?.tmName ?? null,
+        newTmId: tmId,
+        newTmName: tmName,
+      });
       return;
     }
 
@@ -5403,6 +5571,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   const onDragOver = undefined;
 
   const onDragCancel = () => {
+    if (activeDrag?.kind === "assigned") markAssignedDragEnded();
     currentDragKindRef.current = null;
     currentDragFromSlotRef.current = null;
     setActiveDrag(null);
@@ -5685,6 +5854,7 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
 
     // Already-assigned TM being moved
     if (a.type === "assigned") {
+      markAssignedDragEnded();
       // → another slot: atomic swap (or move if target empty)
       if (over?.data.current?.type === "slot") {
         const rawToKey = (over.data.current as any).slotKey;
@@ -5760,111 +5930,15 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         });
         pulseDropTarget(toKey);
 
-        // Single background persist path (no parallel legacy double-write — races
-        // made production look like "nothing saved" when one write undid the other).
-        beginLiveBoardSettle();
-        (async () => {
-          const dateKey = formatLocalDateISO(captureDate);
-          const rollbackDrag = (reason: string) => {
-            // If the operator has moved to another day, never paint Day A's
-            // rollback snapshot onto the visible Day B board.
-            if (getBoardAssignmentsDayKey() === dateKey) {
-              useShiftBuilderStore.getState().setAssignments(preDragAssignments);
-              setAssignments({ ...preDragAssignments });
-              mirrorMainAssignmentsToLiveStore(captureDate);
-              setLiveAssignVersion((v) => v + 1);
-            } else {
-              liveAssignmentsStore.getState().setAssignmentsForNight(dateKey, preDragAssignments);
-            }
-            const qc = currentNight.queryClient;
-            if (qc) {
-              patchNightCoreAssignmentsCache(qc, dateKey, preDragAssignments);
-            }
-            console.error("[drag] background persist failed", reason);
-            showToast(`Couldn't save move ${fromKey} → ${toKey}: ${reason}`, "error");
-          };
-
-          try {
-            const {
-              upsertZoneAssignment,
-              deleteZoneAssignment,
-              batchApplyDraftAssignments,
-            } = await import(
-              "@/lib/shiftbuilder/data"
-            );
-            const nid = nightId || (await resolveNightIdForDate(captureDate, captureDayName));
-            if (!nid) {
-              rollbackDrag("no night context yet — try again");
-              return;
-            }
-
-            if (displacedTmId) {
-              // A real swap is one batch upsert, so both occupants move or
-              // neither does. Two sequential writes could strand the board
-              // half-swapped when the second request failed.
-              const target = uiToDb(toKey);
-              const source = uiToDb(fromKey);
-              await batchApplyDraftAssignments(
-                nid,
-                [
-                  {
-                    slotKey: target.slot_key,
-                    slotType: target.slot_type,
-                    rrSide: target.rr_side,
-                    tmId: movingTmId,
-                  },
-                  {
-                    slotKey: source.slot_key,
-                    slotType: source.slot_type,
-                    rrSide: source.rr_side,
-                    tmId: displacedTmId,
-                  },
-                ],
-                dateKey,
-              );
-            } else {
-              // Move to an empty target. The robust delete retains legacy-key
-              // cleanup; rollback keeps the UI honest if either write fails.
-              if (movingTmId) {
-                const { slot_key, slot_type, rr_side } = uiToDb(toKey);
-                await upsertZoneAssignment({
-                  nightId: nid,
-                  slotKey: slot_key,
-                  slotType: slot_type,
-                  rrSide: rr_side,
-                  tmId: movingTmId,
-                });
-              }
-              // Pass layout-aware DB key so flex AUX deletes hit support_1 / step_up / etc.
-              const fromMapped = uiToDb(fromKey);
-              await deleteZoneAssignment({
-                nightId: nid,
-                uiKey: fromKey,
-                slotType: fromMapped.slot_type,
-                rrSide: fromMapped.rr_side,
-                dbSlotKey: fromMapped.slot_key,
-              });
-            }
-
-            const qc = currentNight.queryClient;
-            if (qc && getBoardAssignmentsDayKey() === dateKey) {
-              patchNightCoreAssignmentsCache(
-                qc,
-                dateKey,
-                useShiftBuilderStore.getState().assignments ?? {},
-              );
-            }
-            setLastSavedAt(new Date());
-            if (displacedTmId) {
-              offerPersistedHistoryUndoToastRef.current("Swapped");
-            }
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            rollbackDrag(msg || "unknown error");
-          } finally {
-            endLiveBoardSettle();
-          }
-        })();
+        persistReseatMove(
+          fromKey,
+          toKey,
+          movingTmId,
+          displacedTmId,
+          captureDate,
+          captureDayName,
+          preDragAssignments,
+        );
 
         return;
       }
@@ -7366,37 +7440,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
   });
 
   const handlePadClearSlot = React.useCallback((slotKey: string) => {
-    // Prefer the live optimistic path (updates TanStack Query cache + liveAssignmentsStore
-    // + the main useShiftBuilderStore that the isolated board + cards subscribe to via
-    // useAssignments()). This is the only way the removal is visible on regular Zone cards
-    // (Z1-Z10 including Z9) because they have no header × — clearing happens via the
-    // MarkerPad "Clear" footer button.
-    //
-    // The legacy `unassign` only touches the old local `assignments` state (plus DB via
-    // persistAssign) and the board never sees it.
-    // Aux cards (Z9SR etc.) have their own header × wired to onLiveUnassign and worked.
-
-    const prevAssignment = padAssignments[slotKey] ?? assignments[slotKey];
-    const reliableNightId = queryNightId || nightId;
-    if (live?.unassign) {
-      live.unassign(slotKey, {
-        captureDate: selectedDay.date,
-        captureDayName: selectedDay.name,
-        targetNightId: reliableNightId,
-        isDraftMode,
-      });
-      logBuilderChange({
-        action: "unassign",
-        slotKey,
-        targetNightId: reliableNightId,
-        previousTmId: prevAssignment?.tmId ?? null,
-        previousTmName: prevAssignment?.tmName ?? null,
-      });
-    } else {
-      unassign(slotKey);
-    }
+    unassign(slotKey);
     setSelectedSlotKey(null);
-  }, [live, unassign, queryNightId, nightId, isDraftMode, selectedDay, assignments, padAssignments, logBuilderChange]);
+  }, [unassign]);
 
   const handleClearBoard = React.useCallback(async () => {
     if (!requireEdit()) return;
@@ -7650,25 +7696,9 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
     [handleEditTask],
   );
 
-  const handleBoardLiveAssign = React.useCallback((uiKey: string, tmId: string, tmName: string) => {
-    if (!requireEdit()) return;
-    if (/^RR\d+$/.test(uiKey)) {
-      console.warn('[shiftbuilder] live assign physical RR blocked');
-      return;
-    }
-    if (isDraftMode) {
-      upsertDraftSlot(uiKey, { kind: "assign", tmId, tmName });
-      return;
-    }
-    // Always prefer the reliable modern source from useCurrentNight (the legacy [nightId] useState can be null on some paths)
-    const reliableNightId = queryNightId || nightId;
-    live?.assign?.(uiKey, tmId, tmName, {
-      captureDate: selectedDay.date,
-      captureDayName: selectedDay.name,
-      targetNightId: reliableNightId,
-      isDraftMode,
-    });
-  }, [live, selectedDay.date, selectedDay.name, queryNightId, nightId, isDraftMode, upsertDraftSlot, requireEdit]);
+  const handleBoardLiveAssign = useStableCallback((uiKey: string, tmId: string, tmName: string) => {
+    assign(uiKey, tmId, tmName);
+  });
 
   const handleBoardLiveUnassign = React.useCallback((uiKey: string) => {
     if (!requireEdit()) return;

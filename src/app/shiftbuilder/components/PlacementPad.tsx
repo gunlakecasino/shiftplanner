@@ -1241,6 +1241,28 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
     [slotKey, onAssign],
   );
 
+  const seatedSwapCandidates = React.useMemo((): TmEntry[] => {
+    if (!a.tmId) return [];
+    const rows: TmEntry[] = [];
+    for (const [key, row] of Object.entries(assignments ?? {})) {
+      if (!row?.tmId || !String(row.tmName ?? "").trim()) continue;
+      if (String(row.tmId) === String(a.tmId) || key === slotKey) continue;
+      rows.push({
+        tmId: String(row.tmId),
+        tmName: String(row.tmName),
+        seatLabel: getSlotMeta(key, auxDefs).label,
+      });
+    }
+    return rows.sort((left, right) => left.tmName.localeCompare(right.tmName));
+  }, [a.tmId, assignments, auxDefs, slotKey]);
+
+  const pickerTms = a.tmId
+    ? [...seatedSwapCandidates, ...scheduledUnassigned]
+    : scheduledUnassigned;
+  const pickerAllTms = a.tmId
+    ? [...seatedSwapCandidates, ...(allEligibleTms ?? [])]
+    : allEligibleTms;
+
   const handleInlineAddTask = () => {
     const lbl = taskInput.trim();
     if (!lbl || !onAddTask) return;
@@ -1428,8 +1450,8 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
           <div className="sb-placement-pad-picker flex flex-col flex-1 min-h-0">
             <TmPicker
               key={`${slotKey}:${nightIsoFromDate(selectedDay.date)}`}
-              tms={scheduledUnassigned}
-              allTms={allEligibleTms}
+              tms={pickerTms}
+              allTms={pickerAllTms}
               fitByTmId={pickerFitByTmId}
               currentTmName={a.tmId ? a.tmName : undefined}
               onPick={handlePickTm}

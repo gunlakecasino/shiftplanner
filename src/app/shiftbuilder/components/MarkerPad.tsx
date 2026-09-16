@@ -45,6 +45,8 @@ import type { PickerTmRotationFit } from "../hooks/usePickerRotationSort";
 export interface TmEntry {
   tmId: string;
   tmName: string;
+  /** Current seat label when this row is a seated↔seated swap candidate. */
+  seatLabel?: string;
 }
 
 // ── Slot metadata lookup ─────────────────────────────────────────────────────
@@ -126,7 +128,12 @@ function TmPickerRow({
       }}
     >
       <span className="sb-tm-picker-avatar">{initial}</span>
-      <span className="sb-tm-picker-name">{tm.tmName}</span>
+      <span className="sb-tm-picker-name">
+        {tm.tmName}
+        {tm.seatLabel ? (
+          <span className="sb-tm-picker-meta"> {tm.seatLabel}</span>
+        ) : null}
+      </span>
       {rotationFit && fitChip && (
         <span
           className="sb-tm-picker-score"
