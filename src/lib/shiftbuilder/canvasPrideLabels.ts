@@ -107,8 +107,11 @@ export function formatCanvasTrailChip(code: string): { label: string; title: str
   if (/^(ADMIN|ADM)$/i.test(raw) || raw === "admin") {
     return { label: "Admin", title: "Admin" };
   }
-  if (/^(JC|job_coach|JOBCOACH)$/i.test(raw)) {
-    return { label: "Job Coach", title: "Job Coach" };
+  if (/^(JC\d*|job_coach(?:_\d+)?|JOBCOACH)$/i.test(raw)) {
+    const n = raw.match(/(?:JC|job_coach_)(\d+)$/i);
+    const label =
+      n && parseInt(n[1], 10) > 1 ? `Job Coach ${n[1]}` : "Job Coach";
+    return { label, title: label };
   }
   if (/^(STEP|step_up|STEPUP|STEP_UP)$/i.test(raw)) {
     return { label: "Step Up", title: "Step Up" };

@@ -247,8 +247,13 @@ export function usePlacementFitMap({
     [weeklyRecentHistory, currentIso],
   );
 
+  const lastFitBySlotRef = useRef<Record<string, PrerenderedPlacementFit>>({});
+
   const fitBySlot = useMemo(() => {
-    if (!enabled) return {};
+    // Keep the last scored map when the board pauses chips (drag / deferred).
+    // Returning {} here forced every card's fitChip to change identity and
+    // re-render the whole grid on pointer-down.
+    if (!enabled) return lastFitBySlotRef.current;
 
     const out: Record<string, PrerenderedPlacementFit> = {};
     const slotKeys = collectDeploymentSlotKeys(auxDefs);
@@ -283,7 +288,7 @@ export function usePlacementFitMap({
     }
 
     if (Object.keys(histories).length > 0) {
-      return applyGranularHealthToFitMap(out, assignments, {
+      const scored = applyGranularHealthToFitMap(out, assignments, {
         auxDefs,
         currentIso,
         histories,
@@ -292,8 +297,11 @@ export function usePlacementFitMap({
         isDraftMode,
         draftAssignments,
       });
+      lastFitBySlotRef.current = scored;
+      return scored;
     }
 
+    lastFitBySlotRef.current = out;
     return out;
   }, [
     enabled,

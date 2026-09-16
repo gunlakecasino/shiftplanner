@@ -525,6 +525,11 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   }, [displayAssignments, draftAssignments, auxDefs]);
 
   const isAnyDragActive = !!pendingDrag;
+  // Fit chips are advisory after-the-fact; keep them off the assign/drag frame.
+  // useDeferredValue lets the board paint the TM first, then rescore. Drag uses
+  // the cheaper dragFit halos, so pause the full map while a card is in flight.
+  const deferredFitAssignments = React.useDeferredValue(assignments);
+  const deferredFitDrafts = React.useDeferredValue(draftAssignments);
   // === Local derived (was in giant parent; now scoped to board only) ===
   // Always call the hook (Rules of Hooks). Prefer worker value when available.
   const computedBreakCounts = React.useMemo(() => {
@@ -590,10 +595,10 @@ const ShiftBuilderBoard = React.memo(function ShiftBuilderBoard({
   }, [dayTransitionKey]);
 
   const internalFitMap = usePlacementFitMap({
-    enabled: !fitBySlotProp && currentView === "deployment",
-    assignments: displayAssignments,
+    enabled: !fitBySlotProp && currentView === "deployment" && !isAnyDragActive,
+    assignments: deferredFitAssignments,
     isDraftMode,
-    draftAssignments,
+    draftAssignments: deferredFitDrafts,
     members,
     auxDefs,
     currentIso,

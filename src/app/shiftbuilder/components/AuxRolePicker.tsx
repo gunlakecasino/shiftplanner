@@ -38,7 +38,7 @@ const ROLE_GROUPS: Array<{ id: string; title: string; options: RoleOption[] }> =
     id: "people",
     title: "People & coverage",
     options: [
-      { role: "job_coach", label: "Job Coach", hint: "One per night", code: "JC" },
+      { role: "job_coach", label: "Job Coach", hint: "Independent seats", code: "JC" },
       { role: "step_up", label: "Step Up", hint: "One per night", code: "STEP" },
     ],
   },

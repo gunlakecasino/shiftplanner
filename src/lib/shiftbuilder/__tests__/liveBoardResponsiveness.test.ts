@@ -81,6 +81,10 @@ const liveAssign = readFileSync(
   resolve(process.cwd(), "src/lib/shiftbuilder/useLiveAssignments.ts"),
   "utf8",
 );
+const shiftBuilderBoard = readFileSync(
+  resolve(process.cwd(), "src/app/shiftbuilder/components/ShiftBuilderBoard.tsx"),
+  "utf8",
+);
 
 describe("live board gesture — poll skip + pendingDrag", () => {
   afterEach(() => {
@@ -242,6 +246,20 @@ describe("live board cache + nav contracts", () => {
     expect(interactiveStage).toContain("activationConstraint: { distance: coarse ? 12 : 4 }");
     expect(liveAssign).toContain("beginLiveBoardSettle()");
     expect(liveAssign).toContain("endLiveBoardSettle()");
+  });
+
+  it("paints the board store before awaiting night-query cancel on assign", () => {
+    const paintIdx = liveAssign.indexOf("mainStore.setAssignments");
+    const cancelIdx = liveAssign.indexOf("await queryClient.cancelQueries");
+    expect(paintIdx).toBeGreaterThan(-1);
+    expect(cancelIdx).toBeGreaterThan(-1);
+    expect(paintIdx).toBeLessThan(cancelIdx);
+  });
+
+  it("defers fit-map rescoring off the assign/drag frame", () => {
+    expect(shiftBuilderBoard).toContain("useDeferredValue");
+    expect(shiftBuilderBoard).toContain("deferredFitAssignments");
+    expect(shiftBuilderBoard).toContain("currentView === \"deployment\" && !isAnyDragActive");
   });
 });
 
