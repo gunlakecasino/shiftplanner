@@ -731,7 +731,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             {showDraftTools && onSaveAllDraft ? (
               <button
                 type="button"
-                className="sb-night-action-pill sb-night-action-pill--apply sb-interactive"
+                className={`sb-night-action-pill sb-night-action-pill--apply sb-interactive${draftSlotCount < 1 ? " sb-night-action-pill--apply-idle" : ""}`}
                 onClick={onSaveAllDraft}
                 disabled={draftSlotCount < 1 || draftApplyBusy || draftApplyConfirming}
                 aria-busy={draftApplyBusy || draftApplyConfirming}

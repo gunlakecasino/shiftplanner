@@ -51,7 +51,7 @@ export function CoveragePaperRail({
         aria-hidden="true"
         style={{ background: tickColor }}
       />
-      <span className="sb-coverage-rail__label sb-coverage-bar-label font-semibold leading-none truncate">
+      <span className="sb-coverage-rail__label sb-coverage-bar-label font-semibold leading-none overflow-hidden whitespace-nowrap">
         {label}
       </span>
       {onRemove ? (

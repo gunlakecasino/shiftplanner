@@ -8296,7 +8296,7 @@ img.sb-drop-zone-disc {
 .sb-coverage-footer__row {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
   width: 100%;
@@ -8837,7 +8837,7 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row {
   display: flex !important;
   flex-direction: row !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   gap: 4px !important;
   width: 100% !important;
@@ -8906,6 +8906,18 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   box-shadow: none !important;
 }
 
+/* Disabled Apply stays staged — never opacity-killed gray. */
+.sb-sheetbuilder-redesign .sb-night-action-pill--apply:disabled {
+  opacity: 1 !important;
+  cursor: default;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pill--apply-idle:disabled {
+  background: #EEF1F6 !important;
+  color: #64748B !important;
+  box-shadow: none !important;
+}
+
 .sb-sheetbuilder-redesign .sb-topbar-publish {
   background: transparent !important;
   border: 0 !important;
@@ -8961,28 +8973,32 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   overflow: hidden !important;
 }
 
+/* Compact empty covering slot — do not regress #38's 14px reserved band. */
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band.sb-coverage-footer--empty,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer--band.sb-coverage-footer--empty {
-  min-height: 28px !important;
+  min-height: 14px !important;
   background: #F4F6FA !important;
 }
 
+/* One reserved footer, one chip row — never stacked full-width bands. */
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row {
   display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 4px !important;
   width: 100% !important;
   max-width: 100% !important;
-  padding: 6px 8px 6px 10px !important;
-  overflow: visible !important;
+  padding: 5px 8px 5px 10px !important;
+  overflow: hidden !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail {
-  width: 100% !important;
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail {
+  width: auto !important;
   max-width: 100% !important;
-  flex: 1 1 auto !important;
+  flex: 0 1 auto !important;
   background: #EEF1F6 !important;
   color: #334155 !important;
   border-radius: 8px !important;
@@ -8990,14 +9006,17 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-bar-label {
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-bar-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-rail__label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-rail__label {
+  flex: 0 1 auto !important;
   font-size: 12px !important;
   font-weight: 650 !important;
   letter-spacing: 0 !important;
   color: #334155 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  text-overflow: clip !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-label,
@@ -9016,12 +9035,18 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
 .sb-card-vector-sans-label {
   display: block;
   font-family: var(--font-builder, "Helvetica Neue", Helvetica, Arial, sans-serif);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;
   color: #334155;
   white-space: nowrap;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) {
+  align-self: start !important;
+  height: auto !important;
+  min-height: 0 !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .assignment-card,
@@ -9033,6 +9058,11 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   border-color: #E6EAF0 !important;
   background: #FFFFFF !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid {
+  flex: 0 0 auto !important;
+  overflow: visible !important;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid > * {
@@ -9089,8 +9119,17 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .zone-task-list,
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-task-list,
-.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list {
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-list-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-list-row [data-task-label],
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-list-row [data-task-label] *,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card-tasks .sb-list-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-task-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-task-row-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-name {
   color: #334155 !important;
   font-size: 12px !important;
   font-style: normal !important;
+  font-family: var(--font-builder, "Helvetica Neue", Helvetica, Arial, sans-serif) !important;
 }

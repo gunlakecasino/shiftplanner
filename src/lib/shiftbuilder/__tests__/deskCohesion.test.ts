@@ -195,11 +195,43 @@ describe("SheetBuilder desk cohesion", () => {
     expect(globalsCss).toContain("background: #1C1C1E !important");
     expect(globalsCss).toContain(".sb-card-vector-sans-label");
     expect(globalsCss).toContain("min-height: 132px !important");
+    expect(nav).toContain("sb-night-action-pill--apply-idle");
+    expect(globalsCss).toContain(".sb-night-action-pill--apply:disabled");
+    expect(globalsCss).toContain(".sb-night-action-pill--apply-idle:disabled");
     expect(coverageBar).toContain('const railBg = "#EEF1F6"');
     expect(coverageBar).toContain('const railInk = "#334155"');
     expect(vectors).toContain("sb-card-vector-sans-label");
     expect(auxCard).toContain("sb-card-assign-zone shrink-0");
     expect(auxCard).not.toContain("{isUnsetBlank && !hasTM ? null : (");
+  });
+
+  it("keeps multi-coverage on one reserved footer chip row", () => {
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    const ipadDesk = readFileSync(
+      resolve(process.cwd(), "src/app/dev/ipad-desk/page.tsx"),
+      "utf8",
+    );
+    expect(coverageBar).toContain("sb-coverage-footer__row");
+    expect(coverageBar).toContain("uniqueOutgoingCoverageTasks");
+    expect(coverageBar).not.toContain("sb-coverage-rail__label sb-coverage-bar-label font-semibold leading-none truncate");
+    expect(globalsCss).toContain("One reserved footer, one chip row");
+    expect(globalsCss).toMatch(
+      /\.sb-coverage-footer__row[\s\S]{0,220}flex-wrap: nowrap/,
+    );
+    expect(globalsCss).toMatch(
+      /\.sb-coverage-footer__row \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,320}width: auto !important/,
+    );
+    expect(globalsCss).toContain("text-overflow: clip !important");
+    expect(globalsCss).toContain("align-self: start !important");
+    expect(globalsCss).toMatch(
+      /\.sb-coverage-footer--empty[\s\S]{0,120}min-height: 14px !important/,
+    );
+    expect(ipadDesk).toContain("AND ZONE 6");
+    expect(ipadDesk).toContain("AND Men's Restroom 7");
+    expect(ipadDesk).toContain("SUPPORT 3");
   });
 
   it("keeps Team search as an icon, not a colliding search ligature", () => {
