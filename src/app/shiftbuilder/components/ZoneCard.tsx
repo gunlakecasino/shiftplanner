@@ -245,9 +245,11 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       ? assignmentState.proposedName
       : assignmentState.kind === "assigned"
         ? assignmentState.tmName
-        : assignmentState.kind === "unassigned"
-          ? "Unassigned"
         : "";
+  const isLiveEmptySeat =
+    assignmentState.kind === "unassigned" ||
+    assignmentState.kind === "covered" ||
+    assignmentState.kind === "loading";
   const zoneNumber = Number(String(def.key).replace(/\D/g, "")) || 1;
   const packageNotes = regularTasks.map((task) => task.taskLabel).filter(Boolean);
   const packageTaskInteractionsEnabled = !isLocked && !isViewOnly;
@@ -331,7 +333,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
       <PackageShiftCard
         zone={zoneNumber}
         label={def.label}
-        name={assignmentState.kind === "covered" ? "" : displayName || "Unassigned"}
+        name={displayName}
         notes={packageNotes}
         nameVector={cardVector ? <CardVectorMark vector={cardVector} size="desk" /> : undefined}
         nameMeta={
@@ -341,7 +343,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         }
         taskContent={packageTaskContent}
         footer={packageCoverageFooter}
-        unassigned={assignmentState.kind === "unassigned" || assignmentState.kind === "covered"}
+        unassigned={isLiveEmptySeat}
         coverage={showDigitalAssists ? undefined : assignmentState.kind === "covered" ? packageCoverage : undefined}
         onClick={() => {
           if (isLocked) return;

@@ -348,7 +348,7 @@ export function UnassignedInvite({
       key="unassigned-invite"
       role="button"
       tabIndex={0}
-      className={`sb-unassigned-invite sb-interactive flex items-center justify-start text-[#94A3B8] tracking-[0.01em] rounded-[8px] cursor-pointer w-full shrink-0 ${cfg.padding}`}
+      className={`sb-unassigned-invite sb-interactive flex items-center justify-start gap-1.5 text-[#94A3B8] tracking-[0.01em] rounded-[8px] cursor-pointer w-full shrink-0 ${cfg.padding}`}
       data-invite-size={size}
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
@@ -366,6 +366,12 @@ export function UnassignedInvite({
       }}
       title={title}
     >
+      <span
+        className="sb-unassigned-invite__mark inline-flex items-center justify-center shrink-0 text-[#94A3B8]"
+        aria-hidden="true"
+      >
+        <MsIcon name="person" size={14} />
+      </span>
       <span
         className="font-medium tracking-[0.01em] text-[#94A3B8]"
         style={{ fontSize: cfg.labelSize, opacity: 0.92 }}
@@ -830,9 +836,15 @@ export function SlotAssignmentBody({
   return (
     <AnimatePresence mode="wait" initial={false}>
       {state.kind === "loading" ? (
-        <div key="loading">
-          <AssignmentSkeleton size={scale === "zone" ? "xl" : "lg"} />
-        </div>
+        showDigitalAssists && onUnassignedClick ? (
+          <div key="loading-invite" className="flex flex-col justify-start min-h-0">
+            <UnassignedInvite size={inviteSize} onClick={onUnassignedClick} />
+          </div>
+        ) : (
+          <div key="loading">
+            <AssignmentSkeleton size={scale === "zone" ? "xl" : "lg"} />
+          </div>
+        )
       ) : state.kind === "draft" ? (
         showDigitalAssists ? (
           <motion.div

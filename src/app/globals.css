@@ -8280,15 +8280,30 @@ img.sb-drop-zone-disc {
   justify-content: flex-end;
   width: 100%;
   max-width: 100%;
-  min-height: 32px;
+  min-height: 16px;
   margin-top: auto;
   padding: 0 !important;
   gap: 0;
-  background: color-mix(in srgb, var(--card-accent, #94A3B8) 10%, #F4F6FA);
+  background: #F4F6FA;
+  overflow: hidden;
 }
 
 .sb-coverage-footer--band.sb-coverage-footer--empty {
-  min-height: 28px;
+  min-height: 14px;
+  background: #F4F6FA;
+}
+
+.sb-coverage-footer__row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band .sb-coverage-bar--chip,
@@ -8336,12 +8351,12 @@ img.sb-drop-zone-disc {
   flex-direction: column !important;
   width: 100% !important;
   max-width: 100% !important;
-  padding: 12px 0 !important;
+  padding: 0 !important;
   gap: 0 !important;
   visibility: visible !important;
   max-height: none !important;
   height: auto !important;
-  overflow: visible !important;
+  overflow: hidden !important;
 }
 
 @media (pointer: coarse) and (min-width: 768px) and (max-width: 1420px) {
@@ -8442,13 +8457,13 @@ img.sb-drop-zone-disc {
 
   html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite,
   .sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite {
-    min-height: 48px !important;
-    padding: 10px 4px !important;
+    min-height: 32px !important;
+    padding: 4px 2px !important;
   }
 
   html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite span,
   .sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite span {
-    font-size: 15px !important;
+    font-size: 13px !important;
   }
 
   html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-card-assign-zone,
@@ -8462,10 +8477,10 @@ img.sb-drop-zone-disc {
     flex-direction: column;
     flex-wrap: nowrap !important;
     gap: 0;
-    padding: 12px 0 !important;
+    padding: 0 !important;
     max-height: none !important;
     visibility: visible !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
   html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
@@ -8589,8 +8604,8 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage 
 
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite,
 .sb-ipad-desk.sb-sheetbuilder-redesign.sb-canvas-builder .sb-unassigned-invite {
-  min-height: 48px !important;
-  padding: 10px 4px !important;
+  min-height: 32px !important;
+  padding: 4px 2px !important;
 }
 
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-footer--rails,
@@ -8599,10 +8614,10 @@ html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage 
   flex-direction: column;
   flex-wrap: nowrap !important;
   gap: 0;
-  padding: 12px 0 !important;
+  padding: 0 !important;
   max-height: none !important;
   visibility: visible !important;
-  overflow: visible !important;
+  overflow: hidden !important;
 }
 
 html.sb-ipad-desk .sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
@@ -8793,4 +8808,61 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   .sb-assignment-card.sb-card-peer-dimmed {
     transition-duration: 0ms;
   }
+}
+
+/* ==========================================================================
+   Kit fidelity — locked desk anatomy (empty / footer / pager / wash / clip).
+   Live canvas only. Golden print metrics stay untouched.
+   ========================================================================== */
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-drop-zones-wrap,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-drop-zones-picker {
+  display: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer--band {
+  background: #F4F6FA !important;
+  min-height: 16px !important;
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band.sb-coverage-footer--empty,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer--band.sb-coverage-footer--empty {
+  min-height: 14px !important;
+  padding: 0 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 4px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 5px 8px !important;
+  overflow: hidden !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail {
+  width: auto !important;
+  max-width: 100% !important;
+  flex: 0 1 auto !important;
+  border-radius: 6px !important;
+  padding: 4px 8px 4px 10px !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-desk-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-pair {
+  overflow: hidden !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-unassigned-invite {
+  min-height: 28px !important;
+  max-height: none !important;
+  padding: 2px 0 !important;
 }
