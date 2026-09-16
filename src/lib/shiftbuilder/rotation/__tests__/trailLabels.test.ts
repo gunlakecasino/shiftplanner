@@ -291,6 +291,8 @@ describe("trailLabelMatchesSlotKey", () => {
     // Same restroom number is one rotation area (engine prior-3 merges sides).
     expect(trailLabelMatchesSlotKey("RR8M", "WRR8")).toBe(true);
     expect(trailLabelMatchesSlotKey("RR8M", "MRR6")).toBe(false);
+    expect(trailLabelMatchesSlotKey("RR8M", "MRR10")).toBe(false);
+    expect(trailLabelMatchesSlotKey("RR8", "MRR10")).toBe(false);
   });
 
   it("matches bare RR8 to either side (area-level)", () => {

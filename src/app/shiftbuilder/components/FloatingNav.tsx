@@ -703,7 +703,7 @@ export default function FloatingNav(props: FloatingNavProps) {
               </button>
             )}
 
-            {showDraftTools && isDraftMode && onSaveAllDraft ? (
+            {showDraftTools && onSaveAllDraft ? (
               <button
                 type="button"
                 className="sb-night-action-pill sb-night-action-pill--apply sb-interactive"
@@ -795,7 +795,11 @@ export default function FloatingNav(props: FloatingNavProps) {
               onClick={onToggleDayPublished}
               disabled={!canPublishDay || publishDayBusy}
               aria-busy={publishDayBusy}
-              title={isDayPublished ? "Unpublish this day" : "Publish this day"}
+              title={
+                isDayPublished
+                  ? "Published night"
+                  : "Unpublished — floor viewers cannot open this night"
+              }
             >
               {isDayPublished ? "Published" : "Unpublished"}
             </button>
