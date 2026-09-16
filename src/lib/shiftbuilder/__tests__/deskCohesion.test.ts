@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import React from "react";
+import { SeatCoverageFooter } from "@/app/shiftbuilder/components/CoverageBar";
+import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 
 const globalsCss = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 const authCss = readFileSync(resolve(process.cwd(), "src/app/shiftbuilder/authGate.css"), "utf8");
@@ -172,6 +176,115 @@ describe("SheetBuilder desk cohesion", () => {
     expect(globalsCss).toContain("Kit fidelity — locked desk anatomy");
     expect(globalsCss).toContain("background: #F4F6FA");
     expect(globalsCss).toContain("overflow: hidden !important");
+  });
+
+  it("compacts the topbar and keeps one sans ramp on live cards", () => {
+    const nav = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/FloatingNav.tsx"),
+      "utf8",
+    );
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    const vectors = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CardVectorMark.tsx"),
+      "utf8",
+    );
+    expect(nav).toContain("sb-topbar-spacer");
+    expect(nav).toContain("sb-topbar-day-strip flex items-center justify-start shrink-0");
+    expect(nav).not.toContain("justify-around flex-1 px-1");
+    expect(globalsCss).toContain("Kit fidelity pass 2");
+    expect(globalsCss).toContain(".sb-topbar-spacer");
+    expect(globalsCss).toContain("background: #1C1C1E !important");
+    expect(globalsCss).toContain(".sb-card-vector-sans-label");
+    expect(globalsCss).toContain("min-height: 132px !important");
+    expect(nav).toContain("sb-night-action-pill--apply-idle");
+    expect(globalsCss).toContain(".sb-night-action-pill--apply:disabled");
+    expect(globalsCss).toContain(".sb-night-action-pill--apply-idle:disabled");
+    expect(coverageBar).toContain('const railBg = "#EEF1F6"');
+    expect(coverageBar).toContain('const railInk = "#334155"');
+    expect(vectors).toContain("sb-card-vector-sans-label");
+    expect(auxCard).toContain("sb-card-assign-zone shrink-0");
+    expect(auxCard).not.toContain("{isUnsetBlank && !hasTM ? null : (");
+  });
+
+  it("keeps multi-coverage on one reserved footer chip row", () => {
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    const ipadDesk = readFileSync(
+      resolve(process.cwd(), "src/app/dev/ipad-desk/page.tsx"),
+      "utf8",
+    );
+    expect(coverageBar).toContain("sb-coverage-footer__row");
+    expect(coverageBar).toContain("uniqueOutgoingCoverageTasks");
+    expect(coverageBar).not.toContain("sb-coverage-rail__label sb-coverage-bar-label font-semibold leading-none truncate");
+    expect(globalsCss).toContain("One reserved footer, one chip row");
+    expect(globalsCss).toMatch(
+      /\.sb-coverage-footer__row[\s\S]{0,220}flex-wrap: nowrap/,
+    );
+    expect(globalsCss).toMatch(
+      /\.sb-coverage-footer__row \.sb-coverage-bar\.sb-coverage-rail[\s\S]{0,400}width: auto !important/,
+    );
+    expect(globalsCss).toContain("flex: 0 0 auto !important");
+    expect(globalsCss).toContain("html.sb-ipad-desk");
+    expect(globalsCss).toContain("text-overflow: clip !important");
+    expect(globalsCss).toContain("align-self: start !important");
+    expect(globalsCss).toMatch(
+      /\.sb-coverage-footer--empty[\s\S]{0,120}min-height: 14px !important/,
+    );
+    expect(ipadDesk).toContain("AND ZONE 6");
+    expect(ipadDesk).toContain("AND Men's Restroom 7");
+    expect(ipadDesk).toContain("SUPPORT 3");
+    const taskRow = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/TaskRow.tsx"),
+      "utf8",
+    );
+    expect(taskRow).toContain("Live desk keeps floor-sheet scale");
+    expect(taskRow).toContain("Math.max(12, baseSizePx)");
+    expect(taskRow).not.toContain("el.style.fontSize = `${shrinkSizePx}px`");
+  });
+
+  it("renders Drew/MEN'S 6 two-coverage as one footer chip row", () => {
+    const task = (
+      id: string,
+      taskLabel: string,
+    ): NightSlotTask => ({
+      id,
+      nightId: "fixture",
+      slotKey: "MRR6",
+      slotType: "rr",
+      rrSide: "mens",
+      taskLabel,
+      catalogTaskId: null,
+      sortOrder: 1,
+      color: "#C05A98",
+      isCoverage: true,
+    });
+    const html = renderToStaticMarkup(
+      React.createElement(SeatCoverageFooter, {
+        slotKey: "MRR6",
+        outgoingTasks: [
+          task("m6-c", "AND ZONE 6"),
+          task("m6-c7", "AND Men's Restroom 7"),
+        ],
+        reserved: true,
+      }),
+    );
+    expect(html.match(/sb-coverage-footer--band/g)).toHaveLength(1);
+    expect(html.match(/sb-coverage-footer__row/g)).toHaveLength(1);
+    expect(html).toContain("Covering Zone 6");
+    expect(html).toMatch(/Covering Men(?:'|&#x27;)s 7/);
+    const rowAt = html.indexOf("sb-coverage-footer__row");
+    const firstRail = html.indexOf("sb-coverage-rail", rowAt);
+    const secondRail = html.indexOf("sb-coverage-rail", firstRail + 1);
+    expect(rowAt).toBeGreaterThan(-1);
+    expect(firstRail).toBeGreaterThan(rowAt);
+    expect(secondRail).toBeGreaterThan(firstRail);
+    expect(html).not.toContain("sb-coverage-footer--empty");
+    expect(html.match(/sb-coverage-footer /g)).toHaveLength(1);
   });
 
   it("keeps Team search as an icon, not a colliding search ligature", () => {

@@ -565,7 +565,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
         className={cardBodyInteriorClass(showDigitalAssists, "min-h-0")}
         style={cardBodyInteriorStyle(showDigitalAssists, showDigitalAssists ? 8 : 10)}
       >
-        {isUnsetBlank && !hasTM ? null : (
         <div
           className="sb-card-assign-zone shrink-0"
           {...assignZoneOpenHandlers(def.key, onCardClick, isLocked)}
@@ -589,7 +588,6 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
             vector={cardVector ? <CardVectorMark vector={cardVector} size="desk" /> : undefined}
           />
         </div>
-        )}
 
             {showDigitalAssists && !isTodayKiosk ? (
               <TaskListDivider hasTm={hasTM} showDigitalAssists={showDigitalAssists} />

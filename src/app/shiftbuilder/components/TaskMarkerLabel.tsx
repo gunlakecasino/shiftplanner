@@ -257,7 +257,7 @@ export function TaskMarkerLabel({
           className="relative isolate inline"
           style={{
             padding: isPrintPreview ? "0 4px 1px" : "1px 6px 2px",
-            transform: isPrintPreview ? "rotate(-0.15deg)" : "rotate(-0.25deg)",
+            transform: isPrintPreview ? "rotate(-0.15deg)" : "none",
           }}
         >
           <MarkerInkLayer>
@@ -314,7 +314,7 @@ export function TaskMarkerLabel({
           className="relative isolate inline-block"
           style={{
             padding: isPrintPreview ? "1px 7px 2px" : "2px 10px 3px",
-            transform: isPrintPreview ? "rotate(-0.35deg)" : "rotate(-0.55deg)",
+            transform: isPrintPreview ? "rotate(-0.35deg)" : "none",
           }}
         >
           <MarkerInkLayer>

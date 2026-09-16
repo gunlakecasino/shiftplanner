@@ -236,7 +236,9 @@ describe("desk standing badge", () => {
     expect(html).toContain("Jessica");
     expect(html).toContain("Silvia");
     expect(html).toContain("Darlene");
-    expect(html).toContain("/card-vectors/sweep-5-8-hl.svg");
+    expect(html).toContain("Sweep 5 | 8 | HL");
+    expect(html).toContain("sb-card-vector-sans-label");
+    expect(html).not.toContain("/card-vectors/sweep-5-8-hl.svg");
     expect(html).toContain("sb-card-vector-badge");
     expect(html).toContain("Need extra towels");
     expect(html).not.toContain("Zone 7 Smoking Room");
@@ -395,6 +397,8 @@ describe("Brian's shipped vector artwork", () => {
     expect(vectors).toContain("/card-vectors/laundry.svg");
     expect(mark).toContain("CARD_VECTOR_SRC[vector]");
     expect(mark).toContain("CARD_VECTOR_VIEWBOX");
+    expect(mark).toContain("sb-card-vector-sans-label");
+    expect(mark).toContain("meta.label");
     expect(CARD_VECTOR_VIEWBOX.sweep_5_8_hl).toEqual({ width: 99.64, height: 14.63 });
     expect(mark).not.toContain("SweepInk");
     expect(mark).not.toContain("LaundryInk");

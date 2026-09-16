@@ -19,7 +19,7 @@ import {
 
 /**
  * Quiet paper rail for the iPad night desk.
- * Surface/ink from coverageChipTone (or gold tokens). Color lives in the
+ * Paper band with quiet ink. Color lives in the
  * 8px left tick — not a saturated flood. Print never uses this.
  */
 export function CoveragePaperRail({
@@ -36,9 +36,8 @@ export function CoveragePaperRail({
   removeAriaLabel?: string;
 }) {
   const goldBanner = isGoldAccent(accent);
-  const chipTone = coverageChipTone(accent);
-  const railBg = goldBanner ? "var(--sb-gold-surface)" : chipTone.surface;
-  const railInk = goldBanner ? "var(--sb-gold-ink)" : chipTone.ink;
+  const railBg = "#EEF1F6";
+  const railInk = "#334155";
   const tickColor = goldBanner ? "var(--sb-gold-ink)" : accent;
 
   return (
@@ -52,7 +51,7 @@ export function CoveragePaperRail({
         aria-hidden="true"
         style={{ background: tickColor }}
       />
-      <span className="sb-coverage-rail__label sb-coverage-bar-label font-semibold leading-none truncate">
+      <span className="sb-coverage-rail__label sb-coverage-bar-label font-semibold leading-none overflow-hidden whitespace-nowrap">
         {label}
       </span>
       {onRemove ? (

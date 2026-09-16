@@ -9,7 +9,6 @@ import { normalizeTaskMarkerType, shouldRenderTaskMarker } from "@/lib/shiftbuil
 import {
   parseTaskLabelSizePx,
   taskLabelColorClass,
-  taskLabelShrinkPx,
   taskLabelSizeClass,
   TASK_LABEL_SIZE_PX,
 } from "@/lib/shiftbuilder/taskTextStyle";
@@ -87,7 +86,6 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     configuredSizePx,
     hierarchyDepth,
   );
-  const shrinkSizePx = taskLabelShrinkPx(baseSizePx);
   const renderedTextStyle = React.useMemo(
     () =>
       task.textStyle?.fontSizePx
@@ -101,11 +99,8 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
     paddingLeft: '0',
   });
 
-  // Responsive task label: measure at card base size, shrink one step if needed.
-  // If still overflows -> wrap with hanging indent.
-  // ONLY in builder (!isPrintPreview). In print-preview / PDF capture we use the static
-  // compact textSize passed from the card lists (matches Golden spec exactly, no
-  // measurement side-effects or ResizeObserver during the settle frames before capture).
+  // Print keeps Golden static size. Live desk keeps floor-sheet scale
+  // and does not shrink task/meta to 8.5px dashboard type.
   React.useLayoutEffect(() => {
     if (isPrintPreview) {
       // Static compact for Golden print/export — no ResizeObserver during capture.
@@ -116,48 +111,11 @@ const TaskRow: React.FC<TaskRowProps> = React.memo(({
       return;
     }
 
-    const el = labelRef.current;
-    if (!el) return;
-    const container = el.parentElement;
-    if (!container) return;
-
-    const compute = () => {
-      // measure at base
-      el.style.fontSize = `${baseSizePx}px`;
-      el.style.textIndent = '0';
-      el.style.paddingLeft = '0';
-      el.style.whiteSpace = 'nowrap';
-
-      const needed = el.scrollWidth;
-      const avail = Math.max(20, container.clientWidth - 4); // tolerance for borders/padding
-
-      let fs = `${baseSizePx}px`;
-      let ti = '0';
-      let pl = '0';
-
-      if (needed > avail) {
-        el.style.fontSize = `${shrinkSizePx}px`;
-        const neededShrink = el.scrollWidth;
-        if (neededShrink > avail) {
-          fs = `${shrinkSizePx}px`;
-          ti = '-1.15em';
-          pl = '1.15em';
-        } else {
-          fs = `${shrinkSizePx}px`;
-        }
-      }
-
-      el.style.whiteSpace = 'normal';
-      setFontSize(fs);
-      setHanging({ textIndent: ti, paddingLeft: pl });
-    };
-
-    compute();
-
-    const ro = new ResizeObserver(compute);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [task.taskLabel, hasColor, markerType, isPrintPreview, textSize, baseSizePx, shrinkSizePx]);
+    // Live desk keeps floor-sheet scale. Do not shrink task/meta to 8.5px
+    // dashboard type — overflow wraps, it does not get tiny.
+    setFontSize(`${Math.max(12, baseSizePx)}px`);
+    setHanging({ textIndent: "0", paddingLeft: "0" });
+  }, [task.taskLabel, hasColor, markerType, isPrintPreview, textSize, baseSizePx]);
   // Self-contained read of the drag pref so TaskRow doesn't require prop threading from every parent.
   // The Sudo Tasks tab writes to the same localStorage key.
   const effectiveDraggable = React.useMemo(() => {

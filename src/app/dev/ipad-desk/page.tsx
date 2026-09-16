@@ -73,7 +73,10 @@ const selectedTasks: Record<string, NightSlotTask[]> = {
   ],
   Z7: [task("z7-t", "Z7", "Pit 1 + 2")],
   WRR6: [task("w6-c", "WRR6", "AND ZONE 5", { isCoverage: true, color: "#ff3b30" })],
-  MRR6: [task("m6-c", "MRR6", "AND ZONE 6", { isCoverage: true, color: "#C05A98" })],
+  MRR6: [
+    task("m6-c", "MRR6", "AND ZONE 6", { isCoverage: true, color: "#C05A98" }),
+    task("m6-c7", "MRR6", "AND Men's Restroom 7", { isCoverage: true, color: "#4B7BE8" }),
+  ],
   WRR1: [task("w1-c", "WRR1", "AND LOBBY", { isCoverage: true, color: "#ffcc00" })],
   job_coach: [
     task("jc-lie", "job_coach", "AND ZONE 3", { isCoverage: true, color: "#ff3b30" }),
@@ -185,6 +188,17 @@ function IpadDeskFixtureInner() {
                 <div className="sb-day-card-host" data-slot-key="job_coach" style={{ minHeight: 176 }}>
                   <AuxCard
                     def={{ key: "job_coach", role: "job_coach", label: "JOB COACH", locations: [] }}
+                    assignments={{}}
+                    selectedTasks={{}}
+                    coveredBy={[]}
+                    onCardClick={() => {}}
+                    showDigitalAssists
+                    showTaskBadge
+                  />
+                </div>
+                <div className="sb-day-card-host" data-slot-key="support_3" style={{ minHeight: 176 }}>
+                  <AuxCard
+                    def={{ key: "support_3", role: "support", label: "SUPPORT 3", locations: [] }}
                     assignments={{}}
                     selectedTasks={{}}
                     coveredBy={[]}
