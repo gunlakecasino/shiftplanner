@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import React from "react";
+import { SeatCoverageFooter } from "@/app/shiftbuilder/components/CoverageBar";
+import type { NightSlotTask } from "@/lib/shiftbuilder/data";
 
 const globalsCss = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 const authCss = readFileSync(resolve(process.cwd(), "src/app/shiftbuilder/authGate.css"), "utf8");
@@ -234,6 +238,53 @@ describe("SheetBuilder desk cohesion", () => {
     expect(ipadDesk).toContain("AND ZONE 6");
     expect(ipadDesk).toContain("AND Men's Restroom 7");
     expect(ipadDesk).toContain("SUPPORT 3");
+    const taskRow = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/TaskRow.tsx"),
+      "utf8",
+    );
+    expect(taskRow).toContain("Live desk keeps floor-sheet scale");
+    expect(taskRow).toContain("Math.max(12, baseSizePx)");
+    expect(taskRow).not.toContain("el.style.fontSize = `${shrinkSizePx}px`");
+  });
+
+  it("renders Drew/MEN'S 6 two-coverage as one footer chip row", () => {
+    const task = (
+      id: string,
+      taskLabel: string,
+    ): NightSlotTask => ({
+      id,
+      nightId: "fixture",
+      slotKey: "MRR6",
+      slotType: "rr",
+      rrSide: "mens",
+      taskLabel,
+      catalogTaskId: null,
+      sortOrder: 1,
+      color: "#C05A98",
+      isCoverage: true,
+    });
+    const html = renderToStaticMarkup(
+      React.createElement(SeatCoverageFooter, {
+        slotKey: "MRR6",
+        outgoingTasks: [
+          task("m6-c", "AND ZONE 6"),
+          task("m6-c7", "AND Men's Restroom 7"),
+        ],
+        reserved: true,
+      }),
+    );
+    expect(html.match(/sb-coverage-footer--band/g)).toHaveLength(1);
+    expect(html.match(/sb-coverage-footer__row/g)).toHaveLength(1);
+    expect(html).toContain("Covering Zone 6");
+    expect(html).toMatch(/Covering Men(?:'|&#x27;)s 7/);
+    const rowAt = html.indexOf("sb-coverage-footer__row");
+    const firstRail = html.indexOf("sb-coverage-rail", rowAt);
+    const secondRail = html.indexOf("sb-coverage-rail", firstRail + 1);
+    expect(rowAt).toBeGreaterThan(-1);
+    expect(firstRail).toBeGreaterThan(rowAt);
+    expect(secondRail).toBeGreaterThan(firstRail);
+    expect(html).not.toContain("sb-coverage-footer--empty");
+    expect(html.match(/sb-coverage-footer /g)).toHaveLength(1);
   });
 
   it("keeps Team search as an icon, not a colliding search ligature", () => {
