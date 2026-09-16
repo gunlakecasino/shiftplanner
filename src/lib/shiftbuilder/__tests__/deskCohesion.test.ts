@@ -70,6 +70,34 @@ describe("SheetBuilder desk cohesion", () => {
     expect(roster).not.toContain("uppercase tracking-wide");
   });
 
+  it("moves Help into More and keeps Draft pill off the toast corner", () => {
+    const help = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/ShiftBuilderHelpButton.tsx"),
+      "utf8",
+    );
+    const nav = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/FloatingNav.tsx"),
+      "utf8",
+    );
+    const client = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/ShiftBuilderClient.tsx"),
+      "utf8",
+    );
+    const layout = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/layout.tsx"),
+      "utf8",
+    );
+    expect(help).not.toContain("sb-help-fab");
+    expect(help).toContain("sb-open-help");
+    expect(nav).toContain("Help");
+    expect(nav).toContain("sb-open-help");
+    expect(globalsCss).toContain(".sb-desk-toasts");
+    expect(globalsCss).toContain("Collision map");
+    expect(client).toContain("sb-desk-toasts");
+    expect(layout).toContain("offset={{ bottom: 88, right: 16 }}");
+    expect(draftPill).toContain("Toasts stay bottom-right");
+  });
+
   it("masks PIN field and loading shells with the same quiet motion", () => {
     expect(authCss).toContain("border-color var(--sb-motion-instant, 100ms)");
     expect(authCss).toContain("border-radius: var(--sb-card-radius, 20px)");

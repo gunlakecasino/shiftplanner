@@ -6607,8 +6607,7 @@ body.sb-tablet-dock-open .sb-builder-shell.sb-sheetbuilder-redesign .sb-stage-ho
   }
 
   .sb-sheetbuilder-topbar button,
-  .sb-sheetbuilder-topbar a[role="menuitem"],
-  .sb-help-fab {
+  .sb-sheetbuilder-topbar a[role="menuitem"] {
     min-width: 44px !important;
     min-height: 44px !important;
     touch-action: manipulation;
@@ -7780,25 +7779,6 @@ body.sb-tablet-dock-open .sb-canvas-veil--active {
   opacity: 0.78;
 }
 
-.sb-help-fab {
-  top: calc(env(safe-area-inset-top, 0px) + 11px);
-  width: 32px;
-  height: 32px;
-  border: 1px solid #E6EAF0;
-  background: #FFFFFF;
-  color: #64748B;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.sb-help-fab:hover {
-  transform: none;
-  background: #F4F6FA;
-  box-shadow: none;
-}
 
 #ops-status-bar {
   font-size: 8px !important;
@@ -8739,10 +8719,19 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   transition: opacity var(--sb-motion-quick) var(--sb-spring-gentle);
 }
 
+/* Collision map: footer owns the bottom strip (Capture left).
+   Draft pill docks center, raised above the footer.
+   Desk toasts + Sonner stay bottom-right on the same raised band.
+   They must not share the pill's center x. */
 .sb-draft-pill {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.25rem);
   background: #ffffff;
   border: 1px solid var(--sb-gold-border);
   box-shadow: 0 8px 24px -16px rgba(15, 23, 42, 0.28);
+}
+
+.sb-desk-toasts {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.25rem);
 }
 
 .sb-draft-pill-btn {

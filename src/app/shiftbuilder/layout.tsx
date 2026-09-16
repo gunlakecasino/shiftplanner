@@ -41,6 +41,7 @@ export default function ShiftBuilderLayout({
             position="bottom-right"
             richColors
             closeButton
+            offset={{ bottom: 88, right: 16 }}
             toastOptions={{ duration: 5000 }}
           />
         </ConfirmProvider>

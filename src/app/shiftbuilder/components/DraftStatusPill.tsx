@@ -27,8 +27,9 @@ export interface DraftStatusPillProps {
  *
  * Draft safety is architecturally sacred (nothing mutates live), but the mode
  * state itself was only visible inside the engine drawer / nav menu. This pill
- * docks bottom-center whenever Draft Mode is on, so the operator can answer
+ * docks bottom-center, raised above the footer, so the operator can answer
  * "am I in Draft, and how much is unapplied?" without opening anything.
+ * Toasts stay bottom-right on that same raised band (no center overlap).
  * Pairs with the gold `sb-draft-frame-active` ring on the scale viewport.
  *
  * Apply/Discard route through the exact same handlers as the nav + engine
@@ -52,7 +53,7 @@ const DraftStatusPill: React.FC<DraftStatusPillProps> = ({
     <div
       role="status"
       aria-live="polite"
-      className="sb-draft-pill no-print fixed bottom-5 left-1/2 z-[120] flex -translate-x-1/2 items-center gap-2.5 rounded-full py-1.5 pl-3.5 pr-1.5"
+      className="sb-draft-pill no-print fixed left-1/2 z-[120] flex -translate-x-1/2 items-center gap-2.5 rounded-full py-1.5 pl-3.5 pr-1.5"
       style={{
         fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
       }}

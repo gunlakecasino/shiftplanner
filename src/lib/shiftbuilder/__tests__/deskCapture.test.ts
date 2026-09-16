@@ -100,7 +100,7 @@ describe("desk capture chrome + seat-scope wiring", () => {
     expect(nav).toContain("onCaptureDesk");
     expect(footer).toContain('aria-label="Capture desk"');
     expect(footer).toContain("onCaptureDesk");
-    expect(client).toContain('className="fixed bottom-4 right-4 z-[100]');
+    expect(client).toContain('className="sb-desk-toasts fixed right-4 z-[100]');
     expect(client).not.toMatch(/bottom-4 right-4[\s\S]{0,400}Capture desk/);
   });
 

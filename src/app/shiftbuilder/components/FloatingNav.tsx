@@ -31,6 +31,7 @@ import {
   RefreshCw,
   ClipboardList,
   Camera,
+  CircleHelp,
 } from "lucide-react";
 
 const APP_BASE_PATH = "/sheetbuilder";
@@ -141,6 +142,8 @@ export interface FloatingNavProps {
   permissions?: ShiftBuilderPermissions;
   /** Desk capture — More menu, not a toast-corner FAB. */
   onCaptureDesk?: () => void;
+  /** Floor help / tutorial — More menu, not a topbar FAB. */
+  onOpenHelp?: () => void;
 }
 
 const MONTHS = MONTH_LONG;
@@ -242,6 +245,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     top = 0,
     permissions,
     onCaptureDesk,
+    onOpenHelp,
   } = props;
 
   const canEditAssignments = permissions?.canEditAssignments ?? false;
@@ -857,6 +861,18 @@ export default function FloatingNav(props: FloatingNavProps) {
                     Capture desk
                   </button>
                 )}
+                <button
+                  type="button"
+                  className={menuItemClass}
+                  onClick={() => {
+                    if (onOpenHelp) onOpenHelp();
+                    else window.dispatchEvent(new Event("sb-open-help"));
+                    setMoreOpen(false);
+                  }}
+                >
+                  <CircleHelp size={14} />
+                  Help
+                </button>
                 {onViewChange && (
                   <button
                     type="button"
