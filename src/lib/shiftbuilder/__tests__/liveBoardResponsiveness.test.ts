@@ -356,5 +356,8 @@ describe("P0 unstocky — poll reconcile + stable placement keys", () => {
     expect(opsMutations).toContain("additional_coverage_slots: coverageByKey.get(k) ?? []");
     expect(opsMutations).toContain("keptCoverageRowId");
     expect(shiftBuilderClient).toContain("reseatTmKeepSeatCoverage(");
+    expect(shiftBuilderClient).toContain("findSeatKeyOfTm(");
+    expect(shiftBuilderClient).toContain("persistReseatMove(");
+    expect(shiftBuilderClient).toContain("markAssignedDragEnded()");
   });
 });

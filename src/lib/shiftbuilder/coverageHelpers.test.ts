@@ -11,6 +11,8 @@ import {
   persistSlotForCoverageSource,
   reseatTmKeepSeatCoverage,
   clearTmKeepSeatCoverage,
+  assignOrReseatTmKeepSeatCoverage,
+  findSeatKeyOfTm,
   visibleOutgoingCoverageTasks,
 } from "./coverageHelpers";
 import { uiToDb } from "./slot-keys";
@@ -248,6 +250,45 @@ describe("coverage banners stay on the seat when TMs swap", () => {
     });
     expect(after.MRR6?.tmId).toBeUndefined();
   });
+
+  it("assignOrReseat swaps two seated TMs without moving coverage", () => {
+    const before = {
+      MRR8: {
+        tmId: "amanda",
+        tmName: "Amanda",
+        additionalCoverageSlots: ["Z8"],
+      },
+      MRR10: {
+        tmId: "nikki",
+        tmName: "Nikki",
+        additionalCoverageSlots: ["Z10"],
+      },
+    };
+    expect(findSeatKeyOfTm(before, "amanda")).toBe("MRR8");
+    const after = assignOrReseatTmKeepSeatCoverage(before, "MRR10", "amanda", "Amanda");
+    expect(after.MRR8).toMatchObject({
+      tmId: "nikki",
+      tmName: "Nikki",
+      additionalCoverageSlots: ["Z8"],
+    });
+    expect(after.MRR10).toMatchObject({
+      tmId: "amanda",
+      tmName: "Amanda",
+      additionalCoverageSlots: ["Z10"],
+    });
+  });
+
+  it("assignOrReseat onto an empty stub keeps the stub banners", () => {
+    const before = {
+      MRR6: { slotKey: "MRR6", additionalCoverageSlots: ["Z6"] },
+    };
+    const after = assignOrReseatTmKeepSeatCoverage(before, "MRR6", "scott", "Scott");
+    expect(after.MRR6).toMatchObject({
+      tmId: "scott",
+      tmName: "Scott",
+      additionalCoverageSlots: ["Z6"],
+    });
+  });
 });
 
 describe("Z9SR / AUX2 is one seat", () => {
@@ -315,6 +356,20 @@ describe("visibleOutgoingCoverageTasks", () => {
         [{ sourceKey: "MRR7" }],
         false,
       ),
+    ).toEqual(tasks);
+  });
+
+  it("hides leftover covering on an empty seat that does not own that stub", () => {
+    const tasks = [{ taskLabel: "And Restroom 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(tasks, "MRR6", [], true, []),
+    ).toEqual([]);
+  });
+
+  it("keeps a seat-owned stub on empty Men's 7 covering Zone 7", () => {
+    const tasks = [{ taskLabel: "And Zone 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(tasks, "MRR7", [], true, ["Z7"]),
     ).toEqual(tasks);
   });
 });

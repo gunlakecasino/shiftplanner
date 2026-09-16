@@ -22,7 +22,7 @@ import {
 } from "./assignmentCardChrome";
 import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./CardTaskZone";
 import { formatCanvasRrSideLabel } from "@/lib/shiftbuilder/canvasPrideLabels";
-import { visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
+import { coverageSlotsOf, visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
 import { CardVectorMark } from "./CardVectorMark";
 import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
@@ -442,12 +442,14 @@ const RRCard: React.FC<RRCardProps> = React.memo(({
     wKey,
     coveredByIndex[wKey] || [],
     wEmpty,
+    coverageSlotsOf(assignments[wKey]),
   );
   const mCoverageTasks = visibleOutgoingCoverageTasks(
     mTasks,
     mKey,
     coveredByIndex[mKey] || [],
     mEmpty,
+    coverageSlotsOf(assignments[mKey]),
   );
 
   const wCoveredBy = coveredByIndex[wKey] || [];

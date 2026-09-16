@@ -5,6 +5,8 @@ import type { EngineRunPhase, CoverageEngineRunOptions } from "../components/Can
 import type { SlotRanking } from "@/lib/shiftbuilder/placement";
 import { useShiftBuilderStore } from "../store/useShiftBuilderStore";
 import { useConfirm } from "../components/ConfirmDialog";
+import { applyDraftMoveOrSwapToMap } from "@/lib/shiftbuilder/draftMove";
+import { coverageSlotsOf, clearTmKeepSeatCoverage } from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
  * useEngineRunner
@@ -220,35 +222,16 @@ export function useEngineRunner(params: UseEngineRunnerParams): UseEngineRunnerR
     displaced: { tmId: string; tmName: string } | null,
   ) => {
     const store = useShiftBuilderStore.getState();
-    const committed = store.assignments ?? {};
-    const next = { ...store.draftAssignments };
-
-    const patchSlot = (key: string, tmId: string | null, tmName: string | null) => {
-      const existingDraft = next[key];
-      const baseline = committed[key];
-      const previousTmId = existingDraft?.previousTmId ?? baseline?.tmId;
-      const previousTmName = existingDraft?.previousTmName ?? baseline?.tmName;
-
-      if (!tmId) {
-        if (!baseline?.tmId && !(existingDraft?.proposedTmId && !existingDraft?.proposedClear)) {
-          delete next[key];
-        } else {
-          next[key] = { proposedTmId: "", proposedTmName: "", previousTmId, previousTmName, proposedClear: true };
-        }
-      } else {
-        if (tmId === baseline?.tmId) {
-          delete next[key];
-        } else {
-          next[key] = { proposedTmId: tmId, proposedTmName: tmName || tmId, previousTmId, previousTmName };
-        }
-      }
-    };
-
-    if (moving) patchSlot(toKey, moving.tmId, moving.tmName);
-    if (displaced) patchSlot(fromKey, displaced.tmId, displaced.tmName);
-    else if (moving) patchSlot(fromKey, null, null);
-
-    store.setDraftAssignments(next);
+    store.setDraftAssignments(
+      applyDraftMoveOrSwapToMap(
+        store.draftAssignments,
+        store.assignments ?? {},
+        fromKey,
+        toKey,
+        moving,
+        displaced,
+      ),
+    );
   };
 
   const buildFinalAssignmentsFromDraft = (
@@ -264,18 +247,20 @@ export function useEngineRunner(params: UseEngineRunnerParams): UseEngineRunnerR
             ? "overlap"
             : "aux";
 
-    const newAssignments: Record<string, any> = { ...currentAssignments };
+    let newAssignments: Record<string, any> = { ...currentAssignments };
     for (const [slotKey, info] of draftEntries) {
       if (info.proposedClear) {
-        delete newAssignments[slotKey];
+        newAssignments = clearTmKeepSeatCoverage(newAssignments, slotKey);
       } else if (info.proposedTmId) {
+        const current = newAssignments[slotKey];
         newAssignments[slotKey] = {
-          ...newAssignments[slotKey],
+          ...current,
           tmId: info.proposedTmId,
           tmName: info.proposedTmName,
-          breakGroup: newAssignments[slotKey]?.breakGroup ?? 0,
+          breakGroup: current?.breakGroup ?? 0,
           type: slotTypeForUiKey(slotKey),
           slotKey,
+          additionalCoverageSlots: coverageSlotsOf(current),
         };
       }
     }

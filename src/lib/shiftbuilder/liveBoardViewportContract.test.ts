@@ -187,10 +187,13 @@ describe("SheetBuilder night actions (PR B)", () => {
     expect(floatingNav).toContain("aria-label=\"Night actions\"");
   });
 
-  it("keeps Apply in the primary night-action cluster when Draft is on", () => {
-    expect(floatingNav).toContain("showDraftTools && isDraftMode && onSaveAllDraft");
+  it("keeps Apply beside Draft as the charcoal primary commit", () => {
+    expect(floatingNav).toContain("showDraftTools && onSaveAllDraft");
+    expect(floatingNav).not.toContain("showDraftTools && isDraftMode && onSaveAllDraft");
     expect(floatingNav).not.toContain("isDraftMode && draftSlotCount > 0 && onSaveAllDraft");
     expect(floatingNav).not.toContain("sb-night-action-pill--split");
+    expect(floatingNav).toContain('background: draftSlotCount > 0 ? "#1C1C1E"');
+    expect(floatingNav).not.toContain("Publish this day");
     expect(globalsCss).toContain(".sb-night-action-pill--apply");
   });
 
@@ -1030,5 +1033,60 @@ describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
     expect(authGateCss).toContain("#F4F6FA");
     expect(authGateCss).toContain("object-fit: contain");
     expect(version).toContain('"1.282"');
+  });
+});
+
+describe("P0 trust / liturgy — coverage, Repeat, swap, inspector", () => {
+  const interactiveStage = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/InteractiveStage.tsx"),
+    "utf8",
+  );
+  const cardTaskZone = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/CardTaskZone.tsx"),
+    "utf8",
+  );
+  const zoneCard = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/ZoneCard.tsx"),
+    "utf8",
+  );
+  const placementPad = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/components/PlacementPad.tsx"),
+    "utf8",
+  );
+
+  it("binds Repeat copy to this card's slotKey", () => {
+    const chrome = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    expect(chrome).toContain("formatCanvasRepeatMark(slotKey)");
+    expect(chrome).toContain("formatCanvasRepeatReason(matchSlotKey ?? repeatChip.code)");
+    expect(chrome).toContain("placementTrailMatchSlotKey={placementTrailMatchSlotKey}");
+    expect(rrCard).toContain("placementTrailMatchSlotKey={slotKey}");
+    expect(zoneCard).toContain("matchSlotKey={def.key}");
+  });
+
+  it("filters empty-seat covering to seat-owned stubs", () => {
+    expect(rrCard).toContain("coverageSlotsOf(assignments[wKey])");
+    expect(rrCard).toContain("coverageSlotsOf(assignments[mKey])");
+    expect(zoneCard).toContain("coverageSlotsOf(a)");
+    expect(rrCard).toContain("visibleOutgoingCoverageTasks");
+  });
+
+  it("lets seated↔seated swap hit a peer slot and kills click-after-drag jump", () => {
+    expect(interactiveStage).toContain('String(c.id) === `slot:${fromSlot}`');
+    expect(interactiveStage).toContain('args.active?.data?.current?.type === "assigned"');
+    expect(cardTaskZone).toContain("wasRecentAssignedDrag()");
+    expect(zoneCard).toContain("wasRecentAssignedDrag()");
+    expect(placementPad).toContain("seatedSwapCandidates");
+    expect(placementPad).toContain("tms={pickerTms}");
+  });
+
+  it("wires inspector Lock / Coverage / Swap / Clear", () => {
+    expect(placementPad).toContain("onToggleLock?.(slotKey)");
+    expect(placementPad).toContain("setCoverageMode(true)");
+    expect(placementPad).toContain("setAssignMode(true)");
+    expect(placementPad).toContain("onLiveUnassign?.(slotKey)");
+    expect(shiftBuilderClient).toContain("unassign(slotKey)");
   });
 });

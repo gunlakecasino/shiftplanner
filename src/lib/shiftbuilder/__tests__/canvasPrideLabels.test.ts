@@ -163,4 +163,10 @@ describe("formatCanvasRepeatMark", () => {
     expect(formatCanvasRepeatMark("Z4")).toBe("Repeat Zone 4");
     expect(formatCanvasRepeatMark()).toBe("Repeat");
   });
+
+  it("never lets Men's 10 inherit Men's 8 Repeat copy", () => {
+    expect(formatCanvasRepeatMark("MRR10")).not.toContain("Men's 8");
+    expect(formatCanvasRepeatReason("MRR10")).not.toContain("Men's 8");
+    expect(formatCanvasRepeatMark("MRR10")).not.toBe(formatCanvasRepeatMark("MRR8"));
+  });
 });

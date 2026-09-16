@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { NightSlotTask } from "@/lib/shiftbuilder/data";
+import { wasRecentAssignedDrag } from "@/lib/shiftbuilder/deskGestureGuard";
 
 export type OpenTasksPadHandler = (
   slotKey: string,
@@ -23,6 +24,7 @@ export function handleAssignZoneClick(
   isLocked?: boolean,
 ) {
   if (isLocked) return;
+  if (wasRecentAssignedDrag()) return;
   e.stopPropagation();
   onOpenPlacementPad(slotKey, e.currentTarget as HTMLElement, e);
 }

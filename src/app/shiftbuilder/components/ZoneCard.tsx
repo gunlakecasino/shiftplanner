@@ -17,6 +17,7 @@ import type { CardVector } from "@/lib/shiftbuilder/cardVectors";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
 import {
   formatCoveragePositionLabel,
+  coverageSlotsOf,
   visibleOutgoingCoverageTasks,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
@@ -24,6 +25,7 @@ import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { CardTaskZone } from "./CardTaskZone";
 import { ShiftCard as PackageShiftCard } from "../redesign/components/ShiftCard";
+import { wasRecentAssignedDrag } from "@/lib/shiftbuilder/deskGestureGuard";
 
 export interface ZoneCardProps {
   def: any;
@@ -209,6 +211,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     def.key,
     coveredBy,
     isEmpty || (!hasTM && isCovered),
+    coverageSlotsOf(a),
   );
   const regularTasks = visibleDeskSlotTasks(selectedTasks[def.key], {
     hideNonCustomZoneDuties: true,
@@ -342,6 +345,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         coverage={showDigitalAssists ? undefined : assignmentState.kind === "covered" ? packageCoverage : undefined}
         onClick={() => {
           if (isLocked) return;
+          if (wasRecentAssignedDrag()) return;
           const el = document.querySelector(`[data-slot-key="${def.key}"]`) as HTMLElement | null;
           if (el) onCardClick(def.key, el);
         }}

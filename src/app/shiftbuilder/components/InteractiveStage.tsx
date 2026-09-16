@@ -47,16 +47,24 @@ function isDroppableVisible(
 
 /** Prefer pointer-hit droppables; ignore hidden/off-screen/zero-size nodes. */
 const shiftBuilderCollisionDetection: CollisionDetection = (args) => {
-  const visibleHits = (collisions: ReturnType<typeof pointerWithin>) =>
-    collisions.filter((c) => isDroppableVisible(c.id, args));
+  const fromSlot =
+    args.active?.data?.current?.type === "assigned"
+      ? String(args.active.data.current.fromSlot ?? "")
+      : "";
+  const rejectSelf = (collisions: ReturnType<typeof pointerWithin>) =>
+    collisions.filter((c) => {
+      if (!isDroppableVisible(c.id, args)) return false;
+      if (fromSlot && String(c.id) === `slot:${fromSlot}`) return false;
+      return true;
+    });
 
-  const pointerHits = visibleHits(pointerWithin(args));
+  const pointerHits = rejectSelf(pointerWithin(args));
   if (pointerHits.length > 0) return pointerHits;
 
-  const rectHits = visibleHits(rectIntersection(args));
+  const rectHits = rejectSelf(rectIntersection(args));
   if (rectHits.length > 0) return rectHits;
 
-  return visibleHits(closestCenter(args));
+  return rejectSelf(closestCenter(args));
 };
 
 /**
