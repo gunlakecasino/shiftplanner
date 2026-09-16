@@ -193,6 +193,17 @@ function IpadDeskFixtureInner() {
                     showTaskBadge
                   />
                 </div>
+                <div className="sb-day-card-host" data-slot-key="support_3" style={{ minHeight: 176 }}>
+                  <AuxCard
+                    def={{ key: "support_3", role: "support", label: "SUPPORT 3", locations: [] }}
+                    assignments={{}}
+                    selectedTasks={{}}
+                    coveredBy={[]}
+                    onCardClick={() => {}}
+                    showDigitalAssists
+                    showTaskBadge
+                  />
+                </div>
               </div>
             </section>
           </div>

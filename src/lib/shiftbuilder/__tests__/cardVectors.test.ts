@@ -395,6 +395,8 @@ describe("Brian's shipped vector artwork", () => {
     expect(vectors).toContain("/card-vectors/laundry.svg");
     expect(mark).toContain("CARD_VECTOR_SRC[vector]");
     expect(mark).toContain("CARD_VECTOR_VIEWBOX");
+    expect(mark).toContain("sb-card-vector-sans-label");
+    expect(mark).toContain("meta.label");
     expect(CARD_VECTOR_VIEWBOX.sweep_5_8_hl).toEqual({ width: 99.64, height: 14.63 });
     expect(mark).not.toContain("SweepInk");
     expect(mark).not.toContain("LaundryInk");

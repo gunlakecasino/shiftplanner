@@ -8866,3 +8866,225 @@ html.sb-ipad-desk.sb-ipad-portrait .sb-sheetbuilder-redesign.sb-canvas-builder .
   max-height: none !important;
   padding: 2px 0 !important;
 }
+
+/* ==========================================================================
+   Kit fidelity pass 2 — remaining chrome trash after #38.
+   Live canvas only. Golden print metrics stay untouched.
+   ========================================================================== */
+
+.sb-sheetbuilder-redesign .sb-sheetbuilder-topbar {
+  gap: 8px !important;
+  padding: 0 14px !important;
+}
+
+.sb-sheetbuilder-redesign .sb-topbar-brand {
+  padding-right: 12px !important;
+}
+
+.sb-sheetbuilder-redesign .sb-topbar-days,
+.sb-sheetbuilder-redesign .sb-topbar-day-strip {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  justify-content: flex-start !important;
+}
+
+.sb-sheetbuilder-redesign .sb-topbar-day-strip {
+  gap: 0 !important;
+  padding-inline: 0 !important;
+}
+
+.sb-sheetbuilder-redesign .sb-topbar-spacer {
+  flex: 1 1 auto;
+  min-width: 12px;
+  max-width: none;
+}
+
+.sb-sheetbuilder-redesign .sb-night-action-pill--print {
+  background: transparent !important;
+  color: #64748B !important;
+  min-width: 0 !important;
+  box-shadow: none !important;
+}
+
+.sb-sheetbuilder-redesign .sb-topbar-publish {
+  background: transparent !important;
+  border: 0 !important;
+  color: #64748B !important;
+}
+
+.sb-sheetbuilder-redesign .sb-month-status-diamond {
+  background: #94A3B8 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-drop-zones-desk-row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-drop-zones-wrap,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-drop-zones-picker,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-shift-notes {
+  display: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-primary-name,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-canvas-slot-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-coverage-bar-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .zone-task-list,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-task-list,
+.placement-dock,
+.placement-dock .sb-placement-pad-task-label,
+.placement-dock .sb-card-vector-sans-label {
+  font-family: var(--font-builder, "Helvetica Neue", Helvetica, Arial, sans-serif) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-refined-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-pair {
+  border-radius: var(--sb-card-radius, 20px) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-card-accent-stripe,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-pair > .sb-card-accent-stripe {
+  width: 8px !important;
+  border-radius: 20px 0 0 20px !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-side-label::before,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-slot-header::before,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-rr-card-header::before {
+  content: none !important;
+  display: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer--band,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer--band {
+  background: #F4F6FA !important;
+  overflow: hidden !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 6px 8px 6px 10px !important;
+  overflow: visible !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-footer__row .sb-coverage-bar.sb-coverage-rail,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-bar.sb-coverage-rail,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-bar.sb-coverage-rail {
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 1 1 auto !important;
+  background: #EEF1F6 !important;
+  color: #334155 !important;
+  border-radius: 8px !important;
+  padding: 5px 10px 5px 12px !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .assignment-card .sb-coverage-rail .sb-coverage-bar-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-ipad-rr-half .sb-coverage-rail .sb-coverage-bar-label {
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  color: #334155 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-label,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-covered-by-name,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-tm-trail-chip {
+  color: #64748B !important;
+  opacity: 1 !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-card-vector--sans {
+  transform: none !important;
+  height: auto !important;
+  max-width: 100% !important;
+}
+
+.sb-card-vector-sans-label {
+  display: block;
+  font-family: var(--font-builder, "Helvetica Neue", Helvetica, Arial, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .assignment-card,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-blank {
+  min-height: 132px !important;
+  height: auto !important;
+  border-radius: var(--sb-card-radius, 20px) !important;
+  border-style: solid !important;
+  border-color: #E6EAF0 !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-aux-grid > * {
+  flex: 0 0 auto !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-aux-slot-btn {
+  color: #64748B !important;
+  border-color: #E6EAF0 !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-card-assign-zone {
+  min-height: 36px !important;
+  padding-bottom: 4px !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-with-aux-sidebar > section:nth-child(3) .sb-coverage-footer--band {
+  display: flex !important;
+}
+
+.placement-dock .sb-placement-pad-primary,
+.sb-sheetbuilder-placement-pad .sb-placement-pad-primary {
+  background: #1C1C1E !important;
+}
+
+.placement-dock .sb-placement-pad-primary:hover:not(:disabled),
+.sb-sheetbuilder-placement-pad .sb-placement-pad-primary:hover:not(:disabled) {
+  background: #111113 !important;
+}
+
+.placement-dock .sb-dock-tab--active {
+  color: #1C1C1E !important;
+  box-shadow: inset 0 -1.5px 0 #1C1C1E !important;
+}
+
+.placement-dock .sb-placement-pad-action-emphasis,
+.sb-sheetbuilder-placement-pad .sb-placement-pad-action-emphasis {
+  color: #1C1C1E !important;
+}
+
+.placement-dock .sb-placement-pad-add-task,
+.sb-sheetbuilder-placement-pad .sb-placement-pad-add-task {
+  border-color: #E6EAF0 !important;
+  background: #FFFFFF !important;
+  color: #334155 !important;
+}
+
+.placement-dock .sb-placement-pad-task-dot,
+.sb-sheetbuilder-placement-pad .sb-placement-pad-task-dot {
+  display: none !important;
+}
+
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .zone-task-list,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-task-list,
+.sb-sheetbuilder-redesign.sb-canvas-builder .sb-builder-stage .builder-workspace .sb-package-card-task-list {
+  color: #334155 !important;
+  font-size: 12px !important;
+  font-style: normal !important;
+}

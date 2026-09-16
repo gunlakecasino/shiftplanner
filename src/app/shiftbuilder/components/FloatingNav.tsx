@@ -516,7 +516,7 @@ export default function FloatingNav(props: FloatingNavProps) {
         <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
 
         {/* CENTER — day scroller */}
-        <div className="sb-topbar-days flex items-center flex-1 min-w-0 gap-0.5">
+        <div className="sb-topbar-days flex items-center shrink-0 gap-0.5">
           <button
             type="button"
             onClick={onPrevWeek}
@@ -528,7 +528,7 @@ export default function FloatingNav(props: FloatingNavProps) {
             <ChevronLeft size={13} strokeWidth={2.8} />
           </button>
 
-          <div className="sb-topbar-day-strip flex items-center justify-around flex-1 px-1">
+          <div className="sb-topbar-day-strip flex items-center justify-start shrink-0 px-0.5">
             {days.map((day, dayIndex) => {
               const isSelected = day.id === selectedDayId;
               const isToday = !!day.isToday;
@@ -618,7 +618,7 @@ export default function FloatingNav(props: FloatingNavProps) {
 
         {onViewChange ? (
           <div
-            className="sb-sheet-view-pills flex items-center gap-1 shrink-0 mx-1"
+            className="sb-sheet-view-pills flex items-center gap-0.5 shrink-0 ml-2"
             role="tablist"
             aria-label="Sheet"
           >
@@ -685,10 +685,10 @@ export default function FloatingNav(props: FloatingNavProps) {
           </div>
         ) : null}
 
-        <div className="shrink-0 mx-1" style={{ width: 1, height: 30, background: chromeDivider }} />
+        <div className="sb-topbar-spacer flex-1 min-w-3" aria-hidden="true" />
 
-        {/* RIGHT — night actions (seen) + roster + more */}
-        <div className="sb-topbar-actions flex items-center gap-1 shrink-0">
+        {/* RIGHT — Draft + Apply primary; Print stays a quiet neighbor. */}
+        <div className="sb-topbar-actions flex items-center gap-1.5 shrink-0">
           <div
             className={`sb-night-action-pills flex items-center shrink-0${isDraftMode ? " sb-night-action-pills--draft-active" : ""}`}
             role="group"
@@ -753,11 +753,19 @@ export default function FloatingNav(props: FloatingNavProps) {
               </button>
             ) : null}
 
+          </div>
+
             {onPrint && (
               <button
                 type="button"
                 className="sb-night-action-pill sb-night-action-pill--print sb-interactive"
-                style={nightActionSegmentStyle()}
+                style={nightActionSegmentStyle({
+                  minWidth: 0,
+                  padding: "0 8px",
+                  background: "transparent",
+                  color: mutedChromeText,
+                  fontWeight: 550,
+                })}
                 onClick={onPrint}
                 disabled={printBusy}
                 aria-busy={printBusy}
@@ -767,7 +775,6 @@ export default function FloatingNav(props: FloatingNavProps) {
                 {printBusy ? <span>Printing…</span> : <span>Print</span>}
               </button>
             )}
-          </div>
 
           <div className="relative" ref={rosterMenuRef}>
             <button

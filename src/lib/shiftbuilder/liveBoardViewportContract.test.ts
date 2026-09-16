@@ -470,7 +470,7 @@ describe("SheetBuilder placement pad modern desk", () => {
     expect(placementPad).toContain("TmPicker");
     expect(placementPad).toContain("Assign team member");
     expect(placementPad).toContain("Change team member");
-    expect(placementPad).toContain('background: "#007AFF"');
+    expect(placementPad).toContain('background: "#1C1C1E"');
     expect(placementPad).not.toContain("Sparkles");
     expect(placementPad).not.toContain("xAI insight");
     expect(placementPad).not.toMatch(/>\s*xAI\s*</);
@@ -648,7 +648,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.283"');
+    expect(version).toContain('"1.284"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -1034,7 +1034,7 @@ describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
     expect(authGateCss).toContain("sb-auth-visual__desk");
     expect(authGateCss).toContain("#F4F6FA");
     expect(authGateCss).toContain("object-fit: contain");
-    expect(version).toContain('"1.283"');
+    expect(version).toContain('"1.284"');
   });
 });
 

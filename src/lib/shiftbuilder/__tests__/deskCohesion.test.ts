@@ -174,6 +174,34 @@ describe("SheetBuilder desk cohesion", () => {
     expect(globalsCss).toContain("overflow: hidden !important");
   });
 
+  it("compacts the topbar and keeps one sans ramp on live cards", () => {
+    const nav = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/FloatingNav.tsx"),
+      "utf8",
+    );
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    const vectors = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CardVectorMark.tsx"),
+      "utf8",
+    );
+    expect(nav).toContain("sb-topbar-spacer");
+    expect(nav).toContain("sb-topbar-day-strip flex items-center justify-start shrink-0");
+    expect(nav).not.toContain("justify-around flex-1 px-1");
+    expect(globalsCss).toContain("Kit fidelity pass 2");
+    expect(globalsCss).toContain(".sb-topbar-spacer");
+    expect(globalsCss).toContain("background: #1C1C1E !important");
+    expect(globalsCss).toContain(".sb-card-vector-sans-label");
+    expect(globalsCss).toContain("min-height: 132px !important");
+    expect(coverageBar).toContain('const railBg = "#EEF1F6"');
+    expect(coverageBar).toContain('const railInk = "#334155"');
+    expect(vectors).toContain("sb-card-vector-sans-label");
+    expect(auxCard).toContain("sb-card-assign-zone shrink-0");
+    expect(auxCard).not.toContain("{isUnsetBlank && !hasTM ? null : (");
+  });
+
   it("keeps Team search as an icon, not a colliding search ligature", () => {
     const teamTab = readFileSync(
       resolve(process.cwd(), "src/app/shiftbuilder/sudo/TeamTab.tsx"),

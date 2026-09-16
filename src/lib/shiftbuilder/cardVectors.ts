@@ -38,7 +38,7 @@ export const CARD_VECTOR_META: Record<
   },
 };
 
-/** Brian's shipped artwork. Do not redraw or recreate as <text>. */
+/** Brian's shipped artwork for print / Golden. Live desk uses CARD_VECTOR_META labels. */
 export const CARD_VECTOR_SRC: Record<CardVector, string> = {
   sweep_9_10_sr: "/card-vectors/sweep-9-10-sr.svg",
   sweep_5_8_hl: "/card-vectors/sweep-5-8-hl.svg",

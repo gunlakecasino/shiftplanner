@@ -383,9 +383,9 @@ export function UnassignedInvite({
 }
 
 const COVERED_LABEL_SIZE_BUILDER: Record<CardNameScale, number> = {
-  zone: 8.5,
-  rr: 10,
-  aux: 7.5,
+  zone: 11,
+  rr: 11,
+  aux: 11,
 };
 
 const COVERED_LABEL_SIZE_PRINT: Record<CardNameScale, number> = {

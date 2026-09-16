@@ -29,24 +29,29 @@ export function CardVectorMark({
   const meta = CARD_VECTOR_META[vector];
   const box = SIZE[size];
   const view = CARD_VECTOR_VIEWBOX[vector];
+  const kitSans = size === "desk" || size === "pad";
 
   return (
     <span
       className={`${box.className} ${
         vector === "laundry" ? "sb-card-vector--laundry" : "sb-card-vector--sweep"
-      }`}
+      }${kitSans ? " sb-card-vector--sans" : ""}`}
       title={meta.label}
       aria-label={box.ariaHidden ? undefined : meta.ariaLabel}
       aria-hidden={box.ariaHidden ? true : undefined}
     >
-      <img
-        src={CARD_VECTOR_SRC[vector]}
-        alt=""
-        width={view.width}
-        height={view.height}
-        className="sb-card-vector-svg"
-        draggable={false}
-      />
+      {kitSans ? (
+        <span className="sb-card-vector-sans-label">{meta.label}</span>
+      ) : (
+        <img
+          src={CARD_VECTOR_SRC[vector]}
+          alt=""
+          width={view.width}
+          height={view.height}
+          className="sb-card-vector-svg"
+          draggable={false}
+        />
+      )}
     </span>
   );
 }

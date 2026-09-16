@@ -342,7 +342,7 @@ function FitIntelBlock({
               onMoreDetails();
             }}
             disabled={loading || !assigned}
-            className="text-[10px] font-semibold px-2.5 py-1 rounded-full border border-[#E6EAF0] text-[#007AFF] bg-white hover:bg-[#F4F6FA] disabled:opacity-50"
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-full border border-[#E6EAF0] text-[#64748B] bg-white hover:bg-[#F4F6FA] disabled:opacity-50"
           >
             {loading ? "Analyzing…" : structured?.headline ? "Full reasoning" : "Fit details"}
           </button>
@@ -1431,7 +1431,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
               disabled={isCurrentNightLocked}
               onClick={() => setAssignMode(true)}
               className="sb-placement-pad-primary mt-3 w-full py-2.5 text-[12px] font-semibold text-white disabled:opacity-50"
-              style={{ background: "#007AFF" }}
+              style={{ background: "#1C1C1E" }}
             >
               Change team member
             </button>
@@ -1440,7 +1440,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
 
         {!a.tmName && !showTmPicker && (
           <div className="py-2">
-            <button disabled={isCurrentNightLocked} onClick={() => setAssignMode(true)} className="sb-placement-pad-primary w-full rounded-2xl py-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#007AFF" }}>
+            <button disabled={isCurrentNightLocked} onClick={() => setAssignMode(true)} className="sb-placement-pad-primary w-full rounded-2xl py-3 text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#1C1C1E" }}>
               Assign team member
             </button>
           </div>
@@ -1480,15 +1480,14 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                 {tasks.map((t) => (
                   <div
                     key={t.id || t.taskLabel}
-                    className={`sb-placement-pad-task-row flex items-center justify-between px-3 py-2 rounded-2xl border border-gray-100 bg-white text-[12px] ${onOpenTasksPad ? "cursor-pointer hover:border-[#007AFF]/30 hover:bg-[#007AFF]/[0.03]" : ""}`}
+                    className={`sb-placement-pad-task-row flex items-center justify-between px-3 py-2 rounded-xl border border-[#E6EAF0] bg-white text-[13px] ${onOpenTasksPad ? "cursor-pointer hover:bg-[#F4F6FA]" : ""}`}
                     onClick={onOpenTasksPad ? (e) => { e.stopPropagation(); onOpenTasksPad(slotKey, t, { preservePlacement: true }); } : undefined}
                     onKeyDown={onOpenTasksPad ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTasksPad(slotKey, t, { preservePlacement: true }); } } : undefined}
                     role={onOpenTasksPad ? "button" : undefined}
                     tabIndex={onOpenTasksPad ? 0 : undefined}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="sb-placement-pad-task-dot w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color ?? accent }} />
-                      <span className="font-medium text-gray-800 truncate">{t.taskLabel}</span>
+                      <span className="sb-placement-pad-task-label font-medium text-[#334155] truncate">{t.taskLabel}</span>
                     </div>
                     {onRemoveTask && (
                       <button
@@ -1534,7 +1533,7 @@ const PlacementPad: React.FC<PlacementPadProps> = (props) => {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onOpenTasksPad(slotKey, undefined, { addMode: true, preservePlacement: true }); }}
-                    className="sb-placement-pad-add-task w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl border border-dashed border-[#007AFF]/35 bg-[#007AFF]/[0.04] text-[12px] font-semibold text-[#007AFF] hover:bg-[#007AFF]/[0.08] active:scale-[0.99] transition-transform transition-opacity"
+                    className="sb-placement-pad-add-task w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-[#E6EAF0] bg-white text-[12px] font-semibold text-[#334155] hover:bg-[#F4F6FA] active:scale-[0.99] transition-transform transition-opacity"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>{tasks.length ? "Add another task" : "Add tasks"}</span>
