@@ -82,6 +82,7 @@ describe("SheetBuilder chrome slim (PR A)", () => {
     expect(floatingNav).toContain("Graves Schedule");
     expect(floatingNav).toContain("Refresh Day");
     expect(floatingNav).toContain("Clear Day");
+    expect(floatingNav).toContain("Capture desk");
     expect(floatingNav).not.toContain(">Optimize Week<");
     expect(floatingNav).not.toContain("Grave Cover Guide");
     expect(floatingNav).not.toContain("Weekly View");
@@ -196,6 +197,7 @@ describe("SheetBuilder night actions (PR B)", () => {
     expect(floatingNav).toContain("Maintenance");
     expect(floatingNav).toContain("Clear Day");
     expect(floatingNav).toContain("Refresh Day");
+    expect(floatingNav).toContain("Capture desk");
     expect(floatingNav).toContain("Graves Schedule");
     expect(floatingNav).toContain("Publish Day");
     expect(floatingNav).toContain("View Print Preview");

@@ -30,6 +30,7 @@ import {
   CalendarDays,
   RefreshCw,
   ClipboardList,
+  Camera,
 } from "lucide-react";
 
 const APP_BASE_PATH = "/sheetbuilder";
@@ -138,6 +139,8 @@ export interface FloatingNavProps {
   publishWeekBusy?: boolean;
   top?: number;
   permissions?: ShiftBuilderPermissions;
+  /** Desk capture — More menu, not a toast-corner FAB. */
+  onCaptureDesk?: () => void;
 }
 
 const MONTHS = MONTH_LONG;
@@ -238,6 +241,7 @@ export default function FloatingNav(props: FloatingNavProps) {
     publishDayBusy = false,
     top = 0,
     permissions,
+    onCaptureDesk,
   } = props;
 
   const canEditAssignments = permissions?.canEditAssignments ?? false;
@@ -840,6 +844,19 @@ export default function FloatingNav(props: FloatingNavProps) {
                 style={{ borderColor: isDark ? undefined : "rgba(0,0,0,0.08)" }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {onCaptureDesk && (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      onCaptureDesk();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Camera size={14} />
+                    Capture desk
+                  </button>
+                )}
                 {onViewChange && (
                   <button
                     type="button"

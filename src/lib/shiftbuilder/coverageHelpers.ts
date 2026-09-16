@@ -114,6 +114,85 @@ type CoverageTaskRow = {
 };
 type AssignmentRow = { tmName?: string; tmId?: string };
 
+export type SeatScopedAssignment = Record<string, unknown> & {
+  tmId?: string | null;
+  tmName?: string | null;
+  slotKey?: string;
+  additionalCoverageSlots?: string[] | null;
+  additional_coverage_slots?: string[] | null;
+};
+
+function hasTmIdentity(row?: SeatScopedAssignment | null): boolean {
+  return !!(row?.tmId || (typeof row?.tmName === "string" && row.tmName.trim()));
+}
+
+/** Coverage targets stored on a seat — never part of the TM identity. */
+export function coverageSlotsOf(row?: SeatScopedAssignment | null): string[] {
+  const raw = row?.additionalCoverageSlots ?? row?.additional_coverage_slots ?? [];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((key): key is string => typeof key === "string" && key.trim().length > 0);
+}
+
+/** TM fields for a move/swap, with seat-owned coverage stripped. */
+export function tmIdentityOf(
+  row?: SeatScopedAssignment | null,
+): SeatScopedAssignment | null {
+  if (!row || !hasTmIdentity(row)) return null;
+  const next = { ...row };
+  delete next.additionalCoverageSlots;
+  delete next.additional_coverage_slots;
+  return next;
+}
+
+/**
+ * Move or swap TMs between seats without taking coverage banners along.
+ * `additionalCoverageSlots` stays on the card/slot. Source tasks (isCoverage)
+ * already live on the slot key and are untouched.
+ */
+export function reseatTmKeepSeatCoverage<T extends SeatScopedAssignment>(
+  assignments: Record<string, T>,
+  fromKey: string,
+  toKey: string,
+): Record<string, T> {
+  if (!fromKey || !toKey || fromKey === toKey) return assignments;
+
+  const fromSeat = assignments[fromKey];
+  const toSeat = assignments[toKey];
+  const fromCoverage = coverageSlotsOf(fromSeat);
+  const toCoverage = coverageSlotsOf(toSeat);
+  const moving = tmIdentityOf(fromSeat);
+  const displaced = tmIdentityOf(toSeat);
+
+  const next: Record<string, T> = { ...assignments };
+  const withSeatCoverage = (
+    tm: SeatScopedAssignment | null,
+    seatKey: string,
+    coverage: string[],
+  ): T | undefined => {
+    if (tm) {
+      return {
+        ...tm,
+        slotKey: seatKey,
+        additionalCoverageSlots: coverage,
+      } as T;
+    }
+    if (coverage.length) {
+      return { slotKey: seatKey, additionalCoverageSlots: coverage } as T;
+    }
+    return undefined;
+  };
+
+  const reseatedFrom = withSeatCoverage(displaced, fromKey, fromCoverage);
+  if (reseatedFrom) next[fromKey] = reseatedFrom;
+  else delete next[fromKey];
+
+  const reseatedTo = withSeatCoverage(moving, toKey, toCoverage);
+  if (reseatedTo) next[toKey] = reseatedTo;
+  else delete next[toKey];
+
+  return next;
+}
+
 /** Register every label that may appear in an "And …" coverage task. */
 export function buildCoverageLabelIndex(auxDefs: AuxDef[] = []): Map<string, string> {
   const map = new Map<string, string>();
