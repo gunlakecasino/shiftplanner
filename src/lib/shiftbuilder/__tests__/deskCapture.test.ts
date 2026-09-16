@@ -7,6 +7,7 @@ import {
   peekDeskCaptureRings,
   recordDeskCaptureAction,
   recordDeskCaptureError,
+  redactDeskCapturePack,
   redactDeskCaptureText,
   resetDeskCaptureRingsForTests,
 } from "../deskCapture";
@@ -20,6 +21,17 @@ describe("desk capture redaction + rings", () => {
     expect(redactDeskCaptureText("pin=123456 failed")).toBe("pin=[redacted] failed");
     expect(redactDeskCaptureText("code 654321 on gate")).toBe("code [redacted] on gate");
     expect(redactDeskCaptureText("Z1 assigned")).toBe("Z1 assigned");
+  });
+
+  it("strips /pin/i keys from the persisted pack", () => {
+    const pack = redactDeskCapturePack({
+      note: "Swap duplicated coverage",
+      pin: "654321",
+      operatorPin: "secret",
+      slotKey: "Z1",
+    }) as Record<string, unknown>;
+    expect(pack).toEqual({ note: "Swap duplicated coverage", slotKey: "Z1" });
+    expect(JSON.stringify(pack)).not.toContain("654321");
   });
 
   it("keeps action and error rings, redacted", () => {
@@ -92,9 +104,12 @@ describe("desk capture chrome + seat-scope wiring", () => {
     expect(client).not.toMatch(/bottom-4 right-4[\s\S]{0,400}Capture desk/);
   });
 
-  it("redacts into rings on errors and leaves bug_reports as a 501 follow-up", () => {
+  it("redacts into rings and inserts sheetbuilder_bug_reports for a signed-in operator", () => {
     expect(toast).toContain("recordDeskCaptureError");
-    expect(route).toContain("bug_reports_table_pending");
-    expect(route).toContain("status: 501");
+    expect(route).toContain("sheetbuilder_bug_reports");
+    expect(route).toContain("requireOpsSession");
+    expect(route).toContain("redactDeskCapturePack");
+    expect(route).not.toContain("bug_reports_table_pending");
+    expect(route).not.toContain("status: 501");
   });
 });

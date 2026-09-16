@@ -95,10 +95,6 @@ export function CaptureDeskDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(snap),
       });
-      if (res.status === 501) {
-        setStatus("Saved JSON locally. Server table is a follow-up.");
-        return;
-      }
       if (!res.ok) throw new Error(`capture ${res.status}`);
       setStatus("Captured.");
     } catch {

@@ -53,6 +53,21 @@ export function redactDeskCaptureText(raw: string): string {
     .replace(/\b\d{6}\b/g, "[redacted]");
 }
 
+/** Drop `/pin/i` keys and redact string leaves before persist or download. */
+export function redactDeskCapturePack(value: unknown): unknown {
+  if (typeof value === "string") return redactDeskCaptureText(value);
+  if (Array.isArray(value)) return value.map((item) => redactDeskCapturePack(item));
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (/pin/i.test(key)) continue;
+      out[key] = redactDeskCapturePack(child);
+    }
+    return out;
+  }
+  return value;
+}
+
 export function recordDeskCaptureAction(entry: {
   message: string;
   slotKey?: string;
@@ -137,7 +152,7 @@ export function deskCaptureFilename(snapshot: DeskCaptureSnapshot): string {
 
 export function downloadDeskCaptureJson(snapshot: DeskCaptureSnapshot): void {
   if (typeof document === "undefined") return;
-  const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+  const blob = new Blob([JSON.stringify(redactDeskCapturePack(snapshot), null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
