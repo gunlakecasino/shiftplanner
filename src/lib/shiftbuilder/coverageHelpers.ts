@@ -193,6 +193,31 @@ export function reseatTmKeepSeatCoverage<T extends SeatScopedAssignment>(
   return next;
 }
 
+/**
+ * Outgoing covering banners that belong on this seat.
+ * Empty seats that are themselves covered must not also show "Covering …"
+ * pointed at the incoming source (Men's 6 + Covering Restroom 7).
+ * Coverage-only stubs with no incoming coverer still show their banners.
+ */
+export function visibleOutgoingCoverageTasks<T extends { taskLabel: string; isCoverage?: boolean }>(
+  tasks: T[],
+  seatKey: string,
+  coveredBy: Array<{ sourceKey?: string }> = [],
+  seatEmpty = false,
+): T[] {
+  const outgoing = tasks.filter((task) => task.isCoverage);
+  if (!seatEmpty || coveredBy.length === 0) return outgoing;
+  const incoming = coveredBy
+    .map((entry) => entry.sourceKey)
+    .filter((key): key is string => !!key?.trim());
+  if (!incoming.length) return outgoing;
+  return outgoing.filter((task) => {
+    const target = parseCoverageTargetFromTaskLabel(task.taskLabel, new Map(), seatKey);
+    if (!target) return true;
+    return !incoming.some((source) => sameCoverageSeat(source, target));
+  });
+}
+
 /** Clear the TM on a seat and leave a coverage-only stub when banners remain. */
 export function clearTmKeepSeatCoverage<T extends SeatScopedAssignment>(
   assignments: Record<string, T>,

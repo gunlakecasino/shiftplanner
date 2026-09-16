@@ -179,11 +179,19 @@ describe("SheetBuilder night actions (PR B)", () => {
     expect(floatingNav).not.toContain("sb-night-action-pill--engine");
     expect(floatingNav).toContain("sb-night-action-pill--draft");
     expect(floatingNav).toContain("sb-night-action-pill--print");
+    expect(floatingNav).toContain("sb-night-action-pill--apply");
     expect(floatingNav).not.toContain("Running…");
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
     expect(floatingNav).toContain("aria-label=\"Night actions\"");
+  });
+
+  it("keeps Apply in the primary night-action cluster when Draft is on", () => {
+    expect(floatingNav).toContain("showDraftTools && isDraftMode && onSaveAllDraft");
+    expect(floatingNav).not.toContain("isDraftMode && draftSlotCount > 0 && onSaveAllDraft");
+    expect(floatingNav).not.toContain("sb-night-action-pill--split");
+    expect(globalsCss).toContain(".sb-night-action-pill--apply");
   });
 
   it("routes Apply through onSaveAllDraft only", () => {
@@ -744,6 +752,7 @@ describe("SheetBuilder canvas pride (RR / chips / overflow)", () => {
     expect(chrome).not.toContain("ASSIGN TM");
     expect(chrome).toContain("formatCanvasTrailChip");
     expect(chrome).toContain("formatCanvasRepeatReason");
+    expect(chrome).toContain("formatCanvasRepeatMark");
     expect(chrome).toContain("sb-critical-repeat-mark");
     expect(chrome).toContain("Repeat");
     expect(chrome).not.toContain("rounded-full font-black");
@@ -856,11 +865,13 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(pride).toContain("export function formatCoveredByRail");
     expect(zoneCard).toContain("formatCoveredByRail");
     expect(zoneCard).toContain("CoveragePaperRail");
-    expect(zoneCard).toContain("coverage={ipadDesk ? undefined");
+    expect(zoneCard).toContain("coverage={showDigitalAssists ? undefined");
+    expect(zoneCard).toContain('presentation={showDigitalAssists ? "rail" : undefined}');
     expect(rrCard).toContain("formatCoveredByRail");
     expect(rrCard).toContain("CoveragePaperRail");
     expect(rrCard).toContain("incomingRails");
-    expect(rrCard).toContain("coveredBy.length > 0 && !pairHalf");
+    expect(rrCard).toContain("visibleOutgoingCoverageTasks");
+    expect(rrCard).toContain("coveredBy.length > 0 && !showDigitalAssists");
   });
 });
 

@@ -365,6 +365,7 @@ import {
   parseCoverageTargetFromTaskLabel,
   persistSlotForCoverageSource,
   reseatTmKeepSeatCoverage,
+  clearTmKeepSeatCoverage,
 } from "@/lib/shiftbuilder/coverageHelpers";
 
 /**
@@ -2834,11 +2835,7 @@ function AuthedShiftBuilder() {
       });
     } else {
       // Fallback (legacy direct path)
-      setAssignments((prev: any) => {
-        const copy = { ...prev };
-        delete copy[slotKey];
-        return copy;
-      });
+      setAssignments((prev: any) => clearTmKeepSeatCoverage(prev, slotKey));
 
       (async () => {
         let nid = targetNightId;

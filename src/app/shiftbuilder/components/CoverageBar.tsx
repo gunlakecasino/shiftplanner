@@ -98,7 +98,7 @@ const CoverageBar = React.memo(function CoverageBar({
   const goldBanner = isGoldAccent(accent);
   const chipTone = coverageChipTone(accent);
   const useRail = presentation === "rail";
-  const label = builderCalm || useRail ? formatCanvasCoverageChip(task.taskLabel) : task.taskLabel;
+  const label = builderCalm || useRail ? formatCanvasCoverageChip(task.taskLabel, slotKey) : task.taskLabel;
 
   if (useRail) {
     return (

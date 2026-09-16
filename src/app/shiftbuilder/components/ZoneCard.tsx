@@ -19,13 +19,13 @@ import { formatCoveredByRail } from "@/lib/shiftbuilder/canvasPrideLabels";
 import {
   formatCoveragePositionLabel,
   getSlotAccentColor,
+  visibleOutgoingCoverageTasks,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
 import type { PrerenderedPlacementFit } from "./placementFitScore";
 import { useCardLongPress } from "@/lib/shiftbuilder/useCardLongPress";
 import { CardTaskZone } from "./CardTaskZone";
 import { ShiftCard as PackageShiftCard } from "../redesign/components/ShiftCard";
-import { useIpadDesk } from "@/lib/shiftbuilder/useIpadDesk";
 
 export interface ZoneCardProps {
   def: any;
@@ -187,7 +187,6 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     tmName: draftActive ? draftInfo!.proposedTmName : a.tmName,
   };
   const color = getZoneColor(def.key);
-  const ipadDesk = useIpadDesk(); // reader — does not write html.sb-ipad-desk
   const { setRef, isOver, isDragging, listeners, attributes, hasTM, dragFitClass } = useSlotDnd(
     def.key, "zone", slotTm, isLocked,
   );
@@ -207,7 +206,12 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     (anchor) => onKioskLongPress?.(anchor),
   );
 
-  const zoneCoverageTasks = (selectedTasks[def.key] || []).filter((t) => t.isCoverage);
+  const zoneCoverageTasks = visibleOutgoingCoverageTasks(
+    selectedTasks[def.key] || [],
+    def.key,
+    coveredBy,
+    isEmpty || (!hasTM && isCovered),
+  );
   const regularTasks = visibleDeskSlotTasks(selectedTasks[def.key], {
     hideNonCustomZoneDuties: true,
   });
@@ -277,11 +281,12 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
     label: formatCoveragePositionLabel(def.key, entry.side, coveredBy.length),
     name: entry.tmName,
   }));
-  const showIpadRails = ipadDesk && (coveredBy.length > 0 || zoneCoverageTasks.length > 0);
-  const showMacCoverageFooter = !ipadDesk && zoneCoverageTasks.length > 0;
-  const packageCoverageFooter = showIpadRails || showMacCoverageFooter ? (
-    <div className={`sb-coverage-footer shrink-0 ${ipadDesk ? "sb-coverage-footer--rails" : showDigitalAssists ? "sb-coverage-footer--chips" : ""}`}>
-      {ipadDesk
+  const showCoverageFooter =
+    (showDigitalAssists && (coveredBy.length > 0 || zoneCoverageTasks.length > 0)) ||
+    (!showDigitalAssists && zoneCoverageTasks.length > 0);
+  const packageCoverageFooter = showCoverageFooter ? (
+    <div className={`sb-coverage-footer shrink-0 ${showDigitalAssists ? "sb-coverage-footer--rails" : ""}`}>
+      {showDigitalAssists
         ? coveredBy.map((entry) => (
             <CoveragePaperRail
               key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
@@ -296,8 +301,8 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
           task={task}
           slotKey={def.key}
           onRemoveTask={packageTaskInteractionsEnabled ? onRemoveTask : undefined}
-          builderCalm={showDigitalAssists && !ipadDesk}
-          presentation={ipadDesk ? "rail" : undefined}
+          builderCalm={showDigitalAssists}
+          presentation={showDigitalAssists ? "rail" : undefined}
         />
       ))}
     </div>
@@ -342,7 +347,7 @@ const ZoneCard: React.FC<ZoneCardProps> = React.memo(({
         taskContent={packageTaskContent}
         footer={packageCoverageFooter}
         unassigned={assignmentState.kind === "unassigned" || assignmentState.kind === "covered"}
-        coverage={ipadDesk ? undefined : assignmentState.kind === "covered" ? packageCoverage : undefined}
+        coverage={showDigitalAssists ? undefined : assignmentState.kind === "covered" ? packageCoverage : undefined}
         onClick={() => {
           if (isLocked) return;
           const el = document.querySelector(`[data-slot-key="${def.key}"]`) as HTMLElement | null;

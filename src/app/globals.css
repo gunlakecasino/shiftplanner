@@ -5598,6 +5598,10 @@ button,
   overflow: hidden;
 }
 
+.sb-night-action-pill--apply {
+  flex: 0 0 auto;
+}
+
 .sb-night-action-pill:disabled,
 .sb-night-action-pill__segment:disabled,
 .sb-night-action-pill__apply:disabled {

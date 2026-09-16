@@ -3,6 +3,7 @@ import {
   coverageChipTone,
   formatCanvasCoverageChip,
   formatCoveredByRail,
+  formatCanvasRepeatMark,
   formatCanvasRepeatReason,
   formatCanvasRrSideLabel,
   formatCanvasTrailChip,
@@ -81,6 +82,13 @@ describe("formatCanvasCoverageChip", () => {
     expect(formatCanvasCoverageChip("And Men's Restroom 10")).toBe(
       "Covering Men's 10",
     );
+    expect(formatCanvasCoverageChip("And Restroom 7", "MRR6")).toBe(
+      "Covering Men's 7",
+    );
+    expect(formatCanvasCoverageChip("And Restroom 7", "WRR6")).toBe(
+      "Covering Women's 7",
+    );
+    expect(formatCanvasCoverageChip("And Men's 7")).toBe("Covering Men's 7");
   });
 
   it("does not prefix Covering onto a label that already says Covering", () => {
@@ -142,5 +150,14 @@ describe("formatCanvasRepeatReason", () => {
     expect(formatCanvasRepeatReason("Z4")).toBe(
       "Same zone as a recent night: Zone 4",
     );
+  });
+});
+
+describe("formatCanvasRepeatMark", () => {
+  it("names the current seat, not a prior trail chip", () => {
+    expect(formatCanvasRepeatMark("MRR10")).toBe("Repeat Men's 10");
+    expect(formatCanvasRepeatMark("MRR6")).toBe("Repeat Men's 6");
+    expect(formatCanvasRepeatMark("Z4")).toBe("Repeat Zone 4");
+    expect(formatCanvasRepeatMark()).toBe("Repeat");
   });
 });

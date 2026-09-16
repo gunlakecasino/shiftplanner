@@ -17,6 +17,7 @@ import {
 } from "@/lib/shiftbuilder/coverageHelpers";
 import { trailLabelMatchesSlotKey } from "./placementPadHelpers";
 import {
+  formatCanvasRepeatMark,
   formatCanvasRepeatReason,
   formatCanvasTrailChip,
 } from "@/lib/shiftbuilder/canvasPrideLabels";
@@ -113,6 +114,7 @@ export function TmNameBlock({
       {trailing}
       {criticalRepeat ? (
         <CriticalRepeatNameMark
+          slotKey={placementTrailMatchSlotKey}
           title={
             placementTrailMatchSlotKey
               ? formatCanvasRepeatReason(placementTrailMatchSlotKey)
@@ -152,12 +154,15 @@ export function TmNameBlock({
 /** Subtle inline mark beside a TM name when prior-3 placement repeat caps health at 50%. */
 export function CriticalRepeatNameMark({
   title,
+  slotKey,
 }: {
   title?: string;
+  slotKey?: string;
 }) {
+  const mark = formatCanvasRepeatMark(slotKey);
   const tip =
     title ??
-    `${formatCanvasRepeatReason()} — rotation health capped at 50%`;
+    `${formatCanvasRepeatReason(slotKey)} — rotation health capped at 50%`;
 
   return (
     <span
@@ -174,7 +179,7 @@ export function CriticalRepeatNameMark({
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      Repeat
+      {mark}
     </span>
   );
 }

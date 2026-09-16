@@ -11,6 +11,7 @@ import {
   persistSlotForCoverageSource,
   reseatTmKeepSeatCoverage,
   clearTmKeepSeatCoverage,
+  visibleOutgoingCoverageTasks,
 } from "./coverageHelpers";
 import { uiToDb } from "./slot-keys";
 
@@ -282,5 +283,38 @@ describe("Z9SR / AUX2 is one seat", () => {
         { tmName: "Sheri O", tmId: "sheri", side: "B", sourceKey: "Z3", taskLabel: "And Z9SR" },
       ]),
     ).toHaveLength(1);
+  });
+});
+
+describe("visibleOutgoingCoverageTasks", () => {
+  it("hides inverted Covering Restroom 7 on empty Men's 6 when Men's 7 is covering it", () => {
+    const tasks = [{ taskLabel: "And Restroom 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(
+        tasks,
+        "MRR6",
+        [{ sourceKey: "MRR7" }],
+        true,
+      ),
+    ).toEqual([]);
+  });
+
+  it("keeps a coverage-only stub when the empty seat is not itself covered", () => {
+    const tasks = [{ taskLabel: "And Restroom 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(tasks, "MRR6", [], true),
+    ).toEqual(tasks);
+  });
+
+  it("keeps outgoing covering on an occupied seat", () => {
+    const tasks = [{ taskLabel: "And Men's Restroom 7", isCoverage: true }];
+    expect(
+      visibleOutgoingCoverageTasks(
+        tasks,
+        "MRR6",
+        [{ sourceKey: "MRR7" }],
+        false,
+      ),
+    ).toEqual(tasks);
   });
 });

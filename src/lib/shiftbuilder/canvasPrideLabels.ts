@@ -202,7 +202,7 @@ export function formatCoveredByRail(tmName: string, sourceKey?: string): string 
 }
 
 /** Coverage footer copy — "And Zone 9" / "+ ZONE 6" → "Covering Zone 9". */
-export function formatCanvasCoverageChip(taskLabel: string): string {
+export function formatCanvasCoverageChip(taskLabel: string, sourceKey?: string): string {
   const body = taskLabel
     .replace(/^\+\s*/, "")
     .replace(/^AND\s+/i, "")
@@ -226,6 +226,26 @@ export function formatCanvasCoverageChip(taskLabel: string): string {
     }
   }
 
+  const genderedBare = body.match(
+    /^(women's|womens|men's|mens)\s+(1\s*\+\s*2|\d+)$/i,
+  );
+  if (genderedBare) {
+    const num = parseRrNumber(genderedBare[2]);
+    const side = parseRrSideToken(genderedBare[1]);
+    if (num != null && side) {
+      return `Covering ${formatCanvasRrSideLabel(num, side).line}`;
+    }
+  }
+
+  const genderless = body.match(/^(?:restroom|rr)\s+(1\s*\+\s*2|\d+)$/i);
+  if (genderless) {
+    const num = parseRrNumber(genderless[1]);
+    const inherited = sourceKey ? parseCanvasRrToken(sourceKey) : null;
+    if (num != null && inherited) {
+      return `Covering ${formatCanvasRrSideLabel(num, inherited.side).line}`;
+    }
+  }
+
   const zone = body.match(/^zone\s+(\d+)$/i);
   if (zone) return `Covering Zone ${zone[1]}`;
 
@@ -241,4 +261,11 @@ export function formatCanvasRepeatReason(slotKey?: string): string {
     return `Same zone as a recent night: ${chip.label}`;
   }
   return `Same area as a recent night: ${chip.label}`;
+}
+
+/** Visible Repeat mark names the current seat, not a prior trail chip. */
+export function formatCanvasRepeatMark(slotKey?: string): string {
+  if (!slotKey?.trim()) return "Repeat";
+  const chip = formatCanvasTrailChip(slotKey);
+  return chip.label ? `Repeat ${chip.label}` : "Repeat";
 }
