@@ -127,17 +127,51 @@ describe("SheetBuilder desk cohesion", () => {
     expect(globalsCss).toContain("background: #1C1C1E");
   });
 
-  it("quiets topbar Unpublished and labels Zones / Breaks sheets", () => {
+  it("quiets topbar Unpublished and labels Zones / Breaks / Overlaps sheets", () => {
     const nav = readFileSync(
       resolve(process.cwd(), "src/app/shiftbuilder/components/FloatingNav.tsx"),
+      "utf8",
+    );
+    const client = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/ShiftBuilderClient.tsx"),
       "utf8",
     );
     expect(nav).toContain("sb-sheet-view-pill");
     expect(nav).toMatch(/>\s*Zones\s*</);
     expect(nav).toMatch(/>\s*Breaks\s*</);
+    expect(nav).toMatch(/>\s*Overlaps\s*</);
     expect(nav).not.toContain("sb-help-fab");
     expect(nav).toContain("sb-topbar-publish");
     expect(nav).toContain('background: draftSlotCount > 0 ? "#1C1C1E"');
+    expect(nav).toContain("Drop zones ·");
+    expect(client).not.toContain("<DropZonesCard");
+    expect(client).not.toContain("showPicker");
+    expect(globalsCss).toContain(".sb-drop-zones-picker");
+    expect(globalsCss).toContain("display: none !important");
+  });
+
+  it("uses one Assign TM empty seat and one reserved covering row", () => {
+    const chrome = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/assignmentCardChrome.tsx"),
+      "utf8",
+    );
+    const coverageBar = readFileSync(
+      resolve(process.cwd(), "src/app/shiftbuilder/components/CoverageBar.tsx"),
+      "utf8",
+    );
+    expect(zoneCard).toContain("isLiveEmptySeat");
+    expect(zoneCard).not.toContain('? "Unassigned"');
+    expect(zoneCard).not.toContain('displayName || "Unassigned"');
+    expect(auxCard).toContain("coverageSlotsOf(a)");
+    expect(chrome).toContain("Assign TM");
+    expect(chrome).toContain("showDigitalAssists && onUnassignedClick");
+    expect(coverageBar).toContain("sb-coverage-footer__row");
+    expect(coverageBar).toContain("uniqueOutgoingCoverageTasks");
+    expect(coverageBar).not.toContain("formatCoveredByRail");
+    expect(globalsCss).toContain(".sb-coverage-footer__row");
+    expect(globalsCss).toContain("Kit fidelity — locked desk anatomy");
+    expect(globalsCss).toContain("background: #F4F6FA");
+    expect(globalsCss).toContain("overflow: hidden !important");
   });
 
   it("keeps Team search as an icon, not a colliding search ligature", () => {

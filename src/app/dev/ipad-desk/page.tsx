@@ -75,6 +75,9 @@ const selectedTasks: Record<string, NightSlotTask[]> = {
   WRR6: [task("w6-c", "WRR6", "AND ZONE 5", { isCoverage: true, color: "#ff3b30" })],
   MRR6: [task("m6-c", "MRR6", "AND ZONE 6", { isCoverage: true, color: "#C05A98" })],
   WRR1: [task("w1-c", "WRR1", "AND LOBBY", { isCoverage: true, color: "#ffcc00" })],
+  job_coach: [
+    task("jc-lie", "job_coach", "AND ZONE 3", { isCoverage: true, color: "#ff3b30" }),
+  ],
 };
 
 const coveredByIndex: Record<string, CoveredByEntry[]> = {

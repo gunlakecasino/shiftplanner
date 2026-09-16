@@ -212,7 +212,10 @@ export function visibleOutgoingCoverageTasks<T extends { taskLabel: string; isCo
   seatEmpty = false,
   ownedCoverageSlots?: string[],
 ): T[] {
-  let outgoing = tasks.filter((task) => task.isCoverage);
+  let outgoing = uniqueOutgoingCoverageTasks(
+    tasks.filter((task) => task.isCoverage),
+    seatKey,
+  );
   if (!seatEmpty) return outgoing;
 
   const labelToKey = buildCoverageLabelIndex();
@@ -226,16 +229,38 @@ export function visibleOutgoingCoverageTasks<T extends { taskLabel: string; isCo
     });
   }
 
-  if (coveredBy.length === 0) return outgoing;
+  if (coveredBy.length === 0) return uniqueOutgoingCoverageTasks(outgoing, seatKey);
   const incoming = coveredBy
     .map((entry) => entry.sourceKey)
     .filter((key): key is string => !!key?.trim());
-  if (!incoming.length) return outgoing;
-  return outgoing.filter((task) => {
+  if (!incoming.length) return uniqueOutgoingCoverageTasks(outgoing, seatKey);
+  return uniqueOutgoingCoverageTasks(
+    outgoing.filter((task) => {
+      const target = parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey, seatKey);
+      if (!target) return true;
+      return !incoming.some((source) => sameCoverageSeat(source, target));
+    }),
+    seatKey,
+  );
+}
+
+/** One chip per target — stacked Covering Zone 8 + Covering Zone 8 is a visual lie. */
+export function uniqueOutgoingCoverageTasks<T extends { taskLabel: string; isCoverage?: boolean }>(
+  tasks: T[],
+  seatKey: string,
+): T[] {
+  const labelToKey = buildCoverageLabelIndex();
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const task of tasks) {
+    if (!task.isCoverage) continue;
     const target = parseCoverageTargetFromTaskLabel(task.taskLabel, labelToKey, seatKey);
-    if (!target) return true;
-    return !incoming.some((source) => sameCoverageSeat(source, target));
-  });
+    const key = (target ?? task.taskLabel.trim().toLowerCase()).toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(task);
+  }
+  return unique;
 }
 
 /** Clear the TM on a seat and leave a coverage-only stub when banners remain. */

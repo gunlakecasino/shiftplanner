@@ -147,7 +147,6 @@ import { useEngineRunner } from "./hooks/useEngineRunner";
 import { useConfirm } from "./components/ConfirmDialog";
 import { WeekEngineResultsSheet } from "./components/WeekEngineResultsSheet";
 import { EngineRunningOverlay } from "./components/EngineRunningOverlay";
-import { DropZonesCard } from "./components/DropZonesCard";
 import { resolveDropZones, type DropZoneGroup } from "@/lib/shiftbuilder/dropZones";
 import { useNotes } from "./hooks/useNotes";
 import { usePrintManager } from "./hooks/usePrintManager";
@@ -8244,6 +8243,10 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
         onDiscardDraft={stableDiscardDraft}
         permissions={permissions}
         onCaptureDesk={openCaptureDesk}
+        dropZoneGroup={dropZones.scheduledGroup}
+        onSetDropZoneGroup={(group) => {
+          void handleSetDropZoneGroup(group);
+        }}
       />
 
       <RunDayPlacementsModal
@@ -8315,13 +8318,6 @@ const deferredDraftGrokExplanation = useDeferredValue(draftGrokExplanation);
           style={{ marginTop: -2 }}
         >
           <div className="sb-drop-zones-desk-row">
-            <DropZonesCard
-              resolution={dropZones}
-              showPicker
-              onSelectGroup={(group) => {
-                void handleSetDropZoneGroup(group);
-              }}
-            />
             <details className="sb-shift-notes group min-w-0 flex-1 rounded-xl border border-black/8 bg-white/55 dark:bg-white/5 dark:border-white/10 backdrop-blur-md">
               <summary className="cursor-pointer select-none list-none px-3 py-1.5 text-[11px] font-semibold tracking-wide text-[var(--ios-secondary-label)] flex items-center gap-2">
                 <span className="opacity-70">Shift notes</span>

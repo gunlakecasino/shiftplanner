@@ -144,6 +144,9 @@ export interface FloatingNavProps {
   onCaptureDesk?: () => void;
   /** Floor help / tutorial — More menu, not a topbar FAB. */
   onOpenHelp?: () => void;
+  /** Drop zone group — More menu, never a circular 1/2/3 pager on the desk. */
+  dropZoneGroup?: 1 | 2 | 3;
+  onSetDropZoneGroup?: (group: 1 | 2 | 3) => void;
 }
 
 const MONTHS = MONTH_LONG;
@@ -246,6 +249,8 @@ export default function FloatingNav(props: FloatingNavProps) {
     permissions,
     onCaptureDesk,
     onOpenHelp,
+    dropZoneGroup,
+    onSetDropZoneGroup,
   } = props;
 
   const canEditAssignments = permissions?.canEditAssignments ?? false;
@@ -657,6 +662,26 @@ export default function FloatingNav(props: FloatingNavProps) {
             >
               Breaks
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={currentView === "weekly"}
+              className="sb-sheet-view-pill sb-interactive"
+              style={{
+                fontSize: 12,
+                fontWeight: currentView === "weekly" ? 650 : 500,
+                color: currentView === "weekly" ? chromeText : mutedChromeText,
+                background: "transparent",
+                border: 0,
+                padding: "4px 8px",
+                borderRadius: 0,
+                boxShadow: currentView === "weekly" ? "inset 0 -1.5px 0 #1C1C1E" : "none",
+                fontFamily: "var(--font-ui, var(--font-inter-tight), system-ui)",
+              }}
+              onClick={() => onViewChange("weekly")}
+            >
+              Overlaps
+            </button>
           </div>
         ) : null}
 
@@ -944,6 +969,21 @@ export default function FloatingNav(props: FloatingNavProps) {
                     {currentView === "breaks" ? "Deployment board" : "Overlap sheet"}
                   </button>
                 )}
+                {onSetDropZoneGroup ? (
+                  <button
+                    type="button"
+                    className={menuItemClass}
+                    onClick={() => {
+                      const current = dropZoneGroup ?? 1;
+                      const next = (current === 3 ? 1 : current + 1) as 1 | 2 | 3;
+                      onSetDropZoneGroup(next);
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Layers size={14} />
+                    Drop zones · {dropZoneGroup ?? 1}
+                  </button>
+                ) : null}
                 <div
                   className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] ${isDark ? "text-zinc-500" : "text-gray-400"}`}
                 >

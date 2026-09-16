@@ -11,11 +11,9 @@ import {
 import {
   coverageChipTone,
   formatCanvasCoverageChip,
-  formatCoveredByRail,
-  formatCoveredByRailTitle,
 } from "@/lib/shiftbuilder/canvasPrideLabels";
 import {
-  getSlotAccentColor,
+  uniqueOutgoingCoverageTasks,
   type CoveredByEntry,
 } from "@/lib/shiftbuilder/coverageHelpers";
 
@@ -243,7 +241,7 @@ const CoverageBar = React.memo(function CoverageBar({
 export function SeatCoverageFooter({
   slotKey,
   outgoingTasks,
-  coveredBy = [],
+  coveredBy: _incomingCoveredBy = [],
   onRemoveTask,
   reserved = false,
 }: {
@@ -258,7 +256,11 @@ export function SeatCoverageFooter({
   /** Keep the footer band even when this seat has no covering chip. */
   reserved?: boolean;
 }) {
-  const hasChips = coveredBy.length > 0 || outgoingTasks.length > 0;
+  // Incoming covered-by lives in the card body. The reserved band is seat-owned
+  // covering only — one chip row, never stacked incoming + outgoing candy.
+  void _incomingCoveredBy;
+  const chips = uniqueOutgoingCoverageTasks(outgoingTasks, slotKey);
+  const hasChips = chips.length > 0;
   if (!reserved && !hasChips) return null;
 
   return (
@@ -266,24 +268,20 @@ export function SeatCoverageFooter({
       className={`sb-coverage-footer sb-coverage-footer--band sb-coverage-footer--rails shrink-0${hasChips ? "" : " sb-coverage-footer--empty"}`}
       data-coverage-slot={slotKey}
     >
-      {coveredBy.map((entry) => (
-        <CoveragePaperRail
-          key={`${entry.sourceKey}-${entry.taskId ?? entry.tmId ?? entry.tmName}`}
-          label={formatCoveredByRail(entry.tmName, entry.sourceKey)}
-          title={formatCoveredByRailTitle(entry.tmName, entry.sourceKey)}
-          accent={getSlotAccentColor(entry.sourceKey)}
-        />
-      ))}
-      {outgoingTasks.map((task) => (
-        <CoverageBar
-          key={task.id}
-          task={task}
-          slotKey={slotKey}
-          onRemoveTask={onRemoveTask}
-          builderCalm
-          presentation="rail"
-        />
-      ))}
+      {hasChips ? (
+        <div className="sb-coverage-footer__row">
+          {chips.map((task) => (
+            <CoverageBar
+              key={task.id}
+              task={task}
+              slotKey={slotKey}
+              onRemoveTask={onRemoveTask}
+              builderCalm
+              presentation="rail"
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

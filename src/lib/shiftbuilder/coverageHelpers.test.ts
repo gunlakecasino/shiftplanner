@@ -14,6 +14,7 @@ import {
   assignOrReseatTmKeepSeatCoverage,
   findSeatKeyOfTm,
   visibleOutgoingCoverageTasks,
+  uniqueOutgoingCoverageTasks,
 } from "./coverageHelpers";
 import { uiToDb } from "./slot-keys";
 
@@ -371,5 +372,13 @@ describe("visibleOutgoingCoverageTasks", () => {
     expect(
       visibleOutgoingCoverageTasks(tasks, "MRR7", [], true, ["Z7"]),
     ).toEqual(tasks);
+  });
+
+  it("dedupes two Covering chips that point at the same target", () => {
+    const tasks = [
+      { id: "a", taskLabel: "And Zone 8", isCoverage: true },
+      { id: "b", taskLabel: "And Zone 8", isCoverage: true },
+    ];
+    expect(uniqueOutgoingCoverageTasks(tasks, "Z1")).toHaveLength(1);
   });
 });

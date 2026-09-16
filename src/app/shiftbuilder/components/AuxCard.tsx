@@ -34,7 +34,7 @@ import { CardTaskZone, assignZoneOpenHandlers, handleAssignZoneClick } from "./C
 import { CardVectorMark } from "./CardVectorMark";
 import { visibleDeskSlotTasks } from "@/lib/shiftbuilder/cardVectors";
 import { SeatCoverageFooter } from "./CoverageBar";
-import { visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
+import { coverageSlotsOf, visibleOutgoingCoverageTasks } from "@/lib/shiftbuilder/coverageHelpers";
 import {
   placeFixedPopover,
   readViewportHeight,
@@ -428,6 +428,7 @@ const AuxCard: React.FC<AuxCardProps> = React.memo(({
     def.key,
     coveredBy,
     isEmpty || (!hasTM && coveredBy.length > 0),
+    coverageSlotsOf(a),
   );
 
   let assignmentState: SlotAssignmentState;

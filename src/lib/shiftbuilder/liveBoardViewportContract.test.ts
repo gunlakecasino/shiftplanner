@@ -648,7 +648,7 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(floatingNav).not.toContain('"Engine"');
     expect(floatingNav).toContain(">Draft<");
     expect(floatingNav).toContain(">Print<");
-    expect(version).toContain('"1.282"');
+    expect(version).toContain('"1.283"');
   });
 
   it("reserves the draft gold frame so breath does not remount the board", () => {
@@ -873,7 +873,9 @@ describe("iPad desk — 13-inch Pro night board", () => {
     expect(pride).toContain("Covered ·");
     expect(pride).not.toContain("Covered by ${name} ·");
     expect(coverageBar).toContain("export function SeatCoverageFooter");
-    expect(coverageBar).toContain("formatCoveredByRail");
+    expect(coverageBar).toContain("uniqueOutgoingCoverageTasks");
+    expect(coverageBar).toContain("sb-coverage-footer__row");
+    expect(coverageBar).not.toContain("formatCoveredByRail");
     expect(coverageBar).toContain('presentation="rail"');
     expect(zoneCard).toContain("SeatCoverageFooter");
     expect(zoneCard).toContain("coverage={showDigitalAssists ? undefined");
@@ -1032,7 +1034,7 @@ describe("SheetBuilder Wave 3 keyboard / cues / cmdk burial", () => {
     expect(authGateCss).toContain("sb-auth-visual__desk");
     expect(authGateCss).toContain("#F4F6FA");
     expect(authGateCss).toContain("object-fit: contain");
-    expect(version).toContain('"1.282"');
+    expect(version).toContain('"1.283"');
   });
 });
 
