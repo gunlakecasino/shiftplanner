@@ -3,17 +3,15 @@ import {
   subscribeBoardAssignmentsDayKey,
 } from "@/lib/shiftbuilder/liveCache";
 
-/** Paper-layer shared-axis hold. Chrome + color rails stay put.
- *  Reveal waits for max(this, data ready), then a matching CSS settle. */
-export const DAY_CONTENT_VEIL_MS = 200;
-const UNBLUR_MS = 200;
-/** Hard ceiling if the next night never hydrates — keep it near the motion budget. */
-const SAFETY_CAP_MS = 400;
+/** Optional settle before a retry tick. Reveal sooner when the next night is ready. */
+export const DAY_CONTENT_VEIL_MS = 80;
+const SETTLE_MS = 80;
+/** Hard ceiling if the next night never hydrates — never a 1.75s theatrical hold. */
+export const DAY_CONTENT_SAFETY_CAP_MS = 400;
 
 export const DAY_CONTENT_VEIL_CLASS = "sb-day-content-veil";
 export const DAY_CONTENT_READY_CLASS = "sb-day-content-ready";
-/** Marks a backward switch (target date earlier than the one on screen) so the
- *  luminous sweep glides the other way. Absent = forward (default). */
+/** Kept for class-name stability; routine switches are opacity-only (no sweep). */
 export const DAY_VEIL_PREV_CLASS = "sb-day-veil--prev";
 
 const VEIL_ROOT_SELECTOR = ".sb-builder-fluid-viewport";
@@ -30,9 +28,6 @@ type VeilSession = {
 
 let session: VeilSession | null = null;
 let unsubscribeDayKey: (() => void) | null = null;
-/** The last day we veiled toward = what's on screen now. Used to pick sweep
- *  direction reliably even when the live assignments cache is momentarily null. */
-let lastVeilDayKey: string | null = null;
 
 export function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
@@ -94,25 +89,24 @@ function tryReveal(force = false) {
   if (!root) return;
 
   const elapsed = Date.now() - session.startAt;
-  const timeOk = force || elapsed >= DAY_CONTENT_VEIL_MS;
   const dataOk =
-    force ||
-    (isAssignmentsReady(session.targetDayKey, session.previousDayKey) &&
-      !hasLoadingSkeletons(root));
+    isAssignmentsReady(session.targetDayKey, session.previousDayKey) &&
+    !hasLoadingSkeletons(root);
 
-  if (!timeOk || !dataOk) return;
+  if (!force && !dataOk && elapsed < DAY_CONTENT_SAFETY_CAP_MS) return;
 
   clearSessionTimers();
   unsubscribeDayKey?.();
   unsubscribeDayKey = null;
 
   root.classList.add(DAY_CONTENT_READY_CLASS);
-  globalThis.setTimeout(() => finishVeil(), UNBLUR_MS);
+  globalThis.setTimeout(() => finishVeil(), SETTLE_MS);
 }
 
 /**
- * Card shells + color rails stay fixed; paper names shared-axis until
- * max(~200ms, data ready). Never a full-canvas fade.
+ * Card shells + color rails stay fixed. Paper names crossfade (opacity)
+ * until the next night is in the store, or the 400ms safety cap.
+ * Never a launch splash, luminous sweep, or 1.75s hold.
  */
 export function beginDayCardContentVeil(opts?: {
   targetDayKey?: string;
@@ -135,28 +129,17 @@ export function beginDayCardContentVeil(opts?: {
     safetyTimer: null,
   };
 
-  // Direction of travel — target earlier than what's on screen sweeps backward.
-  // Prefer the last day we veiled toward (reliable across rapid switches); fall
-  // back to the live cache. ISO day keys compare lexicographically.
-  const referenceDayKey = lastVeilDayKey ?? previousDayKey;
-  const goingBack = !!(
-    opts?.targetDayKey &&
-    referenceDayKey &&
-    opts.targetDayKey < referenceDayKey
-  );
-  if (opts?.targetDayKey) lastVeilDayKey = opts.targetDayKey;
-
   root.classList.remove(DAY_CONTENT_READY_CLASS, DAY_VEIL_PREV_CLASS);
-  // Force a reflow so the sweep animation restarts cleanly on rapid, repeated
-  // day switches (a synchronous remove→add otherwise wouldn't re-run it).
   void root.offsetWidth;
   root.classList.add(DAY_CONTENT_VEIL_CLASS);
-  root.classList.toggle(DAY_VEIL_PREV_CLASS, goingBack);
   root.setAttribute("data-sb-day-veil-source", opts?.source ?? "unknown");
 
   session.minTimer = globalThis.setTimeout(() => tryReveal(), DAY_CONTENT_VEIL_MS);
 
   unsubscribeDayKey = subscribeBoardAssignmentsDayKey(() => tryReveal());
 
-  session.safetyTimer = globalThis.setTimeout(() => tryReveal(true), SAFETY_CAP_MS);
+  session.safetyTimer = globalThis.setTimeout(
+    () => tryReveal(true),
+    DAY_CONTENT_SAFETY_CAP_MS,
+  );
 }

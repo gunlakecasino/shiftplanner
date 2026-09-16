@@ -276,6 +276,8 @@ describe("continuity acceptance — hold previous UI, never replace the board", 
     expect(authedShell).not.toContain("sb-content-enter");
     expect(settingsShell).not.toContain("sb-content-enter");
     expect(useShiftData).toContain("resumeHydratedBoardDayKey");
+    expect(useShiftData).toContain("queryColdLoading && hydratedDayKey == null");
+    expect(useShiftData).not.toContain("hydratedDayKey !== selectedDateKey");
   });
 
   it("layout holds the outgoing paint until the next view is ready", () => {

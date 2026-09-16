@@ -612,9 +612,9 @@
   font-weight: 600;
 }
 
-/* ── Paper-only day switch (P0) ──
-   Topbar + section chrome + color rails stay put. Only card paper
-   (names / tasks) does a ~200ms shared-axis shift + opacity. */
+/* ── Paper-only day switch ──
+   Chrome + color rails stay put. Card paper crossfades (opacity only).
+   No launch splash, no luminous sweep, no blur demo. */
 
 .sb-day-content-veil .sb-day-card-host,
 .sb-day-content-veil .sheet-section-header,
@@ -627,21 +627,14 @@
 }
 
 .sb-day-content-veil .sb-builder-card-grid .assignment-card > :not(:first-child) {
-  opacity: 0.35;
-  transform: translateX(10px);
-  transition:
-    opacity var(--sb-motion-move, 220ms) var(--sb-spring-gentle),
-    transform var(--sb-motion-move, 220ms) var(--sb-spring-gentle);
+  opacity: 0.45;
+  transform: none;
+  transition: opacity var(--sb-motion-quick, 170ms) ease;
   pointer-events: none;
-}
-
-.sb-day-content-veil.sb-day-veil--prev .sb-builder-card-grid .assignment-card > :not(:first-child) {
-  transform: translateX(-10px);
 }
 
 .sb-day-content-veil.sb-day-content-ready .sb-builder-card-grid .assignment-card > :not(:first-child) {
   opacity: 1;
-  transform: translateX(0);
   pointer-events: auto;
 }
 

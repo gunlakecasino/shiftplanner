@@ -8,8 +8,8 @@ import {
 } from "./state/dayCardContentVeil";
 
 /**
- * Applies inner-content blur veil on existing day-switch performance marks.
- * Card shells stay put; contents unblur after max(250ms, assignments hydrated).
+ * Applies the paper opacity veil on existing day-switch performance marks.
+ * Card shells stay put; contents reveal when the next night is ready (≤400ms).
  */
 export function DaySwitchTransitionBridge() {
   useEffect(() => {

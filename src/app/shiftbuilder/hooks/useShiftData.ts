@@ -151,7 +151,9 @@ export function useShiftData(
     assignments: {} as Record<string, any>,
   });
 
-  // Day switch: drop stabilized roster/scheduled snapshots so picker rails don't show the prior night.
+  // Day switch: drop stabilized roster/scheduled snapshots so picker rails don't
+  // show the prior night. Keep the assignment snapshot until the new night
+  // hydrates — wiping it here emptied the board for a frame (launch splash).
   React.useEffect(() => {
     if (stabilizedDateKeyRef.current === selectedDateKey) return;
     stabilizedDateKeyRef.current = selectedDateKey;
@@ -166,7 +168,6 @@ export function useShiftData(
     stableRefs.current.recentZoneHistory = null;
     stableRefs.current.cardBorders = {};
     stableRefs.current.cardVectors = {};
-    stableRefs.current.assignments = {};
     hydratedAssignmentsDayRef.current = null;
 
     const qc = currentNight.queryClient;
@@ -339,13 +340,15 @@ export function useShiftData(
   const boardBackgroundSync = currentNight.isCoreFetching && hasBoardPayload;
 
   // Query data and the Zustand store hydrate on different ticks (the hydration effect
-  // below only runs after the render where query data first lands). Without this,
-  // `boardColdLoading` would go false the instant query data arrives — one render before
-  // the store actually has it — and every ZoneCard would flash "Unassigned" for a frame.
+  // below only runs after the render where query data first lands). First visit with
+  // no resume still waits on that, so cards don't flash "Unassigned".
   const [hydratedDayKey, setHydratedDayKey] = React.useState<string | null>(() =>
     resumeHydratedBoardDayKey(selectedDateKey),
   );
-  const boardColdLoading = queryColdLoading || hydratedDayKey !== selectedDateKey;
+  // Routine Tue→Wed is NOT a cold load. keepPreviousData + the short content veil
+  // cover the gap. A pending day-key mismatch used to count as cold load, which
+  // stripped data-sb-route-ready and flashed the launch splash.
+  const boardColdLoading = queryColdLoading && hydratedDayKey == null;
 
   // Live version for reactivity of "already placed this night" and week surfaces.
   const [liveAssignVersion, setLiveAssignVersion] = React.useState(0);

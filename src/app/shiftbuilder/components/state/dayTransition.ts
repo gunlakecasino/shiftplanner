@@ -12,7 +12,7 @@ export const DAY_SWITCH_EVENT = "sb-day-switch";
 
 export { prefersReducedMotion, dayKeyFromSwitchDetail };
 
-/** Card-inner blur veil — shells stay fixed. */
+/** Card-inner opacity veil — shells stay fixed. No launch splash. */
 export function beginDaySwitchBoardTransition(source = "unknown"): void {
   beginDayCardContentVeil({ source });
 }

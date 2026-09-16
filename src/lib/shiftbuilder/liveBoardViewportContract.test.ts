@@ -590,6 +590,10 @@ describe("SheetBuilder P0 unstocky motion", () => {
     resolve(process.cwd(), "src/app/shiftbuilder/version.ts"),
     "utf8",
   );
+  const useShiftData = readFileSync(
+    resolve(process.cwd(), "src/app/shiftbuilder/hooks/useShiftData.ts"),
+    "utf8",
+  );
 
   it("ships motion tokens and does not use transition:all on live cards", () => {
     expect(globalsCss).toContain("--sb-motion-instant: 100ms");
@@ -612,13 +616,18 @@ describe("SheetBuilder P0 unstocky motion", () => {
     expect(chrome).not.toContain("initial={{ opacity: 0, y: 6, scale: 0.93 }}");
   });
 
-  it("day-switch paper is ≤220ms shared-axis, not a 1.75s canvas sweep", () => {
-    expect(veil).toContain("export const DAY_CONTENT_VEIL_MS = 200");
+  it("day-switch paper is opacity-only ≤400ms, not a 1.75s launch splash", () => {
+    expect(veil).toContain("export const DAY_CONTENT_VEIL_MS = 80");
+    expect(veil).toContain("export const DAY_CONTENT_SAFETY_CAP_MS = 400");
     expect(veil).not.toContain("1750");
-    expect(authGate).toContain("translateX(10px)");
+    expect(authGate).not.toContain("translateX(10px)");
     expect(authGate).not.toContain("filter: blur(12px)");
     expect(authGate).not.toContain("sb-day-sweep 1.5s");
     expect(authGate).toContain("content: none");
+    expect(authGate).toContain("opacity: 0.45");
+    expect(useShiftData).toContain("queryColdLoading && hydratedDayKey == null");
+    expect(useShiftData).not.toContain("hydratedDayKey !== selectedDateKey");
+    expect(useShiftData).not.toContain("stableRefs.current.assignments = {}");
   });
 
   it("does not put Engine back in the header and bumps the patch version", () => {
