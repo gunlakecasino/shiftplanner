@@ -114,7 +114,12 @@ type CoverageTaskRow = {
 };
 type AssignmentRow = { tmName?: string; tmId?: string };
 
-export type SeatScopedAssignment = Record<string, unknown> & {
+/**
+ * Seat-owned assignment row. Extra fields stay allowed by structural typing.
+ * Do not intersect `Record<string, unknown>` — interfaces like `LiveAssignment`
+ * have no string index signature and fail that constraint under `tsc`.
+ */
+export type SeatScopedAssignment = {
   tmId?: string | null;
   tmName?: string | null;
   slotKey?: string;
